@@ -4,8 +4,6 @@
 
 把内核记下的 `avc: denied` 访问拒绝日志,自动「读懂 → 定位根因 → 生成最小安全修复 → 评审验证 → 一键把设备从 permissive 收紧到 enforcing」。
 
-> 2026 开源鸿蒙大学生创新大赛 · 赛道一「系统与技术创新」· 10/31 提交
-
 ---
 
 ## 它解决什么问题
@@ -51,10 +49,6 @@ PolicyLoop 要做的是把每条 denial 自动归到五类根因之一,然后分
 | **设备端(轻)** | 真机上抓 denial 日志的小采集器 | 队长(M3 用真机) |
 | **主机端(重)** | PC 端分析平台(主要开发部分)—— **确定性内核**(解析/索引/诊断/验证,可证明可离线)+ **多智能体**(AI 定位与文案,可摘除) | 团队主力,纯 Python |
 
-## 快速开始(队友 / 贡献者)
-
-只需要 **Python 3.12**。⚠️ **不需要 OHOS 源码树、不需要真机、不需要 GPU** —— 那是 M3 队长侧(ohos_src + DAYU200)才碰的东西,按 onboarding 推进即可。
-
 ```bash
 # 1. 独立 Python 环境
 conda create -n pl python=3.12 -y
@@ -82,8 +76,3 @@ policy_loop/
         ├── model.py     # 结构化数据模型
         └── tests/       # 用例 + 真实格式 fixture
 ```
-
-## 文档导航
-
-- 想**上手开发 / 了解每一步任务 / 查看进度里程碑(M0–M4)**:看 [`docs/onboarding.md`](docs/onboarding.md),进度只在 onboarding 维护,不在此重复
-- 想**验证自己环境**:跑上面快速开始的第 3 步 `python -m policy_loop.selfcheck`
