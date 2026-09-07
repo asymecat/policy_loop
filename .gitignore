@@ -1,0 +1,22 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+
+# 环境
+.venv/
+venv/
+conda-env/
+
+# 本机/敏感
+*.log
+.DS_Store
+*.local
+
+# 例外:avc 解析器的真实样例 fixture 是测试数据,要入库
+!policy_loop/avc/tests/fixtures/*.log
+
+# 误拉整个 OHOS 源码树的保险(项目里绝不跟踪它)
+ohos_src/
