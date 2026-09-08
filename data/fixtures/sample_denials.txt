@@ -1,0 +1,23 @@
+# OpenHarmony 风格 denial 样例（L1 仿真语料起步）
+# 来源：上游 OpenHarmony security_selinux_adapter / sepolicy 仓内真实/近似真实格式
+
+# ① 字符设备 ioctl（含 ioctlcmd）—— faultloggerd /dev/pdump
+avc: denied { ioctl } for pid=7881, comm="/system/bin/faultloggerd" path="/dev/pdump" dev="" ino=23 ioctlcmd=0x7003 scontext=u:r:faultloggerd:s0 tcontext=u:object_r:dev_pdump:s0 tclass=chr_file permissive=1
+
+# ② OH 参数对象类 parameter_service
+avc: denied { set } for parameter=persist.account.login_name_max pid=2208 uid=3058 gid=3058 scontext=u:r:accountmgr:s0 tcontext=u:object_r:persist_param:s0 tclass=parameter_service permissive=0
+
+# ③ OH 系统能力（SA）注册表 samgr_class
+avc: denied { get } for service=3508 sid=u:r:distributedfiledaemon:s0 scontext=u:r:distributedfiledaemon:s0 tcontext=u:object_r:sa_sandbox_manager_service:s0 tclass=samgr_class permissive=0
+
+# ④ 目录操作
+avc: denied { search } for pid=31856, comm="/bin/hiperf"  name="/app" dev="/dev/block/platform/fa500000.ufs/by-name/userdata" ino=991 scontext=u:r:hiperf:s0 tcontext=u:object_r:data_app_file:s0 tclass=dir permissive=1
+
+# ⑤ 带内核 audit 前缀
+audit: type=1400 audit(1502458430.566:4): avc:  denied  { open } for  pid=1658 comm="setenforce" path="/sys/fs/selinux/enforce" dev="selinuxfs" ino=4 scontext=u:r:hdcd:s0 tcontext=u:object_r:selinuxfs:s0 tclass=file permissive=1
+
+# ⑥ 带 avc_audit_slow 前缀
+avc_audit_slow:260] avc: denied { getattr } for pid=4594, comm="/system/bin/appspawn"  path="/data/storage/el2/log/crashpad" dev="/dev/block/platform/fa500000.ufs/by-name/userdata" ino=5159 scontext=u:r:debug_hap:s0 tcontext=u:object_r:data_app_el2_file:s0 tclass=dir permissive=1
+
+# ⑦ 能力（capability）类
+avc: denied { chown } for pid=11524, comm="/system/bin/sa_main"  capability=0 scontext=u:r:backup_sa:s0 tcontext=u:r:backup_sa:s0 tclass=capability permissive=0

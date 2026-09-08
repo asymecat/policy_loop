@@ -1,0 +1,1186 @@
+{
+  "phase_a": {
+    "pairs_allow_fix": 3222,
+    "pairs_allowxperm": 145,
+    "unparseable": 33,
+    "covered_elsewhere": 1274,
+    "informative": 1915,
+    "informative_neverallow": 1045
+  },
+  "result": {
+    "metrics": {
+      "n": 60,
+      "rule_exact_min": 60,
+      "llm_got_patch": 54,
+      "llm_no_output": 6,
+      "llm_exact_min": 54,
+      "llm_overbroad": 0,
+      "llm_insufficient": 0,
+      "llm_neverallow": 0,
+      "llm_review_approve": 54,
+      "llm_review_reject": 0,
+      "refined_after_reject": 0,
+      "llm_source": {
+        "llm": 60,
+        "naive": 0
+      }
+    },
+    "detail": [
+      {
+        "file": "ohos_policy\\window\\window_manager\\system\\samgr.te",
+        "rule": "allow samgr snapshot_display:dir { search };",
+        "denial": {
+          "source_domain": "samgr",
+          "target_type": "snapshot_display",
+          "tclass": "dir",
+          "permissions": [
+            "search"
+          ],
+          "ioctl_cmd": null
+        },
+        "missing": [
+          "search"
+        ],
+        "llm_patch": "allow samgr snapshot_display:dir search;",
+        "llm_scope": [
+          "search"
+        ],
+        "review": "APPROVE"
+      },
+      {
+        "file": "ohos_policy\\msdp\\devicestatus\\system\\msdp_sa.te",
+        "rule": "allow msdp_sa render_service:fd { use };",
+        "denial": {
+          "source_domain": "msdp_sa",
+          "target_type": "render_service",
+          "tclass": "fd",
+          "permissions": [
+            "use"
+          ],
+          "ioctl_cmd": null
+        },
+        "missing": [
+          "use"
+        ],
+        "llm_patch": "allow msdp_sa render_service:fd use;",
+        "llm_scope": [
+          "use"
+        ],
+        "review": "APPROVE"
+      },
+      {
+        "file": "ohos_policy\\multimedia\\drm\\system\\drm_service.te",
+        "rule": "allow drm_service sysfs_devices_system_cpu:file { getattr open read };",
+        "denial": {
+          "source_domain": "drm_service",
+          "target_type": "sysfs_devices_system_cpu",
+          "tclass": "file",
+          "permissions": [
+            "getattr"
+          ],
+          "ioctl_cmd": null
+        },
+        "missing": [
+          "getattr"
+        ],
+        "llm_patch": "allow drm_service sysfs_devices_system_cpu:file getattr;",
+        "llm_scope": [
+          "getattr"
+        ],
+        "review": "APPROVE"
+      },
+      {
+        "file": "ohos_policy\\communication\\netmanager\\system\\netsysnative.te",
+        "rule": "allow netsysnative data_local:dir { search };",
+        "denial": {
+          "source_domain": "netsysnative",
+          "target_type": "data_local",
+          "tclass": "dir",
+          "permissions": [
+            "search"
+          ],
+          "ioctl_cmd": null
+        },
+        "missing": [
+          "search"
+        ],
+        "llm_patch": "allow netsysnative data_local:dir search;",
+        "llm_scope": [
+          "search"
+        ],
+        "review": "APPROVE"
+      },
+      {
+        "file": "ohos_policy\\filemanagement\\storage_service\\system\\domain.te",
+        "rule": "allow domain storage_daemon:key { search };",
+        "denial": {
+          "source_domain": "foundation",
+          "target_type": "storage_daemon",
+          "tclass": "key",
+          "permissions": [
+            "search"
+          ],
+          "ioctl_cmd": null
+        },
+        "missing": [
+          "search"
+        ],
+        "llm_patch": "allow foundation storage_daemon:key search;",
+        "llm_scope": [
+          "search"
+        ],
+        "review": "APPROVE"
+      },
+      {
+        "file": "ohos_policy\\powermgr\\thermal_manager\\system\\normal_hap_attr.te",
+        "rule": "allow normal_hap_attr sa_powermgr_thermal_service:samgr_class { get };",
+        "denial": {
+          "source_domain": "normal_hap",
+          "target_type": "sa_thermal_service",
+          "tclass": "samgr_class",
+          "permissions": [
+            "get"
+          ],
+          "ioctl_cmd": null
+        },
+        "missing": [
+          "get"
+        ],
+        "llm_patch": "allow normal_hap sa_thermal_service:samgr_class get;",
+        "llm_scope": [
+          "get"
+        ],
+        "review": "APPROVE"
+      },
+      {
+        "file": "ohos_policy\\powermgr\\power_manager\\public\\powermgr.te",
+        "rule": "allow powermgr data_storage:dir { search };",
+        "denial": {
+          "source_domain": "powermgr",
+          "target_type": "data_storage",
+          "tclass": "dir",
+          "permissions": [
+            "search"
+          ],
+          "ioctl_cmd": null
+        },
+        "missing": [
+          "search"
+        ],
+        "llm_patch": "allow powermgr data_storage:dir search;",
+        "llm_scope": [
+          "search"
+        ],
+        "review": "APPROVE"
+      },
+      {
+        "file": "ohos_policy\\multimedia\\av_codec\\system\\av_codec_service.te",
+        "rule": "allow av_codec_service av_codec_service:udp_socket { bind create read write };",
+        "denial": {
+          "source_domain": "av_codec_service",
+          "target_type": "av_codec_service",
+          "tclass": "udp_socket",
+          "permissions": [
+            "bind"
+          ],
+          "ioctl_cmd": null
+        },
+        "missing": [
+          "bind"
+        ],
+        "llm_patch": "allow av_codec_service av_codec_service:udp_socket bind;",
+        "llm_scope": [
+          "bind"
+        ],
+        "review": "APPROVE"
+      },
+      {
+        "file": "ohos_policy\\update\\updater\\system\\write_updater.te",
+        "rule": "allow write_updater updater_block_file:blk_file { read write open ioctl getattr };",
+        "denial": {
+          "source_domain": "write_updater",
+          "target_type": "updater_block_file",
+          "tclass": "blk_file",
+          "permissions": [
+            "read",
+            "write"
+          ],
+          "ioctl_cmd": null
+        },
+        "missing": [
+          "read",
+          "write"
+        ],
+        "llm_patch": "allow write_updater updater_block_file:blk_file { read write };",
+        "llm_scope": [
+          "read",
+          "write"
+        ],
+        "review": "APPROVE"
+      },
+      {
+        "file": "ohos_policy\\web\\webview\\system\\nwebspawn.te",
+        "rule": "allow nwebspawn selinuxfs:dir { search };",
+        "denial": {
+          "source_domain": "nwebspawn",
+          "target_type": "selinuxfs",
+          "tclass": "dir",
+          "permissions": [
+            "search"
+          ],
+          "ioctl_cmd": null
+        },
+        "missing": [
+          "search"
+        ],
+        "llm_patch": "allow nwebspawn selinuxfs:dir search;",
+        "llm_scope": [
+          "search"
+        ],
+        "review": "APPROVE"
+      },
+      {
+        "file": "ohos_policy\\filemanagement\\user_file_service\\system\\init.te",
+        "rule": "allow init mnt_external_fuse_file:dir { open read relabelto setattr };",
+        "denial": {
+          "source_domain": "init",
+          "target_type": "mnt_external_fuse_file",
+          "tclass": "dir",
+          "permissions": [
+            "open"
+          ],
+          "ioctl_cmd": null
+        },
+        "missing": [
+          "open"
+        ],
+        "llm_patch": "allow init mnt_external_fuse_file:dir open;",
+        "llm_scope": [
+          "open"
+        ],
+        "review": "APPROVE"
+      },
+      {
+        "file": "ohos_policy\\miscservices\\inputmethod_native\\system\\ime.te",
+        "rule": "allow ime hdcd:fd { use };",
+        "denial": {
+          "source_domain": "ime",
+          "target_type": "hdcd",
+          "tclass": "fd",
+          "permissions": [
+            "use"
+          ],
+          "ioctl_cmd": null
+        },
+        "missing": [
+          "use"
+        ],
+        "llm_patch": "allow ime hdcd:fd use;",
+        "llm_scope": [
+          "use"
+        ],
+        "review": "APPROVE"
+      },
+      {
+        "file": "ohos_policy\\sensors\\system\\sensors.te",
+        "rule": "allow sensors system_core_hap_attr:fd { use };",
+        "denial": {
+          "source_domain": "sensors",
+          "target_type": "system_core_hap",
+          "tclass": "fd",
+          "permissions": [
+            "use"
+          ],
+          "ioctl_cmd": null
+        },
+        "missing": [
+          "use"
+        ],
+        "llm_patch": "allow sensors system_core_hap:fd use;",
+        "llm_scope": [
+          "use"
+        ],
+        "review": "APPROVE"
+      },
+      {
+        "file": "ohos_policy\\drivers\\peripheral\\intelligent_voice\\vendor\\intell_voice_host.te",
+        "rule": "allow intell_voice_host intell_voice_service:fd { use };",
+        "denial": {
+          "source_domain": "intell_voice_host",
+          "target_type": "intell_voice_service",
+          "tclass": "fd",
+          "permissions": [
+            "use"
+          ],
+          "ioctl_cmd": null
+        },
+        "missing": [
+          "use"
+        ],
+        "llm_patch": "allow intell_voice_host intell_voice_service:fd use;",
+        "llm_scope": [
+          "use"
+        ],
+        "review": "APPROVE"
+      },
+      {
+        "file": "ohos_policy\\powermgr\\power_manager\\system\\power_shell.te",
+        "rule": "allow power_shell tty_device:chr_file { read write };",
+        "denial": {
+          "source_domain": "power_shell",
+          "target_type": "tty_device",
+          "tclass": "chr_file",
+          "permissions": [
+            "read",
+            "write"
+          ],
+          "ioctl_cmd": null
+        },
+        "missing": [
+          "read",
+          "write"
+        ],
+        "llm_patch": "allow power_shell tty_device:chr_file { read write };",
+        "llm_scope": [
+          "read",
+          "write"
+        ],
+        "review": "APPROVE"
+      },
+      {
+        "file": "ohos_policy\\distributedhardware\\distributed_hardware_fwk\\system\\dhardware.te",
+        "rule": "allow dhardware data_file:dir { search };",
+        "denial": {
+          "source_domain": "dhardware",
+          "target_type": "data_file",
+          "tclass": "dir",
+          "permissions": [
+            "search"
+          ],
+          "ioctl_cmd": null
+        },
+        "missing": [
+          "search"
+        ],
+        "llm_patch": "allow dhardware data_file:dir search;",
+        "llm_scope": [
+          "search"
+        ],
+        "review": "APPROVE"
+      },
+      {
+        "file": "ohos_policy\\filemanagement\\storage_service\\system\\storage_manager.te",
+        "rule": "allow storage_manager normal_hap_attr:fd { use };",
+        "denial": {
+          "source_domain": "storage_manager",
+          "target_type": "normal_hap",
+          "tclass": "fd",
+          "permissions": [
+            "use"
+          ],
+          "ioctl_cmd": null
+        },
+        "missing": [
+          "use"
+        ],
+        "llm_patch": "allow storage_manager normal_hap:fd use;",
+        "llm_scope": [
+          "use"
+        ],
+        "review": "APPROVE"
+      },
+      {
+        "file": "ohos_policy\\distributedhardware\\distributed_hardware_fwk\\system\\dhardware.te",
+        "rule": "allow dhardware data_service_file:dir { search };",
+        "denial": {
+          "source_domain": "dhardware",
+          "target_type": "data_service_file",
+          "tclass": "dir",
+          "permissions": [
+            "search"
+          ],
+          "ioctl_cmd": null
+        },
+        "missing": [
+          "search"
+        ],
+        "llm_patch": "allow dhardware data_service_file:dir search;",
+        "llm_scope": [
+          "search"
+        ],
+        "review": "APPROVE"
+      },
+      {
+        "file": "ohos_policy\\update\\updater\\system\\updater.te",
+        "rule": "allow updater updater:capability { dac_read_search };",
+        "denial": {
+          "source_domain": "updater",
+          "target_type": "updater",
+          "tclass": "capability",
+          "permissions": [
+            "dac_read_search"
+          ],
+          "ioctl_cmd": null
+        },
+        "missing": [
+          "dac_read_search"
+        ],
+        "llm_patch": "allow updater updater:capability dac_read_search;",
+        "llm_scope": [
+          "dac_read_search"
+        ],
+        "review": "APPROVE"
+      },
+      {
+        "file": "ohos_policy\\developtools\\hdc\\system\\su.te",
+        "rule": "allow system_basic_hap_attr su:binder { transfer };",
+        "denial": {
+          "source_domain": "thermal",
+          "target_type": "su",
+          "tclass": "binder",
+          "permissions": [
+            "call"
+          ],
+          "ioctl_cmd": null
+        },
+        "missing": [
+          "call"
+        ],
+        "llm_patch": "allow thermal su: binder call;",
+        "llm_scope": [
+          "call"
+        ],
+        "review": "APPROVE"
+      },
+      {
+        "file": "ohos_policy\\startup\\appspawn\\public\\hnp.te",
+        "rule": "allow hnp proc_stat_file:file { getattr };",
+        "denial": {
+          "source_domain": "hnp",
+          "target_type": "proc_stat_file",
+          "tclass": "file",
+          "permissions": [
+            "getattr"
+          ],
+          "ioctl_cmd": null
+        },
+        "missing": [
+          "getattr"
+        ],
+        "llm_patch": "allow hnp proc_stat_file:file getattr;",
+        "llm_scope": [
+          "getattr"
+        ],
+        "review": "APPROVE"
+      },
+      {
+        "file": "ohos_policy\\web\\webview\\system\\app_fwk_update_service.te",
+        "rule": "allow app_fwk_update_service web_private_param:parameter_service { set };",
+        "denial": {
+          "source_domain": "app_fwk_update_service",
+          "target_type": "webengine_param",
+          "tclass": "parameter_service",
+          "permissions": [
+            "set"
+          ],
+          "ioctl_cmd": null
+        },
+        "missing": [
+          "set"
+        ],
+        "llm_patch": "allow app_fwk_update_service webengine_param:parameter_service set;",
+        "llm_scope": [
+          "set"
+        ],
+        "review": "APPROVE"
+      },
+      {
+        "file": "ohos_policy\\security\\cert_manager\\system\\cert_manager.te",
+        "rule": "allow cert_manager_service sysfs_devices_system_cpu:file { read open getattr };",
+        "denial": {
+          "source_domain": "cert_manager_service",
+          "target_type": "sysfs_devices_system_cpu",
+          "tclass": "file",
+          "permissions": [
+            "read"
+          ],
+          "ioctl_cmd": null
+        },
+        "missing": [
+          "read"
+        ],
+        "llm_patch": "allow cert_manager_service sysfs_devices_system_cpu:file read;",
+        "llm_scope": [
+          "read"
+        ],
+        "review": "APPROVE"
+      },
+      {
+        "file": "ohos_policy\\update\\updater\\system\\init.te",
+        "rule": "allow init exfat:dir { mounton };",
+        "denial": {
+          "source_domain": "init",
+          "target_type": "exfat",
+          "tclass": "dir",
+          "permissions": [
+            "mounton"
+          ],
+          "ioctl_cmd": null
+        },
+        "missing": [
+          "mounton"
+        ],
+        "llm_patch": "allow init exfat:dir mounton;",
+        "llm_scope": [
+          "mounton"
+        ],
+        "review": "APPROVE"
+      },
+      {
+        "file": "ohos_policy\\web\\webview\\system\\isolated_render.te",
+        "rule": "allow isolated_render nwebspawn:unix_dgram_socket { connect };",
+        "denial": {
+          "source_domain": "isolated_render",
+          "target_type": "nwebspawn",
+          "tclass": "unix_dgram_socket",
+          "permissions": [
+            "connect"
+          ],
+          "ioctl_cmd": null
+        },
+        "missing": [
+          "connect"
+        ],
+        "llm_patch": "allow isolated_render nwebspawn:unix_dgram_socket connect;",
+        "llm_scope": [
+          "connect"
+        ],
+        "review": "APPROVE"
+      },
+      {
+        "file": "ohos_policy\\distributedhardware\\distributed_screen\\system\\dscreen.te",
+        "rule": "allow dscreen softbus_server:tcp_socket { read write };",
+        "denial": {
+          "source_domain": "dscreen",
+          "target_type": "softbus_server",
+          "tclass": "tcp_socket",
+          "permissions": [
+            "read",
+            "write"
+          ],
+          "ioctl_cmd": null
+        },
+        "missing": [
+          "read",
+          "write"
+        ],
+        "llm_patch": "allow dscreen softbus_server:tcp_socket { read write };",
+        "llm_scope": [
+          "read",
+          "write"
+        ],
+        "review": "APPROVE"
+      },
+      {
+        "file": "ohos_policy\\hiviewdfx\\hiview\\system\\foundation.te",
+        "rule": "allow foundation proc_meminfo_file:file { open getattr read };",
+        "denial": {
+          "source_domain": "foundation",
+          "target_type": "proc_meminfo_file",
+          "tclass": "file",
+          "permissions": [
+            "getattr"
+          ],
+          "ioctl_cmd": "0x5413"
+        },
+        "missing": [
+          "getattr"
+        ],
+        "llm_patch": "allow foundation proc_meminfo_file:file getattr;",
+        "llm_scope": [
+          "getattr"
+        ],
+        "review": "APPROVE"
+      },
+      {
+        "file": "ohos_policy\\distributeddatamgr\\sqlite3\\system\\sqlite3.te",
+        "rule": "allow sqlite3 data_app_el1_file:dir { search };",
+        "denial": {
+          "source_domain": "sqlite3",
+          "target_type": "data_app_el1_file",
+          "tclass": "dir",
+          "permissions": [
+            "search"
+          ],
+          "ioctl_cmd": null
+        },
+        "missing": [
+          "search"
+        ],
+        "llm_patch": "allow sqlite3 data_app_el1_file:dir search;",
+        "llm_scope": [
+          "search"
+        ],
+        "review": "APPROVE"
+      },
+      {
+        "file": "ohos_policy\\update\\updater\\system\\updater.te",
+        "rule": "allow updater data_local:dir { search };",
+        "denial": {
+          "source_domain": "updater",
+          "target_type": "data_local",
+          "tclass": "dir",
+          "permissions": [
+            "search"
+          ],
+          "ioctl_cmd": null
+        },
+        "missing": [
+          "search"
+        ],
+        "llm_patch": "allow updater data_local:dir search;",
+        "llm_scope": [
+          "search"
+        ],
+        "review": "APPROVE"
+      },
+      {
+        "file": "ohos_policy\\customization\\enterprise_device_management\\system\\edm_sa.te",
+        "rule": "allow edm_sa sysfs_devices_system_cpu:file { getattr open read };",
+        "denial": {
+          "source_domain": "edm_sa",
+          "target_type": "sysfs_devices_system_cpu",
+          "tclass": "file",
+          "permissions": [
+            "getattr"
+          ],
+          "ioctl_cmd": null
+        },
+        "missing": [
+          "getattr"
+        ],
+        "llm_patch": "allow edm_sa sysfs_devices_system_cpu:file getattr;",
+        "llm_scope": [
+          "getattr"
+        ],
+        "review": "APPROVE"
+      },
+      {
+        "file": "ohos_policy\\liteos\\toybox\\public\\sh.te",
+        "rule": "allow sh labeledfs:filesystem { getattr };",
+        "denial": {
+          "source_domain": "sh",
+          "target_type": "labeledfs",
+          "tclass": "filesystem",
+          "permissions": [
+            "getattr"
+          ],
+          "ioctl_cmd": null
+        },
+        "missing": [
+          "getattr"
+        ],
+        "llm_patch": "allow sh labeledfs:filesystem getattr;",
+        "llm_scope": [
+          "getattr"
+        ],
+        "review": "APPROVE"
+      },
+      {
+        "file": "ohos_policy\\powermgr\\battery_statistics\\system\\powermgr.te",
+        "rule": "allow powermgr sys_prod_file:dir { search };",
+        "denial": {
+          "source_domain": "powermgr",
+          "target_type": "sys_prod_file",
+          "tclass": "dir",
+          "permissions": [
+            "search"
+          ],
+          "ioctl_cmd": null
+        },
+        "missing": [
+          "search"
+        ],
+        "llm_patch": "allow powermgr sys_prod_file:dir search;",
+        "llm_scope": [
+          "search"
+        ],
+        "review": "APPROVE"
+      },
+      {
+        "file": "ohos_policy\\security\\security_component\\system\\security_component_service.te",
+        "rule": "allow security_component_service security_component_service:unix_dgram_socket { getopt setopt };",
+        "denial": {
+          "source_domain": "security_component_service",
+          "target_type": "security_component_service",
+          "tclass": "unix_dgram_socket",
+          "permissions": [
+            "getopt"
+          ],
+          "ioctl_cmd": null
+        },
+        "missing": [
+          "getopt"
+        ],
+        "llm_patch": "allow security_component_service security_component_service:unix_dgram_socket getopt;",
+        "llm_scope": [
+          "getopt"
+        ],
+        "review": "APPROVE"
+      },
+      {
+        "file": "ohos_policy\\distributeddatamgr\\sqlite3\\system\\sqlite3.te",
+        "rule": "allow sqlite3 data_app_el3_file:dir { search };",
+        "denial": {
+          "source_domain": "sqlite3",
+          "target_type": "data_app_el3_file",
+          "tclass": "dir",
+          "permissions": [
+            "search"
+          ],
+          "ioctl_cmd": null
+        },
+        "missing": [
+          "search"
+        ],
+        "llm_patch": "allow sqlite3 data_app_el3_file:dir search;",
+        "llm_scope": [
+          "search"
+        ],
+        "review": "APPROVE"
+      },
+      {
+        "file": "ohos_policy\\miscservices\\inputmethod_native\\public\\input_isolate_hap.te",
+        "rule": "allow foundation input_isolate_hap:dir { search read };",
+        "denial": {
+          "source_domain": "foundation",
+          "target_type": "input_isolate_hap",
+          "tclass": "dir",
+          "permissions": [
+            "search"
+          ],
+          "ioctl_cmd": null
+        },
+        "missing": [
+          "search"
+        ],
+        "llm_patch": "allow foundation input_isolate_hap:dir search;",
+        "llm_scope": [
+          "search"
+        ],
+        "review": "APPROVE"
+      },
+      {
+        "file": "ohos_policy\\multimedia\\player\\system\\init.te",
+        "rule": "allow init dev_rga:chr_file { setattr };",
+        "denial": {
+          "source_domain": "init",
+          "target_type": "dev_rga",
+          "tclass": "chr_file",
+          "permissions": [
+            "setattr"
+          ],
+          "ioctl_cmd": null
+        },
+        "missing": [
+          "setattr"
+        ],
+        "llm_patch": "allow init dev_rga:chr_file setattr;",
+        "llm_scope": [
+          "setattr"
+        ],
+        "review": "APPROVE"
+      },
+      {
+        "file": "ohos_policy\\hiviewdfx\\hiview\\system\\hiview.te",
+        "rule": "allow hiview data_app_el2_file:dir { search read open add_name write create setattr getattr remove_name };",
+        "denial": {
+          "source_domain": "hiview",
+          "target_type": "data_app_el2_file",
+          "tclass": "dir",
+          "permissions": [
+            "add_name"
+          ],
+          "ioctl_cmd": null
+        },
+        "missing": [
+          "add_name"
+        ],
+        "llm_patch": "allow hiview data_app_el2_file:dir add_name;",
+        "llm_scope": [
+          "add_name"
+        ],
+        "review": "APPROVE"
+      },
+      {
+        "file": "ohos_policy\\startup\\appspawn\\public\\hnp.te",
+        "rule": "allow hnp proc_keys_file:file { getattr };",
+        "denial": {
+          "source_domain": "hnp",
+          "target_type": "proc_keys_file",
+          "tclass": "file",
+          "permissions": [
+            "getattr"
+          ],
+          "ioctl_cmd": null
+        },
+        "missing": [
+          "getattr"
+        ],
+        "llm_patch": "allow hnp proc_keys_file:file getattr;",
+        "llm_scope": [
+          "getattr"
+        ],
+        "review": "APPROVE"
+      },
+      {
+        "file": "ohos_policy\\startup\\appspawn\\system\\nwebspawn.te",
+        "rule": "allow nwebspawn dev_asanlog_file:dir { getattr };",
+        "denial": {
+          "source_domain": "nwebspawn",
+          "target_type": "dev_asanlog_file",
+          "tclass": "dir",
+          "permissions": [
+            "getattr"
+          ],
+          "ioctl_cmd": null
+        },
+        "missing": [
+          "getattr"
+        ],
+        "llm_patch": "allow nwebspawn dev_asanlog_file:dir getattr;",
+        "llm_scope": [
+          "getattr"
+        ],
+        "review": "APPROVE"
+      },
+      {
+        "file": "ohos_policy\\drivers\\peripheral\\ethernet\\vendor\\ethernet_host.te",
+        "rule": "allow ethernet_host hdf_ethernet_service:hdf_devmgr_class { add };",
+        "denial": {
+          "source_domain": "ethernet_host",
+          "target_type": "hdf_ethernet_service",
+          "tclass": "hdf_devmgr_class",
+          "permissions": [
+            "add"
+          ],
+          "ioctl_cmd": null
+        },
+        "missing": [
+          "add"
+        ],
+        "llm_patch": "allow ethernet_host hdf_ethernet_service:hdf_devmgr_class add;",
+        "llm_scope": [
+          "add"
+        ],
+        "review": "APPROVE"
+      },
+      {
+        "file": "ohos_policy\\security\\dlp_permission_service\\system\\storage_daemon.te",
+        "rule": "allow storage_daemon dlp_fuse_file:dir { search };",
+        "denial": {
+          "source_domain": "storage_daemon",
+          "target_type": "dlp_fuse_file",
+          "tclass": "dir",
+          "permissions": [
+            "search"
+          ],
+          "ioctl_cmd": null
+        },
+        "missing": [
+          "search"
+        ],
+        "llm_patch": "allow storage_daemon dlp_fuse_file:dir search;",
+        "llm_scope": [
+          "search"
+        ],
+        "review": "APPROVE"
+      },
+      {
+        "file": "ohos_policy\\multimedia\\player\\system\\system_core_hap.te",
+        "rule": "allow system_core_hap_attr media_service:fd { use };",
+        "denial": {
+          "source_domain": "system_core_hap",
+          "target_type": "media_service",
+          "tclass": "fd",
+          "permissions": [
+            "use"
+          ],
+          "ioctl_cmd": null
+        },
+        "missing": [
+          "use"
+        ],
+        "llm_patch": "allow system_core_hap media_service:fd use;",
+        "llm_scope": [
+          "use"
+        ],
+        "review": "APPROVE"
+      },
+      {
+        "file": "ohos_policy\\resourceschedule\\background_task_mgr\\system\\bgtaskmgr_service.te",
+        "rule": "allow bgtaskmgr_service tty_device:chr_file { read write };",
+        "denial": {
+          "source_domain": "bgtaskmgr_service",
+          "target_type": "tty_device",
+          "tclass": "chr_file",
+          "permissions": [
+            "read",
+            "write"
+          ],
+          "ioctl_cmd": null
+        },
+        "missing": [
+          "read",
+          "write"
+        ],
+        "llm_patch": "allow bgtaskmgr_service tty_device:chr_file { read write };",
+        "llm_scope": [
+          "read",
+          "write"
+        ],
+        "review": "APPROVE"
+      },
+      {
+        "file": "ohos_policy\\filemanagement\\storage_service\\system\\hap_domain.te",
+        "rule": "allow hap_domain storage_manager:binder { call };",
+        "denial": {
+          "source_domain": "system_basic_hap",
+          "target_type": "storage_manager",
+          "tclass": "binderpermissive=1",
+          "permissions": [
+            "call"
+          ],
+          "ioctl_cmd": null
+        },
+        "missing": [
+          "call"
+        ],
+        "llm_patch": "allow system_basic_hap storage_manager:binder call;",
+        "llm_scope": [
+          "call"
+        ],
+        "review": "APPROVE"
+      },
+      {
+        "file": "ohos_policy\\communication\\wifi\\system\\wifi_manager_service.te",
+        "rule": "allow wifi_manager_service wifi_manager_service:netlink_generic_socket { create setopt bind getattr write read };",
+        "denial": {
+          "source_domain": "wifi_manager_service",
+          "target_type": "wifi_manager_service",
+          "tclass": "netlink_generic_socket",
+          "permissions": [
+            "setopt"
+          ],
+          "ioctl_cmd": null
+        },
+        "missing": [
+          "setopt"
+        ],
+        "llm_patch": "allow wifi_manager_service self:netlink_generic_socket setopt;",
+        "llm_scope": [
+          "setopt"
+        ],
+        "review": "APPROVE"
+      },
+      {
+        "file": "ohos_policy\\web\\webview\\system\\isolated_gpu.te",
+        "rule": "allow isolated_gpu hdf_codec_component_manager_service:hdf_devmgr_class { get };",
+        "denial": {
+          "source_domain": "isolated_gpu",
+          "target_type": "hdf_codec_component_manager_service",
+          "tclass": "hdf_devmgr_class",
+          "permissions": [
+            "get"
+          ],
+          "ioctl_cmd": null
+        },
+        "missing": [
+          "get"
+        ],
+        "llm_patch": "allow isolated_gpu hdf_codec_component_manager_service:hdf_devmgr_class get;",
+        "llm_scope": [
+          "get"
+        ],
+        "review": "APPROVE"
+      },
+      {
+        "file": "ohos_policy\\security\\dlp_permission_service\\system\\init.te",
+        "rule": "allow init dlp_permission_data_file:dir { relabelto };",
+        "denial": {
+          "source_domain": "init",
+          "target_type": "dlp_permission_data_file",
+          "tclass": "dir",
+          "permissions": [
+            "relabelto"
+          ],
+          "ioctl_cmd": null
+        },
+        "missing": [
+          "relabelto"
+        ],
+        "llm_patch": "allow init dlp_permission_data_file:dir relabelto;",
+        "llm_scope": [
+          "relabelto"
+        ],
+        "review": "APPROVE"
+      },
+      {
+        "file": "ohos_policy\\ai\\intelligent_voice_framework\\system\\intell_voice_service.te",
+        "rule": "allow intell_voice_service proc_file:file { open read };",
+        "denial": {
+          "source_domain": "intell_voice_service",
+          "target_type": "proc_file",
+          "tclass": "file",
+          "permissions": [
+            "open"
+          ],
+          "ioctl_cmd": null
+        },
+        "missing": [
+          "open"
+        ],
+        "llm_patch": "allow intell_voice_service proc_file:file open;",
+        "llm_scope": [
+          "open"
+        ],
+        "review": "APPROVE"
+      },
+      {
+        "file": "ohos_policy\\developtools\\hdc\\system\\su.te",
+        "rule": "allow su drm_service:dir { getattr search };",
+        "denial": {
+          "source_domain": "su",
+          "target_type": "drm_service",
+          "tclass": "dir",
+          "permissions": [
+            "search"
+          ],
+          "ioctl_cmd": null
+        },
+        "missing": [
+          "search"
+        ],
+        "llm_patch": "allow su drm_service:dir search;",
+        "llm_scope": [
+          "search"
+        ],
+        "review": "APPROVE"
+      },
+      {
+        "file": "ohos_policy\\update\\updater\\system\\updater.te",
+        "rule": "allow updater dev_hdf_file:chr_file { getattr read write open ioctl };",
+        "denial": {
+          "source_domain": "updater",
+          "target_type": "dev_hdf_file",
+          "tclass": "chr_file",
+          "permissions": [
+            "getattr"
+          ],
+          "ioctl_cmd": null
+        },
+        "missing": [
+          "getattr"
+        ],
+        "llm_patch": "allow updater dev_hdf_file:chr_file getattr;",
+        "llm_scope": [
+          "getattr"
+        ],
+        "review": "APPROVE"
+      },
+      {
+        "file": "ohos_policy\\web\\webview\\system\\samgr.te",
+        "rule": "allow samgr isolated_render:binder { call transfer };",
+        "denial": {
+          "source_domain": "samgr",
+          "target_type": "isolated_render",
+          "tclass": "binder",
+          "permissions": [
+            "transfer"
+          ],
+          "ioctl_cmd": null
+        },
+        "missing": [
+          "transfer"
+        ],
+        "llm_patch": "allow samgr isolated_render:binder transfer;",
+        "llm_scope": [
+          "transfer"
+        ],
+        "review": "APPROVE"
+      },
+      {
+        "file": "ohos_policy\\msdp\\devicestatus\\system\\system_core_hap.te",
+        "rule": "allow system_core_hap_attr msdp_sa:fd { use };",
+        "denial": {
+          "source_domain": "system_core_hap",
+          "target_type": "msdp_sa",
+          "tclass": "fd",
+          "permissions": [
+            "use"
+          ],
+          "ioctl_cmd": null
+        },
+        "missing": [
+          "use"
+        ],
+        "llm_patch": "allow system_core_hap msdp_sa:fd use;",
+        "llm_scope": [
+          "use"
+        ],
+        "review": "APPROVE"
+      },
+      {
+        "file": "ohos_policy\\update\\updater\\system\\ueventd.te",
+        "rule": "allow ueventd dev_file:lnk_file { create };",
+        "denial": {
+          "source_domain": "ueventd",
+          "target_type": "dev_file",
+          "tclass": "lnk_file",
+          "permissions": [
+            "create"
+          ],
+          "ioctl_cmd": null
+        },
+        "missing": [
+          "create"
+        ],
+        "llm_patch": "allow ueventd dev_file:lnk_file create;",
+        "llm_scope": [
+          "create"
+        ],
+        "review": "APPROVE"
+      },
+      {
+        "file": "ohos_policy\\update\\updater\\system\\write_updater.te",
+        "rule": "allow write_updater dev_unix_socket:dir { search };",
+        "denial": {
+          "source_domain": "write_updater",
+          "target_type": "dev_unix_socket",
+          "tclass": "dir",
+          "permissions": [
+            "search"
+          ],
+          "ioctl_cmd": null
+        },
+        "missing": [
+          "search"
+        ],
+        "llm_patch": "allow write_updater dev_unix_socket:dir search;",
+        "llm_scope": [
+          "search"
+        ],
+        "review": "APPROVE"
+      }
+    ],
+    "evaluated": 60,
+    "informative_total": 1915,
+    "mode": "greedy"
+  },
+  "use_real_llm": true,
+  "config": {
+    "limit": 60,
+    "seed": 0,
+    "mode": "greedy"
+  }
+}

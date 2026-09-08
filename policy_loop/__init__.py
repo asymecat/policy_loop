@@ -1,1 +1,3 @@
-"""PolicyLoop —— OpenHarmony SELinux 策略自学习 + 最小权限收敛。"""
+"""PolicyLoop - OpenHarmony SELinux security policy diagnosis & repair agent."""
+
+__version__ = "0.1.0"

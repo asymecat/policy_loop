@@ -1,89 +1,109 @@
 # PolicyLoop
 
-**OpenHarmony SELinux 运行态策略自学习 + 最小权限收敛**
+面向 **OpenHarmony** 安全子系统（SELinux/访问控制）的 denial 诊断与**最小权限**修复 Agent —— L1（确定性核心）、L2（真实语料评测基线）与 L3（Multi-Agent 最小闭环）已完成。
 
-把内核记下的 `avc: denied` 访问拒绝日志,自动「读懂 → 定位根因 → 生成最小安全修复 → 评审验证 → 一键把设备从 permissive 收紧到 enforcing」。
+> 完整方案与设计见 [`docs/design.md`](docs/design.md)（含"先仿真、后真机"执行策略）。
 
-> 2026 开源鸿蒙大学生创新大赛 · 赛道一「系统与技术创新」· 10/31 提交
+## 现状（2026-09-07）
 
----
+**无第三方运行时依赖、可断网演示。** 已实现：
 
-## 它解决什么问题
+- `policy_loop.denial.parser`：OpenHarmony 风格 AVC denial 解析器
+- `policy_loop.policy.index`：`.te` 策略索引（allow/allowxperm/neverallow + attribute 闭包 + 宏展开 + ioctl xperm 判定）
+- `policy_loop.agents.*`：**L3 Multi-Agent 闭环**（Log→Policy→Security→Repair→Reviewer→Verify + Orchestrator Agent Trace）
+- `policy_loop.eval.*`：L2 评测工具（corpus / extract / replay）
+- `policy_loop.selfcheck`：环境 + 模块 + 冒烟自检
 
-OpenHarmony 里,应用/服务想碰系统资源都得过 **SELinux** 这道门禁;刷不过去,内核就记一条 `avc: denied`(访问被拒)日志。但这类日志开发者普遍**看不懂、也不知道该在哪补规则**,很多人干脆把门禁开成"只记不拦"(permissive)。
+**L2 实测基线**（真实上游 `security_selinux_adapter` 语料，1315 个 `.te`）：
+- 索引 21,790 条规则；抽取 **3,367 对 denial→修复 golden、5,161 条真实 denial**
+- 回放 **coverage_all 97.2%**（5,117 条可评测中 4,973 条判定正确），见 [`docs/eval-L2.md`](docs/eval-L2.md)
 
-**一条 denial 长这样:**
+**L3 Agent 闭环**：一条 denial → 人话解释 + 最小权限补丁 + 安全评审 + 验证（规则版，断网可跑；LLM 可插拔）。
+- golden 留一回归（1915 个真实"单规则可解释"denial 上）：**识别需修复/拒绝越权 100%、最小权限 100%、59% 与上游人工修复一致、39% 比上游更收敛、neverallow 一律拒放权**（[`docs/eval-agent-L3.md`](docs/eval-agent-L3.md)）
+- LLM 对比（真模型 deepseek-v4-flash，54 个真实样本）：**最小权限指令 + 规则护栏 → 100% 最小权限、0 越权**；而"未受约束 AI 放权"100% 过宽被护栏 100% 拦截并精修（[`docs/eval-llm-guardrail.md`](docs/eval-llm-guardrail.md)）
 
-```
-avc:  denied { read } comm="media_service" path="/dev/video0"
-     scontext=u:r:media_service:s0  tcontext=u:object_r:camera_device:s0
-     tclass=chr_file permissive=1
-```
-
-- `scontext` = 发起方(哪个进程/权限域,如 `media_service`)
-- `tcontext` = 目标(要碰哪类资源,如 `camera_device`)
-- `tclass` = 资源种类(这里是字符设备 `chr_file`)
-- 结尾 `permissive=1` 只记不拦;`permissive=0` 是真拦截、那功能就失败了
-
-**被拒不一定是"缺规则",所以补丁不能乱补:**
-
-- 规则写在 `.te` 文件里,形如 `allow media_service camera_device:chr_file { ioctl };` = 允许媒体服务对摄像头设备做 `ioctl`;
-- 但 `file_contexts` 规定文件系统里"哪个文件贴什么标签"——**标签贴错了也会被拒**,根因≠缺规则。
-
-PolicyLoop 要做的是把每条 denial 自动归到五类根因之一,然后分而治之:
-
-> **缺规则** · **标签贴错** · **跑错权限域** · **疑似越权(报警)** · **噪音**
-
-对前三类自动出最小安全修复、对越权报警、把噪音滤掉——**不需要人读懂日志,机器替你读、替你定位、替你出最小修复,还替你验证安全**。
-
-## 交付的样子(演示主线)
-
-1. 一台鸿蒙真机处于 permissive —— 跑一个真实场景,采集器抓到一堆 denial
-2. PolicyLoop 在 PC 上把每条日志**解析成人话**
-3. 多智能体(AI)定位根因,给出**最小权限修复补丁**草稿
-4. 评审 agent 挑刺:不放太宽、不违反系统红线
-5. 一键把设备**收紧到 enforcing** —— 系统功能依旧正常、越权访问被挡
-
-## 两层架构
-
-| 端 | 内容 | 谁开发 |
-|---|---|---|
-| **设备端(轻)** | 真机上抓 denial 日志的小采集器 | 队长(M3 用真机) |
-| **主机端(重)** | PC 端分析平台(主要开发部分)—— **确定性内核**(解析/索引/诊断/验证,可证明可离线)+ **多智能体**(AI 定位与文案,可摘除) | 团队主力,纯 Python |
-
-## 快速开始(队友 / 贡献者)
-
-只需要 **Python 3.12**。⚠️ **不需要 OHOS 源码树、不需要真机、不需要 GPU** —— 那是 M3 队长侧(ohos_src + DAYU200)才碰的东西,按 onboarding 推进即可。
+## 快速开始
 
 ```bash
-# 1. 独立 Python 环境
-conda create -n pl python=3.12 -y
-conda activate pl
-
-# 2. 拉仓库
-git clone https://github.com/asymecat/policy_loop.git
-cd policy_loop
-
-# 3. 自检:看到 "✔ 环境 OK" 就算通过
+# 自检（环境/模块/冒烟样例，全绿才算就绪）
 python -m policy_loop.selfcheck
+
+# 单测（标准库 unittest，无需安装额外依赖）
+python -m unittest discover -s tests -v
+
+# L3 Multi-Agent 演示（内置 3 个场景 + Agent Trace）
+python -m policy_loop.agents.demo
+
+# Web UI（Agent Trace 动画 + 结果卡片；浏览器打开 http://127.0.0.1:8765）
+python -m webui.server --port 8765
+# 默认加载上游全量语料（data/raw/oh-selinux）；无则用 fixtures 小策略
+
+# 解析任意一条 denial
+python -m policy_loop.agents.demo --denial "<avc: denied ...>"
 ```
 
-## 项目结构
+命令行解析演示：
 
+```bash
+python -m policy_loop.denial.parser --text "avc: denied { set } for parameter=persist.account.login_name_max pid=2208 uid=3058 gid=3058 scontext=u:r:accountmgr:s0 tcontext=u:object_r:persist_param:s0 tclass=parameter_service permissive=0"
 ```
+
+## 目录结构
+
+```text
 policy_loop/
-├── docs/onboarding.md   # 队友上手手册:概念 → 分步任务 → 完成标志
-├── README.md            # 你正在看的
-└── policy_loop/         # 主包(纯 Python,零第三方依赖)
-    ├── selfcheck.py     # 环境自检入口
-    └── avc/             # avc 解析层:denial 文本 -> 结构化 JSON
-        ├── parser.py    # 行解析
-        ├── contexts.py  # scontext/tcontext/tclass 归一化
-        ├── model.py     # 结构化数据模型
-        └── tests/       # 用例 + 真实格式 fixture
+  denial/parser.py    # denial 解析（确定性，无 LLM）
+  policy/index.py     # .te 策略索引与查询（allow/neverallow/allowxperm + attribute/宏）
+  agents/             # L3：SecurityCase + Orchestrator + 6 Agents + 可插拔 LLM Provider
+  eval/               # L2/L3 评测：corpus / extract / replay / agent_eval(留一)
+  selfcheck.py        # 自检入口
+webui/                # Web UI：stdlib HTTP server + /api/analyze + Agent Trace 前端
+data/
+  fixtures/           # 测试/演示样例（含上游真实格式 denial）
+  eval/golden.jsonl   # 自证 denial→修复 评测集（3,367 对，已入库）
+  reports/            # corpus/replay/agent-eval 评测报告（已入库）
+  raw/                # 上游语料（稀疏克隆，不入库，需自行拉取）
+docs/                 # 方案与路线文档
+tests/                # 单测（47 个）
 ```
 
-## 文档导航
+## L2/L3 评测命令
 
-- 想**上手开发 / 了解每一步任务 / 查看进度里程碑(M0–M4)**:看 [`docs/onboarding.md`](docs/onboarding.md),进度只在 onboarding 维护,不在此重复
-- 想**验证自己环境**:跑上面快速开始的第 3 步 `python -m policy_loop.selfcheck`
+```bash
+# 先拉上游语料（一次性；默认在 data/raw/oh-selinux）
+git clone --depth 1 --sparse https://gitee.com/openharmony/security_selinux_adapter.git data/raw/oh-selinux
+# （然后）cd data/raw/oh-selinux && git sparse-checkout set sepolicy
+
+python -m policy_loop.eval.corpus          # 语料规模统计
+python -m policy_loop.eval.extract         # golden 评测集抽取
+python -m policy_loop.eval.replay          # 索引覆盖回放（coverage 97.2%）
+python -m policy_loop.eval.agent_eval --limit 400 --seed 0
+                                           # L3 Agent 留一回归（生成补丁正确性）
+python -m policy_loop.eval.agent_llm_eval --limit 120 --mode greedy
+                                           # LLM 自由补丁 vs 规则护栏对比
+```
+
+## 接入真实 LLM（可选）
+
+复制 `.env.example` 为 `.env` 并填入 key（`.env` 已在 `.gitignore`，密钥不会入库、不进对话）：
+
+```text
+OPENAI_API_KEY=sk-...
+OPENAI_BASE_URL=https://api.deepseek.com/v1   # OpenAI/DeepSeek/Ollama 等兼容端点
+OPENAI_MODEL=deepseek-chat
+```
+
+用途：
+- `agent_llm_eval`：让真实 LLM 直接起草修复补丁，量化其过宽/漏修率，并验证 ReviewerAgent 护栏能拦截并精修回最小权限；
+- 未配置 key 时自动回退到可复现的 **naive-LLM 档位**（`--mode moderate|greedy`），评测断网可跑。
+- 主链路始终确定性优先；LLM 只做增强（解释/候选），安全决策由规则护栏把关。
+
+## Roadmap（仿真 → 真机）
+
+| 级 | 内容 | 状态 |
+|---|---|---|
+| L0 | 仓库骨架 + selfcheck + CI | ✅ |
+| L1 | Parser + Policy Index（数据仿真） | ✅ |
+| L2 | 真实语料评测基线（coverage 97.2%） | ✅ |
+| L3 | Multi-Agent 闭环 + 最小权限 patch + Verify | ✅（规则版；LLM 增强待接） |
+| L4 | DAYU200 真机验证 | 未开始 |

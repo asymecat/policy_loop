@@ -1,0 +1,15 @@
+# synthetic sample policy (mirrors OpenHarmony sepolicy style)
+# NOTE: hand-written for tests/demo; real corpus comes from upstream sepolicy in L2.
+type media_service;
+type sys_prod_file;
+type dev_camera_file;
+type dev_bbox;
+attribute hap_domain;
+type normal_hap, hap_domain;
+type system_basic_hap, hap_domain;
+
+allow media_service dev_camera_file:chr_file { open read };
+allowxperm media_service dev_camera_file:chr_file ioctl { 0x641f };
+allow media_service sys_prod_file:file { ioctl };
+neverallow normal_hap dev_bbox:chr_file { read };
+allow hap_domain sys_prod_file:file { read };

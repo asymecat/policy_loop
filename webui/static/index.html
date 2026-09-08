@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>PolicyLoop · OpenHarmony 安全策略诊断与修复平台</title>
+<style>
+  :root{
+    --brand:#2f6bff; --brand-d:#1e4fd6; --brand-l:#eaf1ff;
+    --ok:#16a34a; --ok-l:#eafaf1; --warn:#d97706; --warn-l:#fff7e6;
+    --err:#dc2626; --err-l:#fdecec;
+    --bg:#f6f8fc; --card:#fff; --line:#e5e9f2; --text:#1c2333;
+    --dim:#6b7488; --mono:ui-monospace,"Cascadia Code",Consolas,monospace;
+    --shadow:0 1px 2px rgba(16,24,40,.04),0 8px 24px rgba(16,24,40,.06);
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);
+    font:15px/1.65 -apple-system,"Segoe UI",Roboto,"PingFang SC","Microsoft YaHei",sans-serif}
+  a{color:var(--brand);text-decoration:none}
+  .container{max-width:1160px;margin:0 auto;padding:0 22px}
+
+  /* ---------- top bar ---------- */
+  .topbar{background:#fff;border-bottom:1px solid var(--line);position:sticky;top:0;z-index:5}
+  .topbar .in{display:flex;align-items:center;gap:16px;height:60px}
+  .logo{display:flex;align-items:center;gap:10px;font-weight:800;font-size:19px;color:var(--text)}
+  .logo .mark{width:34px;height:34px;border-radius:9px;display:grid;place-items:center;
+    background:linear-gradient(135deg,var(--brand),#5b8cff);color:#fff;font-size:18px}
+  .logo small{display:block;font-weight:500;font-size:11px;color:var(--dim);line-height:1.1}
+  .topbar .spacer{flex:1}
+  .chiprule{font-size:12.5px;color:var(--dim);background:var(--bg);border:1px solid var(--line);
+    padding:4px 12px;border-radius:999px;white-space:nowrap}
+  .topbar .doc{font-size:13.5px}
+
+  /* ---------- hero ---------- */
+  .hero{padding:26px 0 6px}
+  .hero h1{margin:0;font-size:30px;letter-spacing:.2px}
+  .hero h1 .hl{color:var(--brand)}
+  .hero p{margin:6px 0 0;color:var(--dim);max-width:780px}
+  .statline{display:flex;gap:10px;flex-wrap:wrap;margin:16px 0 2px}
+  .stat{background:#fff;border:1px solid var(--line);border-radius:12px;padding:8px 16px;box-shadow:var(--shadow)}
+  .stat b{font-size:18px;color:var(--brand)} .stat span{display:block;font-size:12px;color:var(--dim)}
+
+  /* ---------- layout ---------- */
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-top:18px;align-items:start}
+  @media(max-width:960px){.grid{grid-template-columns:1fr}}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:16px;box-shadow:var(--shadow);overflow:hidden}
+  .card h2{margin:0;padding:14px 18px;font-size:14px;color:var(--text);border-bottom:1px solid var(--line);
+    display:flex;align-items:center;gap:8px;background:#fcfdff}
+  .card h2 .num{width:20px;height:20px;border-radius:6px;background:var(--brand-l);color:var(--brand);
+    font-size:12px;font-weight:700;display:grid;place-items:center}
+  .card .body{padding:16px 18px}
+
+  /* input */
+  textarea{width:100%;min-height:128px;border:1px solid var(--line);border-radius:10px;padding:12px 14px;
+    font:13px var(--mono);color:var(--text);background:#fbfcfe;resize:vertical}
+  textarea:focus{outline:2px solid var(--brand-l);border-color:var(--brand)}
+  .scen{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0 14px}
+  .scen button{font-size:12.5px;color:var(--brand);background:var(--brand-l);border:1px solid #cddcff;
+    padding:4px 12px;border-radius:999px;cursor:pointer;transition:.15s}
+  .scen button:hover{background:#d8e5ff}
+  .actions{display:flex;gap:10px;align-items:center}
+  .btn{font-weight:600;font-size:14px;border:0;border-radius:9px;padding:9px 22px;cursor:pointer}
+  .btn-primary{background:var(--brand);color:#fff;box-shadow:0 4px 12px rgba(47,107,255,.25)}
+  .btn-primary:hover{background:var(--brand-d)}
+  .btn-primary:disabled{opacity:.55;cursor:default}
+  .hint{font-size:12px;color:var(--dim)}
+
+  /* results */
+  .empty{color:var(--dim);font-size:13.5px;padding:6px 0}
+  .verdictline{display:flex;gap:8px;flex-wrap:wrap;align-items:center;padding:14px 18px;border-bottom:1px dashed var(--line)}
+  .tag{display:inline-flex;align-items:center;gap:6px;padding:3px 11px;border-radius:999px;font-size:12.5px;font-weight:600}
+  .tag .dot{width:7px;height:7px;border-radius:50%;background:currentColor}
+  .t-brand{background:var(--brand-l);color:var(--brand)}
+  .t-ok{background:var(--ok-l);color:var(--ok)} .t-warn{background:var(--warn-l);color:var(--warn)}
+  .t-err{background:var(--err-l);color:var(--err)} .t-dim{background:#f0f2f7;color:var(--dim)}
+  .section{padding:14px 18px;border-bottom:1px solid var(--line)}
+  .section:last-child{border-bottom:0}
+  .section .ttl{font-size:12.5px;color:var(--dim);letter-spacing:.4px;margin-bottom:8px;font-weight:600}
+  .explain{background:var(--brand-l);border:1px solid #d6e4ff;border-left:4px solid var(--brand);
+    border-radius:10px;padding:12px 14px;font-size:14px}
+  table{width:100%;border-collapse:collapse;font-size:13.5px}
+  th{color:var(--dim);font-weight:600;text-align:left;padding:7px 8px;border-bottom:1px solid var(--line);font-size:12.5px}
+  td{padding:8px;border-bottom:1px solid #eef1f7;vertical-align:top}
+  tr:last-child td{border-bottom:0}
+  .mono{font-family:var(--mono)}
+  code.patch{display:block;background:#0f172a;color:#cde2ff;border-radius:10px;padding:12px 14px;
+    font:13px var(--mono);white-space:pre-wrap;margin:2px 0 8px}
+  .note{font-size:12.5px;color:var(--dim)}
+
+  /* timeline */
+  .steps{list-style:none;margin:0;padding:8px 2px 4px}
+  .steps li{display:flex;gap:12px;position:relative;padding-bottom:2px;opacity:0;animation:in .35s forwards}
+  @keyframes in{to{opacity:1}}
+  .steps .rail{display:flex;flex-direction:column;align-items:center;width:22px}
+  .steps .nd{width:14px;height:14px;border-radius:50%;margin-top:5px;z-index:1}
+  .steps .nd.ok{background:var(--ok);box-shadow:0 0 0 4px var(--ok-l)}
+  .steps .nd.bad{background:var(--err);box-shadow:0 0 0 4px var(--err-l)}
+  .steps .nd.warn{background:var(--warn);box-shadow:0 0 0 4px var(--warn-l)}
+  .steps .nd.run{background:var(--brand);box-shadow:0 0 0 4px var(--brand-l)}
+  .steps .nd.neu{background:#c3cad8;box-shadow:0 0 0 4px #f0f2f7}
+  .steps .line{flex:1;width:2px;background:var(--line)}
+  .steps li:last-child .line{display:none}
+  .step-body{padding-bottom:14px;min-width:0}
+  .agent{display:inline-block;font-size:11.5px;font-weight:700;color:var(--brand);background:var(--brand-l);
+    padding:1px 8px;border-radius:6px;margin-right:6px;vertical-align:1px}
+  .act{font-weight:600;font-size:13.5px}
+  .detail{font-size:12.5px;color:var(--dim);font-family:var(--mono);word-break:break-all;margin-top:1px}
+
+  .final{display:flex;align-items:center;gap:10px;background:#fff;border:1px solid var(--ok);
+    color:var(--ok);border-radius:12px;padding:10px 16px;font-weight:800;margin-top:4px;font-size:14px}
+  .final.warn{border-color:var(--warn);color:var(--warn)}
+
+  footer{margin:26px 0 40px;color:var(--dim);font-size:12.5px;display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="container in">
+    <div class="logo">
+      <span class="mark">🛡</span>
+      <span>PolicyLoop<small>OpenHarmony 安全策略诊断与修复平台</small></span>
+    </div>
+    <div class="spacer"></div>
+    <span class="chiprule" id="policyLabel">策略：加载中…</span>
+    <a class="doc" href="#" onclick="return false">使用说明</a>
+  </div>
+</div>
+
+<div class="container">
+  <div class="hero">
+    <h1>让 AI 找到正确的那张门卡，<span class="hl">而不是把门拆掉</span></h1>
+    <p>面向 OpenHarmony 系统开发者：解析 AVC denial 日志 → 多智能体定位根因 → 生成并审查最小权限修复 → 数据驱动验证。
+       全程证据驱动、确定性优先，绝不放宽超出 denial 证据的权限。</p>
+    <div class="statline">
+      <div class="stat"><b>97.2%</b><span>策略覆盖回放（真实语料）</span></div>
+      <div class="stat"><b>100%</b><span>最小权限补丁（留一回归）</span></div>
+      <div class="stat"><b>3,367</b><span>真实 denial→修复评测集</span></div>
+    </div>
+  </div>
+
+  <div class="grid">
+    <!-- 左侧：输入 -->
+    <div class="card">
+      <h2><span class="num">1</span>输入安全事件（AVC denial）</h2>
+      <div class="body">
+        <div class="scen" id="chips"></div>
+        <textarea id="denial" spellcheck="false" placeholder="粘贴一条 avc: denied 日志，或点上方选择一个演示场景…"></textarea>
+        <div class="actions" style="margin-top:12px">
+          <button class="btn btn-primary" id="run">运行智能诊断</button>
+          <span class="hint">由 Log → Policy → Security → Repair → Review → Verify 六个智能体协作</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- 右侧：结果 -->
+    <div class="card">
+      <h2><span class="num">2</span>诊断结果</h2>
+      <div id="verdictline" class="verdictline"></div>
+      <div id="result"><div class="empty" style="padding:18px">运行后将在此展示：根因分类、人话解释、候选修复方案、最小权限补丁与安全验证结论。</div></div>
+    </div>
+  </div>
+
+  <!-- 执行过程 -->
+  <div class="card" style="margin-top:18px">
+    <h2><span class="num">3</span>智能体执行过程（Agent Trace）<span class="hint" style="margin-left:auto;font-weight:400">逐条回放，供审计与复现</span></h2>
+    <div class="body">
+      <ul class="steps" id="trace"></ul>
+    </div>
+  </div>
+
+  <footer>
+    <span>PolicyLoop · 证据驱动 · 最小权限 · 自动验证 · 全程离线可运行</span>
+    <span>开源鸿蒙大学生创新大赛 · 系统与技术创新赛道</span>
+  </footer>
+</div>
+
+<script>
+const $=id=>document.getElementById(id);
+let meta=null, stop=false;
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+const esc=s=>(s==null?'':String(s)).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+const CN={
+  cls:{MISSING_RULE:'缺规则',XPERM_GAP:'ioctl 命令号缺口',POTENTIAL_ESCALATION:'疑似越权',
+       NOISE_OR_ALREADY_FIXED:'噪声 / 已修复',DOMAIN_OR_LABEL_MISMATCH:'域或标签不匹配'},
+  rev:{APPROVE:'已通过',REJECT:'已拒绝',SKIP:'跳过'},
+  ver:{SUCCESS:'通过',FAILED:'失败',SECURITY_REGRESSION:'安全回归',
+       BLOCKED_BY_REVIEW:'被评审阻断',HUMAN_REVIEW_REQUIRED:'需人工决策',
+       VERIFIED_AS_NOISE:'无需修复（噪声）'}
+};
+
+async function loadMeta(){
+  const r=await fetch('/api/meta'); meta=await r.json();
+  $('policyLabel').textContent='策略：'+meta.policy_label;
+  $('chips').innerHTML='';
+  meta.scenarios.forEach((s,i)=>{
+    const b=document.createElement('button');
+    b.textContent='演示 '+(i+1)+'：'+s.label;
+    b.onclick=()=>{$('denial').value=s.denial;};
+    $('chips').appendChild(b);
+  });
+}
+
+function tag(text,kind){const s=document.createElement('span');s.className='tag '+kind;s.innerHTML='<span class="dot"></span>'+esc(text);return s;}
+
+function addStep(agent,action,status,detail){
+  const li=document.createElement('li');
+  const dotCls=status==='ok'?'ok':(status==='reject'||status==='fail')?'bad':
+    (status==='run')?'run':(status==='skip')?'neu':'neu';
+  li.innerHTML=`<span class="rail"><span class="nd ${dotCls}"></span><span class="line"></span></span>
+    <div class="step-body"><span class="agent">${esc(agent)}</span><span class="act">${esc(action)}</span>
+    ${detail?`<div class="detail">${esc(detail)}</div>`:''}</div>`;
+  $('trace').appendChild(li);
+}
+
+async function play(trace){
+  $('trace').innerHTML=''; stop=false;
+  for(const t of trace){
+    if(stop) return;
+    addStep(t.agent,t.action,t.status,t.detail);
+    $('trace').scrollIntoView({block:'nearest'});
+    await sleep(300);
+  }
+}
+
+function kindTag(cls){const m={MISSING_RULE:'t-brand',XPERM_GAP:'t-warn',
+  POTENTIAL_ESCALATION:'t-err',NOISE_OR_ALREADY_FIXED:'t-ok',DOMAIN_OR_LABEL_MISMATCH:'t-warn'};
+  return m[cls]||'t-dim';}
+
+function renderResult(c){
+  const vl=$('verdictline'); vl.innerHTML='';
+  const clsCN=CN.cls[c.classification]||c.classification;
+  const t1=tag('根因：'+clsCN, kindTag(c.classification)); t1.title='枚举：'+c.classification; vl.appendChild(t1);
+  const rv=(c.verify&&c.verify.status)||'—';
+  const ok=rv==='SUCCESS'||rv==='VERIFIED_AS_NOISE'||rv==='HUMAN_REVIEW_REQUIRED';
+  const revS=(c.review&&c.review.status)||'—';
+  const t2=tag('评审：'+(CN.rev[revS]||revS), revS==='REJECT'?'t-err':'t-warn');
+  t2.title='枚举：'+revS; vl.appendChild(t2);
+  const t3=tag('验证：'+(CN.ver[rv]||rv), ok?'t-ok':'t-err'); t3.title='枚举：'+rv; vl.appendChild(t3);
+
+  const r=$('result'); r.innerHTML='';
+
+  const s1=document.createElement('div'); s1.className='section';
+  s1.innerHTML='<div class="ttl">根因解读</div><div class="explain">'+esc(c.explanation||'')+'</div>';
+  r.appendChild(s1);
+
+  if(c.candidates&&c.candidates.length){
+    const s2=document.createElement('div'); s2.className='section';
+    s2.innerHTML='<div class="ttl">候选修复方案</div>';
+    const tb=document.createElement('table');
+    tb.innerHTML='<tr><th style="width:34px">#</th><th style="width:110px">风险</th><th>修复方向 / 补丁</th><th>说明</th></tr>';
+    const riskT={LOW:['t-ok','低'],MEDIUM:['t-warn','中'],'MEDIUM-HIGH':['t-warn','中高'],HIGH:['t-err','高'],'LOW-MEDIUM':['t-dim','低-中']};
+    c.candidates.forEach(cd=>{
+      const tr=document.createElement('tr');
+      const rk=riskT[cd.risk]||['t-dim',cd.risk];
+      tr.innerHTML=`<td style="font-weight:700">${esc(cd.id)}</td><td></td>
+        <td class="mono" style="font-size:12.5px">${esc(cd.patch_draft||'（不改权限，调整域/标签/调用）')}</td>
+        <td class="note">${esc(cd.note||'')}</td>`;
+      tr.children[1].appendChild(tag(rk[1],rk[0]));
+      tb.appendChild(tr);
+    });
+    s2.appendChild(tb); r.appendChild(s2);
+  }
+
+  const s3=document.createElement('div'); s3.className='section';
+  s3.innerHTML='<div class="ttl">推荐修复（最小权限）</div>';
+  if(c.patch){
+    const pre=document.createElement('code'); pre.className='patch'; pre.textContent=c.patch;
+    s3.appendChild(pre);
+    if(c.patch_target_note){const n=document.createElement('div');n.className='note';n.textContent=c.patch_target_note;s3.appendChild(n);}
+  }else{
+    const n=document.createElement('div');n.className='note';
+    n.textContent=c.needs_human?'该访问可能越权或属架构问题，PolicyLoop 拒绝自动放权，需人工决策。':'无需修改（噪声或已允许）。';
+    s3.appendChild(n);
+  }
+  r.appendChild(s3);
+
+  const rev=c.review||{}, ver=c.verify||{};
+  if(rev.reasons&&rev.reasons.length){const s4=document.createElement('div');s4.className='section';
+    s4.innerHTML='<div class="ttl">评审意见</div><div class="note" style="color:var(--err)">'+esc(rev.reasons.join('；'))+'</div>';r.appendChild(s4);}
+  if(ver.reason){const s4=document.createElement('div');s4.className='section';
+    s4.innerHTML='<div class="ttl">验证说明</div><div class="note">'+esc(ver.reason)+'</div>';r.appendChild(s4);}
+
+  const fin=document.createElement('div'); fin.className='final'+(ok?'':' warn');
+  fin.textContent=ok?'验证通过：最小权限补丁已通过安全评审与验证':'需要关注 · 未通过自动验证';
+  r.appendChild(fin);
+}
+
+async function run(){
+  const denial=$('denial').value.trim();
+  if(!denial){alert('请先粘贴一条 denial 或选择演示场景');return;}
+  $('run').disabled=true;
+  $('verdictline').innerHTML=''; $('result').innerHTML='<div class="empty" style="padding:18px">分析中…</div>';
+  $('trace').innerHTML='';
+  try{
+    const res=await fetch('/api/analyze',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({denial})});
+    const data=await res.json();
+    if(!data.ok) throw new Error(data.error||'服务端错误');
+    const c=data.case;
+    await play(c.trace);
+    renderResult(c);
+  }catch(e){
+    $('result').innerHTML='<div class="empty" style="color:var(--err)">诊断出错：'+esc(e.message)+'</div>';
+  }finally{$('run').disabled=false;}
+}
+$('run').onclick=run;
+loadMeta();
+</script>
+</body>
+</html>

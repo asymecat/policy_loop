@@ -1,9 +1,0 @@
-[ 1234.567890] type=1400 audit(1690000000.123:45): avc:  denied  { read } for  pid=1716 comm="surfaceflinger" name="main" dev="tmpfs" ino=1336 scontext=u:r:surfaceflinger:s0 tcontext=u:object_r:tmpfs:s0 tclass=file permissive=1
-[ 1234.568123] avc:  denied  { getattr } for  pid=741 comm="logd" name="logd" dev="dm-0" ino=942
-     scontext=u:r:logd:s0 tcontext=u:object_r:system_data_file:s0 tclass=file permissive=1
-[ 1234.570000] avc:  denied  { read write open } for  pid=3124 comm="media_service" name="video0" dev="tmpfs" ino=2001 scontext=u:r:media_service:s0 tcontext=u:object_r:camera_device:s0 tclass=chr_file permissive=1
-some random unrelated kernel log line, ignore me
-[ 1234.571234] avc:  denied  { ioctl } for  pid=3124 comm="media_service" path="/dev/video0" dev="tmpfs" ino=2001 ioctlcmd=0x5601 scontext=u:r:media_service:s0 tcontext=u:object_r:camera_device:s0 tclass=chr_file permissive=0
-[ 1235.000000] avc:  denied  { create } for  pid=918 comm="installd" name="test.apk" dev="sda1" ino=445566 scontext=u:r:installd:s0:c512,c768 tcontext=u:object_r:apk_data_file:s0 tclass=file permissive=1
-Binder: 1234_1: send error
-[ 1236.000000] avc:  denied  { search } for  pid=555 comm="zygote" name="/" dev="rootfs" ino=2 scontext=u:r:zygote:s0 tcontext=u:object_r:rootfs:s0 tclass=dir permissive=1
