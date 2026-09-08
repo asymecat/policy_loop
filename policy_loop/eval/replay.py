@@ -29,7 +29,7 @@ _DEFAULT_GOLDEN = Path(__file__).resolve().parents[2] / "data" / "eval" / "golde
 _DEFAULT_OUT = Path(__file__).resolve().parents[2] / "data" / "reports" / "replay-report.json"
 
 
-def replay(golden_path: Path, root: Path) -> dict:
+def replay(golden_path: Path, root: Path, resolve: bool = False) -> dict:
     idx = load_dir(root)
     stats = {
         "policy_rules": idx.summary()["rules"],
@@ -39,6 +39,8 @@ def replay(golden_path: Path, root: Path) -> dict:
         "skip_incomplete": 0,
         "coverage_all": 0,          # every requested perm granted
         "coverage_any": 0,          # at least one requested perm granted
+        "resolve_logical": bool(resolve),
+        "resolved_count": 0,        # placeholder targets mapped to concrete types
         "class_counts": Counter(),
         "perm_gap_samples": [],     # capped list of uncovered denials
         "fix_vs_denial_perm_extra": [],
@@ -61,7 +63,15 @@ def replay(golden_path: Path, root: Path) -> dict:
             stats["denials_evaluable"] += 1
             stats["class_counts"][cls] += 1
 
-            all_ok, granted, _ = idx.has_access(src, tgt, cls, frozenset(perms))
+            q_tgt = tgt
+            if resolve:
+                r_tgt = idx.resolve_logical_target(
+                    src, cls, tgt, d.get("service"), frozenset(perms))
+                if r_tgt:
+                    q_tgt = r_tgt
+                    stats["resolved_count"] += 1
+            all_ok, granted, _ = idx.has_access(src, q_tgt, cls,
+                                                frozenset(perms))
             if all_ok:
                 stats["coverage_all"] += 1
             if granted:
@@ -125,6 +135,9 @@ def main(argv: list | None = None) -> int:
     ap.add_argument("--golden", type=Path, default=_DEFAULT_GOLDEN)
     ap.add_argument("--root", type=Path, default=_DEFAULT_ROOT)
     ap.add_argument("--out", type=Path, default=_DEFAULT_OUT)
+    ap.add_argument("--resolve", action="store_true",
+                    help="resolve default_* samgr/hdf placeholders to concrete "
+                         "sa_*/hdf_* types before querying (logical coverage)")
     args = ap.parse_args(argv)
 
     if not args.golden.exists():
@@ -135,9 +148,11 @@ def main(argv: list | None = None) -> int:
         print(f"policy root not found: {args.root}")
         return 1
 
-    stats = replay(args.golden, args.root)
+    stats = replay(args.golden, args.root, resolve=args.resolve)
 
     print(f"policy rules           : {stats['policy_rules']}")
+    print(f"resolve logical targets: {stats['resolve_logical']} "
+          f"({stats['resolved_count']} denials remapped)")
     print(f"golden pairs           : {stats['pairs']}")
     print(f"denials total          : {stats['denials_total']}")
     print(f"denials evaluable      : {stats['denials_evaluable']}")

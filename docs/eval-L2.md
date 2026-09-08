@@ -89,7 +89,7 @@ allow accountmgr account_data_file:file { lock watch };
 
 残余原因（继续增强的方向）：
 1. 少量规则用 `hdi_call()` 等更深层宏（未展开）；
-2. `samgr_class`/`hdf_devmgr_class` 的 target 是 `service=` 资源，需接 `service_contexts`/`hdf_service_contexts` 做第二层映射；
+2. `samgr_class`/`hdf_devmgr_class` 的 target 是 `service=` 资源，需做第二层映射 —— **已由 M3 `resolve_logical_target` 处理**（见 `docs/eval-trust.md`：在质检后的 trusted 子集上 `replay --resolve`，占位目标未覆盖 **7 → 2**，剩余 2 条为数字 SA 的客户端 `get`，依赖 samgr `sa_profile` 外部注册表）；
 3. 个别 `*` 权限与 `neverallowxperm` 表达式的近似语义。
 
 > 验收口径更新：**coverage_all 已从 92.0% → 97.19%（目标 ≥97%，达成）**。

@@ -79,10 +79,22 @@ replay 与 agent_eval 都能 `--golden` 指向 trusted 子集，两套口径并�
 |---|---|---|---|
 | 全量 golden | 5161 | 97.19%（4973/5117 可评估） | **144** |
 | **trusted 子集** | 3522 | **99.80%**（3515/3522） | **7** |
+| trusted + `--resolve`（逻辑覆盖） | 3522 | **99.94%**（3520/3522） | **2** |
 
-未覆盖从 144 → 7，**剩下的 7 条全部是同一个已知局限**：`default_service`
-（4 samgr_class）与 `default_hdf_service`（3 hdf_devmgr_class）占位目标——
-恰好是 M3 的 service→类型二次映射要打的缺口，不是散噪声。
+未覆盖从 144 → 7：**剩下的 7 条全部是同一个已知局限**——`default_service`
+（4 samgr_class）与 `default_hdf_service`（3 hdf_devmgr_class）占位目标，不是
+散噪声。这正是 M3 的 service→类型二次映射要打的缺口。
+
+#### M3：占位目标逻辑解析（`--resolve`，见下节余量）
+
+`replay --resolve` 先把可确定性推导的占位目标重映射为具体类型再查索引，7 条里
+**5 条被证明已被策略允许**，未覆盖 7 → 2。剩余 2 条
+（`normal_hap`/`system_basic_hap` → `default_service:samgr_class { get }`
+`service=312`）是对**远端 SA 312**（`sa_intell_voice_service`）的客户端查询——
+数字 SA id→名的对应关系存在 OpenHarmony 的 samgr `sa_profile` 注册表里，
+**不在 sepolicy 语料中**，纯索引无法闭合；它们各自的修复规则
+（`allow normal_hap_attr sa_intell_voice_service:samgr_class { get };`）已在索引
+中，补上外部注册表即可覆盖。诚实口径：这 2 条是外部数据依赖，不是引擎缺陷。
 
 ### L3 agent 留一（limit 400 / seed 0）
 
@@ -104,6 +116,25 @@ replay 与 agent_eval 都能 `--golden` 指向 trusted 子集，两套口径并�
 决策"的含量；`covered_elsewhere`（多为错配恰好被他规则覆盖）从 1274 砍到 320，
 `unparseable` 从 33 归零。**这正是"把评测集的信号做纯，而不是把指标做高"。**
 
+## M3 覆盖：service 占位逻辑解析（`resolve_logical_target`）
+
+真实日志里 samgr/hdf 访问的 target 是 `default_service`/`default_hdf_service`
+占位符，而真实规则落在具体 `sa_*`/`hdf_*` 类型上。`PolicyIndex` 新增
+`resolve_logical_target(src, cls, tgt, service, perms)`，把占位目标重映射为可
+推导的具体类型——**只在候选类型已被索引声明时才返回**，绝不臆造目标：
+
+| 情形 | 映射 | 依据 |
+|---|---|---|
+| 具名 service + hdf_devmgr_class | `hdf_<service>` | OH 的 hdf 服务类型按其名字命名 |
+| 具名 service + samgr_class | `sa_<service>` | 同上 |
+| 数字 service + samgr `add` | `sa_<src>` | SA 启动时把**自己**注册进 samgr，目标即源域同名 SA 类型 |
+| 其余（数字 client `get`、数字 hdf） | 不映射 | 需要 samgr `sa_profile` 外部 id→名注册表 |
+
+实测（trusted 子集 3522 条，见上表）：7 条占位未覆盖里 **5 条经解析后证明已
+允许**（3 具名 hdf 服务 + 2 个 samgr 自注册 `add`），未覆盖 7 → 2；仅剩的 2 条
+为对远端数字 SA 的客户端 `get`，外部数据依赖。改动只进 `index.py` + `replay`，
+不动 repair/review/verify 语义。
+
 ## 边界与诚实口径
 
 - `exact_min=1.000` 仍是**构造使然**（补丁=剔除后缺失权限），只作自洽检查，
@@ -123,6 +154,8 @@ python -m policy_loop.eval.replay  --golden data/eval/golden.jsonl \
                                   --out data/reports/replay-report.json
 python -m policy_loop.eval.replay  --golden data/eval/golden.trusted.jsonl \
                                   --out data/reports/replay-report.trusted.json
+python -m policy_loop.eval.replay  --golden data/eval/golden.trusted.jsonl --resolve \
+                                  --out data/reports/replay-report.trusted-resolved.json
 python -m policy_loop.eval.agent_eval --golden data/eval/golden.jsonl \
                                   --limit 400 --seed 0 --out data/reports/agent-eval.json
 python -m policy_loop.eval.agent_eval --golden data/eval/golden.trusted.jsonl \

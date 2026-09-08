@@ -333,6 +333,42 @@ class PolicyIndex:
         all_ok = all(p in granted for p in perms)
         return all_ok, frozenset(matched), rules
 
+    def resolve_logical_target(self, src: str, cls: str, tgt: str,
+                               service: str | None,
+                               perms: FrozenSet[str]) -> str | None:
+        """Resolve a samgr/hdf placeholder target to its concrete type.
+
+        Runtime logs target ``default_service`` (samgr) / ``default_hdf_service``
+        (devmgr) as placeholders; real rules target concrete ``sa_*`` / ``hdf_*``
+        types. OH names a service type after its *name* (``hdf_<name>`` /
+        ``sa_<name>``), so a *named* ``service=`` field maps deterministically.
+
+        Two conservative, declaration-checked rules:
+          - named service   -> ``hdf_<service>`` (hdf_devmgr_class)
+                             -> ``sa_<service>``  (samgr_class)
+          - numeric service + samgr ``add``  -> ``sa_<src>``
+            (an SA registers *itself* with samgr under its own id at startup,
+            so the concrete type is the SA type named after the subject).
+
+        Returns the concrete target only if it is a declared type/attribute in
+        this index; otherwise ``None`` (do not invent targets). Numeric ids that
+        name a *remote* SA (client ``get``) are not resolvable without the
+        external samgr id->name registry -> caller keeps the placeholder.
+        """
+        if tgt not in ("default_service", "default_hdf_service") or not service:
+            return None
+        if cls not in ("samgr_class", "hdf_devmgr_class"):
+            return None
+        if not service.isdigit():
+            cand = ("hdf_" if cls == "hdf_devmgr_class" else "sa_") + service
+        elif cls == "samgr_class" and perms and perms <= {"add"}:
+            cand = "sa_" + src          # SA registers its own samgr entry
+        else:
+            return None
+        if cand in self.type_attrs or cand in self.attributes:
+            return cand
+        return None
+
     def neverallow_rules(self, src: str, tgt: str, cls: str) -> List[Rule]:
         return self._rule_hits("neverallow", src, tgt, cls)
 
