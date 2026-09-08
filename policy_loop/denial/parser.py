@@ -15,11 +15,13 @@ No LLM is used here; parsing correctness is a hard acceptance metric.
 
 from __future__ import annotations
 
+import hashlib
+import json
 import re
 from dataclasses import asdict, dataclass
 from typing import Iterator, Optional
 
-__all__ = ["DenialRecord", "parse", "parse_event"]
+__all__ = ["DenialRecord", "parse", "parse_event", "fingerprint"]
 
 # --------------------------------------------------------------------------- #
 # Regexes
@@ -175,6 +177,25 @@ def parse_event(text: str) -> DenialRecord:
         raise ValueError("no 'avc: denied' event found in input")
     block = text[starts[0]:]
     return _parse_event(block)
+
+
+def fingerprint(rec: DenialRecord) -> str:
+    """Canonical dedup key of one denial = the *logical access* it reports.
+
+    Two log lines describing the same denied access (same subject, target,
+    class, permission set and ioctl command, regardless of pid/comm/path
+    details and permission ordering) collapse to one key. Used by LogAgent for
+    single-case tracing and by the batch converge tool for clustering.
+    """
+    key = {
+        "src": rec.source_domain,
+        "tgt": rec.target_type,
+        "cls": rec.tclass,
+        "perms": sorted(rec.permissions or ()),
+        "ioctl": rec.ioctl_cmd,
+    }
+    payload = json.dumps(key, sort_keys=True, ensure_ascii=False)
+    return hashlib.sha1(payload.encode("utf-8")).hexdigest()[:12]
 
 
 # --------------------------------------------------------------------------- #

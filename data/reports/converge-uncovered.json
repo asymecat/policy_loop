@@ -1,0 +1,4829 @@
+{
+  "total_denials": 144,
+  "unique_cases": 134,
+  "by_category": {
+    "auto_repairable": 38,
+    "needs_human": 96
+  },
+  "by_classification": {
+    "MISSING_RULE": 76,
+    "POTENTIAL_ESCALATION": 58
+  },
+  "clusters": [
+    {
+      "fp": "563592d80308",
+      "count": 1,
+      "permissive": 1,
+      "enforcing": 0,
+      "permissive_unknown": 0,
+      "src": "distributed_isolate_hap",
+      "tgt": "distributed_isolate_hap",
+      "cls": "hmcap",
+      "perms": [
+        "supervsable"
+      ],
+      "ioctl": "",
+      "comms": [
+        "/system/bin/appspawn"
+      ],
+      "sample_raw": "# avc: denied { supervsable } for pid=9682, comm=\"/system/bin/appspawn\"  scontext=u:r:distributed_isolate_hap:s0 tcontext=u:r:distributed_isolate_hap:s0 tclass=hmcap permissive=1",
+      "category": "auto_repairable",
+      "classification": "MISSING_RULE",
+      "patch": "allow distributed_isolate_hap distributed_isolate_hap:hmcap { supervsable };",
+      "review_status": "APPROVE",
+      "verify_status": "SUCCESS",
+      "why": "最小权限补齐"
+    },
+    {
+      "fp": "bacb9d957dd1",
+      "count": 1,
+      "permissive": 1,
+      "enforcing": 0,
+      "permissive_unknown": 0,
+      "src": "intell_voice_service",
+      "tgt": "default_hdf_service",
+      "cls": "hdf_devmgr_class",
+      "perms": [
+        "get"
+      ],
+      "ioctl": "",
+      "comms": [],
+      "sample_raw": "# avc:  denied  { get } for service=intell_voice_trigger_manager_service pid=633 scontext=u:r:intell_voice_service:s0 tcontext=u:object_r:default_hdf_service:s0 tclass=hdf_devmgr_class permissive=1",
+      "category": "needs_human",
+      "classification": "POTENTIAL_ESCALATION",
+      "patch": "",
+      "review_status": "",
+      "verify_status": "",
+      "why": "命中 neverallow 红线：禁止自动放权（转人工）"
+    },
+    {
+      "fp": "70a81770dae2",
+      "count": 1,
+      "permissive": 1,
+      "enforcing": 0,
+      "permissive_unknown": 0,
+      "src": "intell_voice_service",
+      "tgt": "default_service",
+      "cls": "samgr_class",
+      "perms": [
+        "add"
+      ],
+      "ioctl": "",
+      "comms": [],
+      "sample_raw": "# avc:  denied  { add } for service=312 pid=633 scontext=u:r:intell_voice_service:s0 tcontext=u:object_r:default_service:s0 tclass=samgr_class permissive=1",
+      "category": "needs_human",
+      "classification": "POTENTIAL_ESCALATION",
+      "patch": "",
+      "review_status": "",
+      "verify_status": "",
+      "why": "命中 neverallow 红线：禁止自动放权（转人工）"
+    },
+    {
+      "fp": "8d1a44eb2371",
+      "count": 1,
+      "permissive": 0,
+      "enforcing": 1,
+      "permissive_unknown": 0,
+      "src": "normal_hap",
+      "tgt": "default_service",
+      "cls": "samgr_class",
+      "perms": [
+        "get"
+      ],
+      "ioctl": "",
+      "comms": [],
+      "sample_raw": "# avc:  denied  { get } for service=312 pid=3548 scontext=u:r:normal_hap:s0 tcontext=u:object_r:default_service:s0 tclass=samgr_class permissive=0",
+      "category": "needs_human",
+      "classification": "POTENTIAL_ESCALATION",
+      "patch": "",
+      "review_status": "",
+      "verify_status": "",
+      "why": "命中 neverallow 红线：禁止自动放权（转人工）"
+    },
+    {
+      "fp": "7b9c53cf0c7e",
+      "count": 1,
+      "permissive": 0,
+      "enforcing": 1,
+      "permissive_unknown": 0,
+      "src": "system_basic_hap",
+      "tgt": "default_service",
+      "cls": "samgr_class",
+      "perms": [
+        "get"
+      ],
+      "ioctl": "",
+      "comms": [],
+      "sample_raw": "# avc:  denied  { get } for service=312 pid=2633 scontext=u:r:system_basic_hap:s0 tcontext=u:object_r:default_service:s0 tclass=samgr_class permissive=0",
+      "category": "needs_human",
+      "classification": "POTENTIAL_ESCALATION",
+      "patch": "",
+      "review_status": "",
+      "verify_status": "",
+      "why": "命中 neverallow 红线：禁止自动放权（转人工）"
+    },
+    {
+      "fp": "3d3f77807e8b",
+      "count": 1,
+      "permissive": 1,
+      "enforcing": 0,
+      "permissive_unknown": 0,
+      "src": "bluetooth_service",
+      "tgt": "data_data_pudata_bluetoothlse_dir",
+      "cls": "file",
+      "perms": [
+        "getattr"
+      ],
+      "ioctl": "",
+      "comms": [
+        "threaded-ml"
+      ],
+      "sample_raw": "#avc:  denied  { getattr } for pid=371 comm=\"threaded-ml\" path=\"/data/data/.pulse_dir/state\" dev=\"mmcblk0p7\" ino=1436167 scontext=u:r:bluetooth_service:s0 tcontext=u:object_r:data_data_pudata_bluetoothlse_dir:s0 tclass=file permissive=1",
+      "category": "needs_human",
+      "classification": "MISSING_RULE",
+      "patch": "allow bluetooth_service data_data_pudata_bluetoothlse_dir:file { getattr };",
+      "review_status": "APPROVE",
+      "verify_status": "SUCCESS",
+      "why": "主体/目标「data_data_pudata_bluetoothlse_dir」不在当前策略语料中（设备新增域、生成的数字 service 标签或标注异常），补丁无法落点验证，转人工"
+    },
+    {
+      "fp": "2413518fd7bb",
+      "count": 1,
+      "permissive": 1,
+      "enforcing": 0,
+      "permissive_unknown": 0,
+      "src": "vpnmanager",
+      "tgt": "devpts",
+      "cls": "chr_file",
+      "perms": [
+        "open"
+      ],
+      "ioctl": "",
+      "comms": [
+        "xl2tpd"
+      ],
+      "sample_raw": "# avc:  denied  { open } for  pid=2719 comm=\"xl2tpd\" path=\"/dev/pts/1\" dev=\"devpts\" ino=4 scontext=u:r:vpnmanager:s0 tcontext=u:object_r:devpts:s0 tclass=chr_file permissive=1",
+      "category": "needs_human",
+      "classification": "MISSING_RULE",
+      "patch": "allow vpnmanager devpts:chr_file { open };",
+      "review_status": "APPROVE",
+      "verify_status": "SUCCESS",
+      "why": "主体/目标「vpnmanager」不在当前策略语料中（设备新增域、生成的数字 service 标签或标注异常），补丁无法落点验证，转人工"
+    },
+    {
+      "fp": "65c620839118",
+      "count": 1,
+      "permissive": 1,
+      "enforcing": 0,
+      "permissive_unknown": 0,
+      "src": "vpnmanager",
+      "tgt": "devpts",
+      "cls": "chr_file",
+      "perms": [
+        "getattr"
+      ],
+      "ioctl": "",
+      "comms": [
+        "pppd"
+      ],
+      "sample_raw": "# avc:  denied  { getattr } for  pid=2359 comm=\"pppd\" path=\"/dev/pts/1\" dev=\"devpts\" ino=4 scontext=u:r:vpnmanager:s0 tcontext=u:object_r:devpts:s0 tclass=chr_file permissive=1",
+      "category": "needs_human",
+      "classification": "MISSING_RULE",
+      "patch": "allow vpnmanager devpts:chr_file { getattr };",
+      "review_status": "APPROVE",
+      "verify_status": "SUCCESS",
+      "why": "主体/目标「vpnmanager」不在当前策略语料中（设备新增域、生成的数字 service 标签或标注异常），补丁无法落点验证，转人工"
+    },
+    {
+      "fp": "1ac1a82916b0",
+      "count": 1,
+      "permissive": 0,
+      "enforcing": 1,
+      "permissive_unknown": 0,
+      "src": "edm_sa",
+      "tgt": "sa_net_policy_manager",
+      "cls": "samar_class",
+      "perms": [
+        "get"
+      ],
+      "ioctl": "",
+      "comms": [],
+      "sample_raw": "# avc: denied { get } for service=1152 sid=u:r:edm_sa:s0 scontext=u:r:edm_sa:s0 tcontext=u:object_r:sa_net_policy_manager:s0 tclass=samar_class permissive=0",
+      "category": "needs_human",
+      "classification": "MISSING_RULE",
+      "patch": "allow edm_sa sa_net_policy_manager:samar_class { get };",
+      "review_status": "APPROVE",
+      "verify_status": "SUCCESS",
+      "why": "对象类「samar_class」不在策略任何规则中出现（疑为日志笔误），补丁无法落点验证，转人工"
+    },
+    {
+      "fp": "853ffe911641",
+      "count": 1,
+      "permissive": 0,
+      "enforcing": 1,
+      "permissive_unknown": 0,
+      "src": "edm_sa",
+      "tgt": "sa_pulseaudio_audio_service",
+      "cls": "samar_class",
+      "perms": [
+        "get"
+      ],
+      "ioctl": "",
+      "comms": [],
+      "sample_raw": "# avc:  denied  { get } for service=3001 pid=6793 scontext=u:r:edm_sa:s0 tcontext=u:object_r:sa_pulseaudio_audio_service:s0 tclass=samar_class permissive=0",
+      "category": "needs_human",
+      "classification": "MISSING_RULE",
+      "patch": "allow edm_sa sa_pulseaudio_audio_service:samar_class { get };",
+      "review_status": "APPROVE",
+      "verify_status": "SUCCESS",
+      "why": "对象类「samar_class」不在策略任何规则中出现（疑为日志笔误），补丁无法落点验证，转人工"
+    },
+    {
+      "fp": "6afac188e97e",
+      "count": 1,
+      "permissive": 1,
+      "enforcing": 0,
+      "permissive_unknown": 0,
+      "src": "hdcd_user_permit",
+      "tgt": "sceneboard_hap",
+      "cls": "binder",
+      "perms": [
+        "call"
+      ],
+      "ioctl": "",
+      "comms": [
+        "/system/bin/hdcd_user_permit"
+      ],
+      "sample_raw": "#avc: denied { call } for pid=5470, comm=\"/system/bin/hdcd_user_permit\" scontext=u:r:hdcd_user_permit:s0 tcontext=u:r:sceneboard_hap:s0 tclass=binder permissive=1",
+      "category": "needs_human",
+      "classification": "POTENTIAL_ESCALATION",
+      "patch": "",
+      "review_status": "",
+      "verify_status": "",
+      "why": "命中 neverallow 红线：禁止自动放权（转人工）"
+    },
+    {
+      "fp": "34058a45c021",
+      "count": 1,
+      "permissive": 1,
+      "enforcing": 0,
+      "permissive_unknown": 0,
+      "src": "hdcd_user_permit",
+      "tgt": "sceneboard_hap",
+      "cls": "binder",
+      "perms": [
+        "transfer"
+      ],
+      "ioctl": "",
+      "comms": [
+        "/system/bin/hdcd_user_permit"
+      ],
+      "sample_raw": "#avc: denied { transfer } for pid=5470, comm=\"/system/bin/hdcd_user_permit\" scontext=u:r:hdcd_user_permit:s0 tcontext=u:r:sceneboard_hap:s0 tclass=binder permissive=1",
+      "category": "needs_human",
+      "classification": "POTENTIAL_ESCALATION",
+      "patch": "",
+      "review_status": "",
+      "verify_status": "",
+      "why": "命中 neverallow 红线：禁止自动放权（转人工）"
+    },
+    {
+      "fp": "4c1de34e3cf2",
+      "count": 1,
+      "permissive": 1,
+      "enforcing": 0,
+      "permissive_unknown": 0,
+      "src": "sh",
+      "tgt": "hook_param",
+      "cls": "file",
+      "perms": [
+        "map"
+      ],
+      "ioctl": "",
+      "comms": [
+        "sh"
+      ],
+      "sample_raw": "#avc: denied { map } for pid=14537 comm=\"sh\" path=\"/dev/__parameters__/u:object_r:hook_param:s0\" dev=\"tmpfs\" ino=70 scontext=u:r:sh:s0 tcontext=u:object_r:hook_param:s0 tclass=file permissive=1",
+      "category": "auto_repairable",
+      "classification": "MISSING_RULE",
+      "patch": "allow sh hook_param:file { map };",
+      "review_status": "APPROVE",
+      "verify_status": "SUCCESS",
+      "why": "最小权限补齐"
+    },
+    {
+      "fp": "c8aaa98d8a7f",
+      "count": 1,
+      "permissive": 1,
+      "enforcing": 0,
+      "permissive_unknown": 0,
+      "src": "sh",
+      "tgt": "hook_param",
+      "cls": "file",
+      "perms": [
+        "open"
+      ],
+      "ioctl": "",
+      "comms": [
+        "sh"
+      ],
+      "sample_raw": "#avc: denied { open } for pid=5554 comm=\"sh\" path=\"/dev/__parameters__/u:object_r:hook_param:s0\" dev=\"tmpfs\" ino=70 scontext=u:r:sh:s0 tcontext=u:object_r:hook_param:s0 tclass=file permissive=1",
+      "category": "auto_repairable",
+      "classification": "MISSING_RULE",
+      "patch": "allow sh hook_param:file { open };",
+      "review_status": "APPROVE",
+      "verify_status": "SUCCESS",
+      "why": "最小权限补齐"
+    },
+    {
+      "fp": "bd7e52bb9928",
+      "count": 1,
+      "permissive": 1,
+      "enforcing": 0,
+      "permissive_unknown": 0,
+      "src": "sh",
+      "tgt": "init",
+      "cls": "fd",
+      "perms": [
+        "use"
+      ],
+      "ioctl": "",
+      "comms": [
+        "sh"
+      ],
+      "sample_raw": "#avc: denied { use } for pid=5554 comm=\"sh\" path=\"/dev/console\" dev=\"tmpfs\" ino=39 scontext=u:r:sh:s0 tcontext=u:r:init:s0 tclass=fd permissive=1",
+      "category": "auto_repairable",
+      "classification": "MISSING_RULE",
+      "patch": "allow sh init:fd { use };",
+      "review_status": "APPROVE",
+      "verify_status": "SUCCESS",
+      "why": "最小权限补齐"
+    },
+    {
+      "fp": "57d0d0860c8d",
+      "count": 1,
+      "permissive": 0,
+      "enforcing": 1,
+      "permissive_unknown": 0,
+      "src": "sh",
+      "tgt": "dev_null_file",
+      "cls": "chr_file",
+      "perms": [
+        "ioctl"
+      ],
+      "ioctl": "0x5413",
+      "comms": [
+        "sh"
+      ],
+      "sample_raw": "#avc: denied { ioctl } for pid=5024 comm=\"sh\" path=\"/dev/null\" dev=\"tmpfs\" ino=3 ioctlcmd=0x5413 scontext=u:r:sh:s0 tcontext=u:object_r:dev_null_file:s0 tclass=chr_file permissive=0",
+      "category": "auto_repairable",
+      "classification": "MISSING_RULE",
+      "patch": "allow sh dev_null_file:chr_file { ioctl };",
+      "review_status": "APPROVE",
+      "verify_status": "SUCCESS",
+      "why": "最小权限补齐"
+    },
+    {
+      "fp": "954c0dc10497",
+      "count": 1,
+      "permissive": 1,
+      "enforcing": 0,
+      "permissive_unknown": 0,
+      "src": "sh",
+      "tgt": "startup_init_param",
+      "cls": "file",
+      "perms": [
+        "map"
+      ],
+      "ioctl": "",
+      "comms": [
+        "sh"
+      ],
+      "sample_raw": "#avc: denied { map } for pid=13700 comm=\"sh\" path=\"/dev/__parameters__/u:object_r:startup_init_param:s0\" dev=\"tmpfs\" ino=55 scontext=u:r:sh:s0 tcontext=u:object_r:startup_init_param:s0 tclass=file permissive=1",
+      "category": "auto_repairable",
+      "classification": "MISSING_RULE",
+      "patch": "allow sh startup_init_param:file { map };",
+      "review_status": "APPROVE",
+      "verify_status": "SUCCESS",
+      "why": "最小权限补齐"
+    },
+    {
+      "fp": "536ec15076f2",
+      "count": 1,
+      "permissive": 1,
+      "enforcing": 0,
+      "permissive_unknown": 0,
+      "src": "sh",
+      "tgt": "startup_init_param",
+      "cls": "file",
+      "perms": [
+        "open"
+      ],
+      "ioctl": "",
+      "comms": [
+        "sh"
+      ],
+      "sample_raw": "#avc: denied { open } for pid=13700 comm=\"sh\" path=\"/dev/__parameters__/u:object_r:startup_init_param:s0\" dev=\"tmpfs\" ino=55 scontext=u:r:sh:s0 tcontext=u:object_r:startup_init_param:s0 tclass=file permissive=1",
+      "category": "auto_repairable",
+      "classification": "MISSING_RULE",
+      "patch": "allow sh startup_init_param:file { open };",
+      "review_status": "APPROVE",
+      "verify_status": "SUCCESS",
+      "why": "最小权限补齐"
+    },
+    {
+      "fp": "af6f9b5d2ec4",
+      "count": 1,
+      "permissive": 1,
+      "enforcing": 0,
+      "permissive_unknown": 0,
+      "src": "sh",
+      "tgt": "startup_init_param",
+      "cls": "file",
+      "perms": [
+        "read"
+      ],
+      "ioctl": "",
+      "comms": [
+        "sh"
+      ],
+      "sample_raw": "#avc: denied { read } for pid=13700 comm=\"sh\" name=\"u:object_r:startup_init_param:s0\" dev=\"tmpfs\" ino=55 scontext=u:r:sh:s0 tcontext=u:object_r:startup_init_param:s0 tclass=file permissive=1",
+      "category": "auto_repairable",
+      "classification": "MISSING_RULE",
+      "patch": "allow sh startup_init_param:file { read };",
+      "review_status": "APPROVE",
+      "verify_status": "SUCCESS",
+      "why": "最小权限补齐"
+    },
+    {
+      "fp": "d8a7eef150ac",
+      "count": 1,
+      "permissive": 1,
+      "enforcing": 0,
+      "permissive_unknown": 0,
+      "src": "sh",
+      "tgt": "data_hdc_pubkeys",
+      "cls": "dir",
+      "perms": [
+        "getattr"
+      ],
+      "ioctl": "",
+      "comms": [
+        "ls"
+      ],
+      "sample_raw": "#avc: denied { getattr } for pid=8467 comm=\"ls\" path=\"/data/service/el1/public/hdc\" dev=\"mmcblk0p15\" ino=12 scontext=u:r:sh:s0 tcontext=u:object_r:data_hdc_pubkeys:s0 tclass=dir permissive=1",
+      "category": "auto_repairable",
+      "classification": "MISSING_RULE",
+      "patch": "allow sh data_hdc_pubkeys:dir { getattr };",
+      "review_status": "APPROVE",
+      "verify_status": "SUCCESS",
+      "why": "最小权限补齐"
+    },
+    {
+      "fp": "c0c18512fb26",
+      "count": 1,
+      "permissive": 1,
+      "enforcing": 0,
+      "permissive_unknown": 0,
+      "src": "su",
+      "tgt": "inputmethod_service",
+      "cls": "process",
+      "perms": [
+        "signal"
+      ],
+      "ioctl": "",
+      "comms": [
+        "su"
+      ],
+      "sample_raw": "#avc:  denied  { signal } for  pid=1549 comm=\"su\" scontext=u:r:su:s0 tcontext=u:r:inputmethod_service:s0 tclass=process permissive=1",
+      "category": "needs_human",
+      "classification": "POTENTIAL_ESCALATION",
+      "patch": "",
+      "review_status": "",
+      "verify_status": "",
+      "why": "命中 neverallow 红线：禁止自动放权（转人工）"
+    },
+    {
+      "fp": "993379c492f7",
+      "count": 1,
+      "permissive": 1,
+      "enforcing": 0,
+      "permissive_unknown": 0,
+      "src": "su",
+      "tgt": "pasteboard_service",
+      "cls": "fd",
+      "perms": [
+        "use"
+      ],
+      "ioctl": "",
+      "comms": [
+        "IPC_1_843"
+      ],
+      "sample_raw": "#avc:  denied  { use } for  pid=555 comm=\"IPC_1_843\" path=\"/dev/ashmem\" dev=\"tmpfs\" ino=166 scontext=u:r:su:s0 tcontext=u:r:pasteboard_service:s0 tclass=fd permissive=1",
+      "category": "auto_repairable",
+      "classification": "MISSING_RULE",
+      "patch": "allow su pasteboard_service:fd { use };",
+      "review_status": "APPROVE",
+      "verify_status": "SUCCESS",
+      "why": "最小权限补齐"
+    },
+    {
+      "fp": "10b13b2cd0fe",
+      "count": 1,
+      "permissive": 1,
+      "enforcing": 0,
+      "permissive_unknown": 0,
+      "src": "thermal",
+      "tgt": "su",
+      "cls": "binder",
+      "perms": [
+        "call"
+      ],
+      "ioctl": "",
+      "comms": [
+        "thermal"
+      ],
+      "sample_raw": "#avc:  denied  { call } for  pid=472 comm=\"thermal\" scontext=u:r:thermal:s0 tcontext=u:r:su:s0 tclass=binder permissive=1",
+      "category": "needs_human",
+      "classification": "MISSING_RULE",
+      "patch": "allow thermal su:binder { call };",
+      "review_status": "APPROVE",
+      "verify_status": "SUCCESS",
+      "why": "主体/目标「thermal」不在当前策略语料中（设备新增域、生成的数字 service 标签或标注异常），补丁无法落点验证，转人工"
+    },
+    {
+      "fp": "c38e35e14a0e",
+      "count": 1,
+      "permissive": 0,
+      "enforcing": 0,
+      "permissive_unknown": 1,
+      "src": "dcamera",
+      "tgt": "sa_device_security_level_manager_service",
+      "cls": "samgr_class",
+      "perms": [
+        "get"
+      ],
+      "ioctl": "",
+      "comms": [],
+      "sample_raw": "#avc: denied  { get } for service=3511 pid=4213 scontext=u:r:dcamera:s0 tcontext=u:r:sa_device_security_level_manager_service:s0 tclass=samgr_class permissive=0;",
+      "category": "needs_human",
+      "classification": "POTENTIAL_ESCALATION",
+      "patch": "",
+      "review_status": "",
+      "verify_status": "",
+      "why": "命中 neverallow 红线：禁止自动放权（转人工）"
+    },
+    {
+      "fp": "a305e7e2eb0f",
+      "count": 1,
+      "permissive": 1,
+      "enforcing": 0,
+      "permissive_unknown": 0,
+      "src": "distributedsche",
+      "tgt": "sa_1401_service",
+      "cls": "samgr_class",
+      "perms": [
+        "add"
+      ],
+      "ioctl": "",
+      "comms": [],
+      "sample_raw": "#avc:  denied  { add } for service=1401 pid=406 scontext=u:r:distributedsche:s0 tcontext=u:object_r:sa_1401_service:s0 tclass=samgr_class permissive=1",
+      "category": "needs_human",
+      "classification": "MISSING_RULE",
+      "patch": "allow distributedsche sa_1401_service:samgr_class { add };",
+      "review_status": "APPROVE",
+      "verify_status": "SUCCESS",
+      "why": "主体/目标「sa_1401_service」不在当前策略语料中（设备新增域、生成的数字 service 标签或标注异常），补丁无法落点验证，转人工"
+    },
+    {
+      "fp": "94d8299a197d",
+      "count": 1,
+      "permissive": 0,
+      "enforcing": 1,
+      "permissive_unknown": 0,
+      "src": "distributedsche",
+      "tgt": "d-bms",
+      "cls": "binder",
+      "perms": [
+        "call"
+      ],
+      "ioctl": "",
+      "comms": [
+        "continue_manage"
+      ],
+      "sample_raw": "#avc:  denied  { call } for  pid=479 comm=\"continue_manage\" scontext=u:r:distributedsche:s0 tcontext=u:r:d-bms:s0 tclass=binder permissive=0",
+      "category": "needs_human",
+      "classification": "POTENTIAL_ESCALATION",
+      "patch": "",
+      "review_status": "",
+      "verify_status": "",
+      "why": "命中 neverallow 红线：禁止自动放权（转人工）"
+    },
+    {
+      "fp": "2d5309689bfc",
+      "count": 1,
+      "permissive": 1,
+      "enforcing": 0,
+      "permissive_unknown": 0,
+      "src": "hdf_devmgr",
+      "tgt": "dev_file",
+      "cls": "chr_file",
+      "perms": [
+        "ioctl"
+      ],
+      "ioctl": "0x6201",
+      "comms": [
+        "hdf_devmgr"
+      ],
+      "sample_raw": "#avc:  denied  { ioctl } for  pid=245 comm=\"hdf_devmgr\" path=\"/dev/hdf_kevent\" dev=\"tmpfs\" ino=199 ioctlcmd=0x6201 scontext=u:r:hdf_devmgr:s0 tcontext=u:object_r:dev_file:s0 tclass=chr_file permissive=1",
+      "category": "auto_repairable",
+      "classification": "MISSING_RULE",
+      "patch": "allow hdf_devmgr dev_file:chr_file { ioctl };",
+      "review_status": "APPROVE",
+      "verify_status": "SUCCESS",
+      "why": "最小权限补齐"
+    },
+    {
+      "fp": "bd44d2a2abc6",
+      "count": 1,
+      "permissive": 1,
+      "enforcing": 0,
+      "permissive_unknown": 0,
+      "src": "hdf_devmgr",
+      "tgt": "dev_file",
+      "cls": "chr_file",
+      "perms": [
+        "ioctl"
+      ],
+      "ioctl": "0x6202",
+      "comms": [
+        "hdf_devmgr"
+      ],
+      "sample_raw": "#avc:  denied  { ioctl } for  pid=245 comm=\"hdf_devmgr\" path=\"/dev/hdf_kevent\" dev=\"tmpfs\" ino=199 ioctlcmd=0x6202 scontext=u:r:hdf_devmgr:s0 tcontext=u:object_r:dev_file:s0 tclass=chr_file permissive=1",
+      "category": "auto_repairable",
+      "classification": "MISSING_RULE",
+      "patch": "allow hdf_devmgr dev_file:chr_file { ioctl };",
+      "review_status": "APPROVE",
+      "verify_status": "SUCCESS",
+      "why": "最小权限补齐"
+    },
+    {
+      "fp": "e552be583b82",
+      "count": 1,
+      "permissive": 1,
+      "enforcing": 0,
+      "permissive_unknown": 0,
+      "src": "sample_host",
+      "tgt": "default_hdf_service",
+      "cls": "hdf_devmgr_class",
+      "perms": [
+        "add"
+      ],
+      "ioctl": "",
+      "comms": [],
+      "sample_raw": "#avc:  denied  { add } for service=sample_driver_service2 pid=2005 scontext=u:r:sample_host:s0 tcontext=u:object_r:default_hdf_service:s0 tclass=hdf_devmgr_class permissive=1",
+      "category": "needs_human",
+      "classification": "POTENTIAL_ESCALATION",
+      "patch": "",
+      "review_status": "",
+      "verify_status": "",
+      "why": "命中 neverallow 红线：禁止自动放权（转人工）"
+    },
+    {
+      "fp": "4f417f151864",
+      "count": 1,
+      "permissive": 1,
+      "enforcing": 0,
+      "permissive_unknown": 0,
+      "src": "audio_host",
+      "tgt": "default_hdf_service",
+      "cls": "hdf_devmgr_class",
+      "perms": [
+        "add"
+      ],
+      "ioctl": "",
+      "comms": [],
+      "sample_raw": "# avc:  denied  { add } for service=intell_voice_trigger_manager_service pid=1070 scontext=u:r:audio_host:s0 tcontext=u:object_r:default_hdf_service:s0 tclass=hdf_devmgr_class permissive=1",
+      "category": "needs_human",
+      "classification": "POTENTIAL_ESCALATION",
+      "patch": "",
+      "review_status": "",
+      "verify_status": "",
+      "why": "命中 neverallow 红线：禁止自动放权（转人工）"
+    },
+    {
+      "fp": "8485b8ec8749",
+      "count": 1,
+      "permissive": 0,
+      "enforcing": 1,
+      "permissive_unknown": 0,
+      "src": "input_user_host",
+      "tgt": "dev_file",
+      "cls": "chr_file",
+      "perms": [
+        "getattr"
+      ],
+      "ioctl": "",
+      "comms": [
+        "input_user_host"
+      ],
+      "sample_raw": "#avc:  denied  { getattr } for  pid=477 comm=\"input_user_host\" path=\"/dev/hdf_input_event3\" dev=\"tmpfs\" ino=498 scontext=u:r:input_user_host:s0 tcontext=u:object_r:dev_file:s0 tclass=chr_file permissive=0",
+      "category": "auto_repairable",
+      "classification": "MISSING_RULE",
+      "patch": "allow input_user_host dev_file:chr_file { getattr };",
+      "review_status": "APPROVE",
+      "verify_status": "SUCCESS",
+      "why": "最小权限补齐"
+    },
+    {
+      "fp": "825853ad6500",
+      "count": 1,
+      "permissive": 1,
+      "enforcing": 0,
+      "permissive_unknown": 0,
+      "src": "intell_voice_host",
+      "tgt": "default_hdf_service",
+      "cls": "hdf_devmgr_class",
+      "perms": [
+        "add"
+      ],
+      "ioctl": "",
+      "comms": [],
+      "sample_raw": "# avc:  denied  { add } for service=intell_voice_engine_manager_service pid=1022 scontext=u:r:intell_voice_host:s0 tcontext=u:object_r:default_hdf_service:s0 tclass=hdf_devmgr_class permissive=1",
+      "category": "needs_human",
+      "classification": "POTENTIAL_ESCALATION",
+      "patch": "",
+      "review_status": "",
+      "verify_status": "",
+      "why": "命中 neverallow 红线：禁止自动放权（转人工）"
+    },
+    {
+      "fp": "ade7bdc1dafc",
+      "count": 1,
+      "permissive": 1,
+      "enforcing": 0,
+      "permissive_unknown": 0,
+      "src": "face_auth_host",
+      "tgt": "default_service",
+      "cls": "hdf_devmgr_class",
+      "perms": [
+        "get"
+      ],
+      "ioctl": "",
+      "comms": [],
+      "sample_raw": "#avc:  denied  { get } for service=5100 pid=403 scontext=u:r:face_auth_host:s0 tcontext=u:object_r:default_service:s0 tclass=hdf_devmgr_class permissive=1",
+      "category": "needs_human",
+      "classification": "MISSING_RULE",
+      "patch": "allow face_auth_host default_service:hdf_devmgr_class { get };",
+      "review_status": "APPROVE",
+      "verify_status": "SUCCESS",
+      "why": "目标为 default_* 占位符（service 需映射到具体 sa_*/hdf 类型才能落规则），转人工"
+    },
+    {
+      "fp": "b0f665f5382c",
+      "count": 1,
+      "permissive": 1,
+      "enforcing": 0,
+      "permissive_unknown": 0,
+      "src": "fingerprint_auth_host",
+      "tgt": "default_service",
+      "cls": "hdf_devmgr_class",
+      "perms": [
+        "get"
+      ],
+      "ioctl": "",
+      "comms": [],
+      "sample_raw": "#avc:  denied  { get } for service=5100 pid=369 scontext=u:r:fingerprint_auth_host:s0 tcontext=u:object_r:default_service:s0 tclass=hdf_devmgr_class permissive=1",
+      "category": "needs_human",
+      "classification": "MISSING_RULE",
+      "patch": "allow fingerprint_auth_host default_service:hdf_devmgr_class { get };",
+      "review_status": "APPROVE",
+      "verify_status": "SUCCESS",
+      "why": "目标为 default_* 占位符（service 需映射到具体 sa_*/hdf 类型才能落规则），转人工"
+    },
+    {
+      "fp": "3f60d5b5b854",
+      "count": 1,
+      "permissive": 1,
+      "enforcing": 0,
+      "permissive_unknown": 0,
+      "src": "pin_auth_host",
+      "tgt": "default_service",
+      "cls": "hdf_devmgr_class",
+      "perms": [
+        "get"
+      ],
+      "ioctl": "",
+      "comms": [],
+      "sample_raw": "#avc:  denied  { get } for service=5100 pid=402 scontext=u:r:pin_auth_host:s0 tcontext=u:object_r:default_service:s0 tclass=hdf_devmgr_class permissive=1",
+      "category": "needs_human",
+      "classification": "MISSING_RULE",
+      "patch": "allow pin_auth_host default_service:hdf_devmgr_class { get };",
+      "review_status": "APPROVE",
+      "verify_status": "SUCCESS",
+      "why": "目标为 default_* 占位符（service 需映射到具体 sa_*/hdf 类型才能落规则），转人工"
+    },
+    {
+      "fp": "c5e2a50d0a2d",
+      "count": 1,
+      "permissive": 1,
+      "enforcing": 0,
+      "permissive_unknown": 0,
+      "src": "wifi_host",
+      "tgt": "default_hdf_service",
+      "cls": "hdf_devmgr_class",
+      "perms": [
+        "add"
+      ],
+      "ioctl": "",
+      "comms": [],
+      "sample_raw": "#avc:  denied  { add } for service=wlan_interface_service pid=569 scontext=u:r:wifi_host:s0 tcontext=u:object_r:default_hdf_service:s0 tclass=hdf_devmgr_class permissive=1",
+      "category": "needs_human",
+      "classification": "POTENTIAL_ESCALATION",
+      "patch": "",
+      "review_status": "",
+      "verify_status": "",
+      "why": "命中 neverallow 红线：禁止自动放权（转人工）"
+    },
+    {
+      "fp": "6e5c11aebdd3",
+      "count": 3,
+      "permissive": 0,
+      "enforcing": 3,
+      "permissive_unknown": 0,
+      "src": "wifi_host",
+      "tgt": "wifi_host",
+      "cls": "capability",
+      "perms": [
+        "dac_override"
+      ],
+      "ioctl": "",
+      "comms": [
+        "wifi_host",
+        "IPC_1_1625"
+      ],
+      "sample_raw": "#avc:  denied  { dac_override } for  pid=1621 comm=\"wifi_host\" capability=1  scontext=u:r:wifi_host:s0 tcontext=u:r:wifi_host:s0 tclass=capability permissive=0",
+      "category": "auto_repairable",
+      "classification": "MISSING_RULE",
+      "patch": "allow wifi_host wifi_host:capability { dac_override };",
+      "review_status": "APPROVE",
+      "verify_status": "SUCCESS",
+      "why": "最小权限补齐"
+    },
+    {
+      "fp": "4429fe294861",
+      "count": 1,
+      "permissive": 1,
+      "enforcing": 0,
+      "permissive_unknown": 0,
+      "src": "distributedfiledaemon",
+      "tgt": "data_service_el2_file",
+      "cls": "dir",
+      "perms": [
+        "write"
+      ],
+      "ioctl": "",
+      "comms": [
+        "kworker/u8:5"
+      ],
+      "sample_raw": "#avc:  denied  { write } for  pid=182 comm=\"kworker/u8:5\" name=\"account_cache\" dev=\"mmcblk0p11\" ino=1044562 scontext=u:r:distributedfiledaemon:s0 tcontext=u:object_r:data_service_el2_file:s0 tclass=dir permissive=1",
+      "category": "auto_repairable",
+      "classification": "MISSING_RULE",
+      "patch": "allow distributedfiledaemon data_service_el2_file:dir { write };",
+      "review_status": "APPROVE",
+      "verify_status": "SUCCESS",
+      "why": "最小权限补齐"
+    },
+    {
+      "fp": "79e21e00fd5d",
+      "count": 1,
+      "permissive": 1,
+      "enforcing": 0,
+      "permissive_unknown": 0,
+      "src": "distributedfiledaemon",
+      "tgt": "data_service_el2_file",
+      "cls": "file",
+      "perms": [
+        "read",
+        "write",
+        "open"
+      ],
+      "ioctl": "",
+      "comms": [
+        "kworker/u8:4"
+      ],
+      "sample_raw": "#avc:  denied  { read write open } for  pid=183 comm=\"kworker/u8:4\" path=2F646174612F736572766963652F656C322F3130302F686D6466732F63616368652F6163636F756E745F63616368652F23333933303937202864656C6574656429 dev=\"mmcblk0p11\" ino=393097 scontext=u:r:distributedfiledaemon:s0 tcontext=u:object_r:data_service_el2_file:s0 tclass=file permissive=1",
+      "category": "needs_human",
+      "classification": "POTENTIAL_ESCALATION",
+      "patch": "",
+      "review_status": "",
+      "verify_status": "",
+      "why": "命中 neverallow 红线：禁止自动放权（转人工）"
+    },
+    {
+      "fp": "4b1c09a7a38d",
+      "count": 1,
+      "permissive": 0,
+      "enforcing": 0,
+      "permissive_unknown": 1,
+      "src": "system_basic_hap",
+      "tgt": "storage_manager",
+      "cls": "binderpermissive=1",
+      "perms": [
+        "call"
+      ],
+      "ioctl": "",
+      "comms": [
+        "e.volumemanager"
+      ],
+      "sample_raw": "#avc:  denied  { call } for  pid=1550 comm=\"e.volumemanager\" scontext=u:r:system_basic_hap:s0 tcontext=u:r:storage_manager:s0 tclass=binderpermissive=1",
+      "category": "needs_human",
+      "classification": "MISSING_RULE",
+      "patch": "allow system_basic_hap storage_manager:binderpermissive=1 { call };",
+      "review_status": "APPROVE",
+      "verify_status": "FAILED",
+      "why": "最小权限补齐"
+    },
+    {
+      "fp": "149d5176fb8a",
+      "count": 1,
+      "permissive": 1,
+      "enforcing": 0,
+      "permissive_unknown": 0,
+      "src": "storage_daemon",
+      "tgt": "dev_block_file",
+      "cls": "dir",
+      "perms": [
+        "write",
+        "search"
+      ],
+      "ioctl": "",
+      "comms": [
+        "storage_daemon"
+      ],
+      "sample_raw": "#avc:  denied  { write search } for  pid=241 comm=\"storage_daemon\" name=\"block\" dev=\"tmpfs\" ino=7 scontext=u:r:storage_daemon:s0 tcontext=u:object_r:dev_block_file:s0 tclass=dir permissive=1",
+      "category": "auto_repairable",
+      "classification": "MISSING_RULE",
+      "patch": "allow storage_daemon dev_block_file:dir { write };",
+      "review_status": "APPROVE",
+      "verify_status": "SUCCESS",
+      "why": "最小权限补齐"
+    },
+    {
+      "fp": "44ca8650ff53",
+      "count": 1,
+      "permissive": 1,
+      "enforcing": 0,
+      "permissive_unknown": 0,
+      "src": "storage_daemon",
+      "tgt": "dev_block_file",
+      "cls": "dir",
+      "perms": [
+        "add_name",
+        "search"
+      ],
+      "ioctl": "",
+      "comms": [
+        "storage_daemon"
+      ],
+      "sample_raw": "#avc:  denied  { add_name search } for  pid=241 comm=\"storage_daemon\" name=\"disk-8-0\" scontext=u:r:storage_daemon:s0 tcontext=u:object_r:dev_block_file:s0 tclass=dir permissive=1",
+      "category": "auto_repairable",
+      "classification": "MISSING_RULE",
+      "patch": "allow storage_daemon dev_block_file:dir { add_name };",
+      "review_status": "APPROVE",
+      "verify_status": "SUCCESS",
+      "why": "最小权限补齐"
+    },
+    {
+      "fp": "2651f8d86e5b",
+      "count": 1,
+      "permissive": 1,
+      "enforcing": 0,
+      "permissive_unknown": 0,
+      "src": "storage_daemon",
+      "tgt": "dev_block_file",
+      "cls": "blk_file",
+      "perms": [
+        "create"
+      ],
+      "ioctl": "",
+      "comms": [
+        "storage_daemon"
+      ],
+      "sample_raw": "#avc:  denied  { create } for  pid=241 comm=\"storage_daemon\" name=\"disk-8-0\" scontext=u:r:storage_daemon:s0 tcontext=u:object_r:dev_block_file:s0 tclass=blk_file permissive=1",
+      "category": "auto_repairable",
+      "classification": "MISSING_RULE",
+      "patch": "allow storage_daemon dev_block_file:blk_file { create };",
+      "review_status": "APPROVE",
+      "verify_status": "SUCCESS",
+      "why": "最小权限补齐"
+    },
+    {
+      "fp": "47853c331ac1",
+      "count": 1,
+      "permissive": 1,
+      "enforcing": 0,
+      "permissive_unknown": 0,
+      "src": "storage_daemon",
+      "tgt": "dev_block_file",
+      "cls": "blk_file",
+      "perms": [
+        "read"
+      ],
+      "ioctl": "",
+      "comms": [
+        "storage_daemon"
+      ],
+      "sample_raw": "#avc:  denied  { read } for  pid=241 comm=\"storage_daemon\" name=\"disk-8-0\" dev=\"tmpfs\" ino=508 scontext=u:r:storage_daemon:s0 tcontext=u:object_r:dev_block_file:s0 tclass=blk_file permissive=1",
+      "category": "auto_repairable",
+      "classification": "MISSING_RULE",
+      "patch": "allow storage_daemon dev_block_file:blk_file { read };",
+      "review_status": "APPROVE",
+      "verify_status": "SUCCESS",
+      "why": "最小权限补齐"
+    },
+    {
+      "fp": "cae0c404e8ae",
+      "count": 1,
+      "permissive": 1,
+      "enforcing": 0,
+      "permissive_unknown": 0,
+      "src": "storage_daemon",
+      "tgt": "dev_block_file",
+      "cls": "blk_file",
+      "perms": [
+        "read",
+        "open"
+      ],
+      "ioctl": "",
+      "comms": [
+        "blkid"
+      ],
+      "sample_raw": "#avc:  denied  { read open } for  pid=2061 comm=\"blkid\" path=\"/dev/block/vol-8-2\" dev=\"tmpfs\" ino=502 scontext=u:r:storage_daemon:s0 tcontext=u:object_r:dev_block_file:s0 tclass=blk_file permissive=1",
+      "category": "auto_repairable",
+      "classification": "MISSING_RULE",
+      "patch": "allow storage_daemon dev_block_file:blk_file { open read };",
+      "review_status": "APPROVE",
+      "verify_status": "SUCCESS",
+      "why": "最小权限补齐"
+    },
+    {
+      "fp": "909f18fa9f9c",
+      "count": 1,
+      "permissive": 1,
+      "enforcing": 0,
+      "permissive_unknown": 0,
+      "src": "storage_daemon",
+      "tgt": "data_chipset_el1_file",
+      "cls": "dir",
+      "perms": [
+        "remove_name"
+      ],
+      "ioctl": "",
+      "comms": [
+        "storage_daemon"
+      ],
+      "sample_raw": "#avc:  denied  { remove_name } for  pid=254 comm=\"storage_daemon\" name=\"101\" dev=\"mmcblk0p11\" ino=262719 scontext=u:r:storage_daemon:s0 tcontext=u:object_r:data_chipset_el1_file:s0 tclass=dir permissive=1",
+      "category": "auto_repairable",
+      "classification": "MISSING_RULE",
+      "patch": "allow storage_daemon data_chipset_el1_file:dir { remove_name };",
+      "review_status": "APPROVE",
+      "verify_status": "SUCCESS",
+      "why": "最小权限补齐"
+    },
+    {
+      "fp": "05948235810d",
+      "count": 1,
+      "permissive": 1,
+      "enforcing": 0,
+      "permissive_unknown": 0,
+      "src": "storage_daemon",
+      "tgt": "data_chipset_el2_file",
+      "cls": "dir",
+      "perms": [
+        "remove_name"
+      ],
+      "ioctl": "",
+      "comms": [
+        "storage_daemon"
+      ],
+      "sample_raw": "#avc:  denied  { remove_name } for  pid=254 comm=\"storage_daemon\" name=\"101\" dev=\"mmcblk0p11\" ino=391690 scontext=u:r:storage_daemon:s0 tcontext=u:object_r:data_chipset_el2_file:s0 tclass=dir permissive=1",
+      "category": "auto_repairable",
+      "classification": "MISSING_RULE",
+      "patch": "allow storage_daemon data_chipset_el2_file:dir { remove_name };",
+      "review_status": "APPROVE",
+      "verify_status": "SUCCESS",
+      "why": "最小权限补齐"
+    },
+    {
+      "fp": "714ce1ca1c84",
+      "count": 1,
+      "permissive": 1,
+      "enforcing": 0,
+      "permissive_unknown": 0,
+      "src": "storage_daemon",
+      "tgt": "hmdfs",
+      "cls": "file",
+      "perms": [
+        "getattr"
+      ],
+      "ioctl": "",
+      "comms": [
+        "kworker/u8:3"
+      ],
+      "sample_raw": "#avc:  denied  { getattr } for  pid=179 comm=\"kworker/u8:3\" path=\"/mnt/hmdfs/100/account/device_view/local/files/Camera/IMG_2022629_152726.jpg\" dev=\"hmdfs\" ino=2305843009213824715 scontext=u:r:storage_daemon:s0 tcontext=u:object_r:hmdfs:s0 tclass=file permissive=1",
+      "category": "needs_human",
+      "classification": "POTENTIAL_ESCALATION",
+      "patch": "",
+      "review_status": "",
+      "verify_status": "",
+      "why": "命中 neverallow 红线：禁止自动放权（转人工）"
+    },
+    {
+      "fp": "8bbfd4a386eb",
+      "count": 1,
+      "permissive": 1,
+      "enforcing": 0,
+      "permissive_unknown": 0,
+      "src": "storage_daemon",
+      "tgt": "hmdfs",
+      "cls": "file",
+      "perms": [
+        "read"
+      ],
+      "ioctl": "",
+      "comms": [
+        "kworker/u8:3"
+      ],
+      "sample_raw": "#avc:  denied  { read } for  pid=179 comm=\"kworker/u8:3\" name=\"IMG_2022629_152726.jpg\" dev=\"hmdfs\" ino=2305843009213824715 scontext=u:r:storage_daemon:s0 tcontext=u:object_r:hmdfs:s0 tclass=file permissive=1",
+      "category": "needs_human",
+      "classification": "POTENTIAL_ESCALATION",
+      "patch": "",
+      "review_status": "",
+      "verify_status": "",
+      "why": "命中 neverallow 红线：禁止自动放权（转人工）"
+    },
+    {
+      "fp": "f53fdde71fd0",
+      "count": 1,
+      "permissive": 1,
+      "enforcing": 0,
+      "permissive_unknown": 0,
+      "src": "storage_daemon",
+      "tgt": "hmdfs",
+      "cls": "file",
+      "perms": [
+        "read",
+        "write"
+      ],
+      "ioctl": "",
+      "comms": [
+        "kworker/u8:3"
+      ],
+      "sample_raw": "#avc:  denied  { read write } for  pid=179 comm=\"kworker/u8:3\" name=\"IMG_2022629_152726.jpg\" dev=\"hmdfs\" ino=2305843009213824715 scontext=u:r:storage_daemon:s0 tcontext=u:object_r:hmdfs:s0 tclass=file permissive=1",
+      "category": "needs_human",
+      "classification": "POTENTIAL_ESCALATION",
+      "patch": "",
+      "review_status": "",
+      "verify_status": "",
+      "why": "命中 neverallow 红线：禁止自动放权（转人工）"
+    },
+    {
+      "fp": "3e1f2c0baea3",
+      "count": 1,
+      "permissive": 1,
+      "enforcing": 0,
+      "permissive_unknown": 0,
+      "src": "storage_daemon",
+      "tgt": "hmdfs",
+      "cls": "file",
+      "perms": [
+        "read",
+        "write",
+        "open"
+      ],
+      "ioctl": "",
+      "comms": [
+        "kworker/u8:3"
+      ],
+      "sample_raw": "#avc:  denied  { read write open } for  pid=179 comm=\"kworker/u8:3\" path=\"/mnt/hmdfs/100/account/device_view/local/files/Camera/IMG_2022629_152726.jpg\" dev=\"hmdfs\" ino=2305843009213824715 scontext=u:r:storage_daemon:s0 tcontext=u:object_r:hmdfs:s0 tclass=file permissive=1",
+      "category": "needs_human",
+      "classification": "POTENTIAL_ESCALATION",
+      "patch": "",
+      "review_status": "",
+      "verify_status": "",
+      "why": "命中 neverallow 红线：禁止自动放权（转人工）"
+    },
+    {
+      "fp": "5a39a27caeac",
+      "count": 1,
+      "permissive": 1,
+      "enforcing": 0,
+      "permissive_unknown": 0,
+      "src": "storage_daemon",
+      "tgt": "distributedfiledaemon",
+      "cls": "binder",
+      "perms": [
+        "call"
+      ],
+      "ioctl": "",
+      "comms": [
+        "IPC_1_2158"
+      ],
+      "sample_raw": "# avc:  denied  { call } for  pid=2153 comm=\"IPC_1_2158\" scontext=u:r:storage_daemon:s0 tcontext=u:r:distributedfiledaemon:s0 tclass=binder permissive=1",
+      "category": "needs_human",
+      "classification": "POTENTIAL_ESCALATION",
+      "patch": "",
+      "review_status": "",
+      "verify_status": "",
+      "why": "命中 neverallow 红线：禁止自动放权（转人工）"
+    },
+    {
+      "fp": "0acdf502501f",
+      "count": 1,
+      "permissive": 1,
+      "enforcing": 0,
+      "permissive_unknown": 0,
+      "src": "storage_daemon",
+      "tgt": "unlabeled",
+      "cls": "dir",
+      "perms": [
+        "mounton"
+      ],
+      "ioctl": "",
+      "comms": [
+        "storage_daemon"
+      ],
+      "sample_raw": "# avc:  denied  { mounton } for  pid=2060 comm=\"storage_daemon\" path=\"/mnt/hmdfs/100/cloud\" dev=\"fuse\" ino=1668 scontext=u:r:storage_daemon:s0 tcontext=u:object_r:unlabeled:s0 tclass=dir permissive=1",
+      "category": "auto_repairable",
+      "classification": "MISSING_RULE",
+      "patch": "allow storage_daemon unlabeled:dir { mounton };",
+      "review_status": "APPROVE",
+      "verify_status": "SUCCESS",
+      "why": "最小权限补齐"
+    },
+    {
+      "fp": "541beb1692bf",
+      "count": 1,
+      "permissive": 1,
+      "enforcing": 0,
+      "permissive_unknown": 0,
+      "src": "storage_daemon",
+      "tgt": "fuse_file",
+      "cls": "filesystem",
+      "perms": [
+        "unmount"
+      ],
+      "ioctl": "",
+      "comms": [
+        "/bin/umount"
+      ],
+      "sample_raw": "# avc: denied { unmount } for pid=5206, comm=\"/bin/umount\"  scontext=u:r:storage_daemon:s0 tcontext=u:object_r:fuse_file:s0 tclass=filesystem permissive=1",
+      "category": "needs_human",
+      "classification": "POTENTIAL_ESCALATION",
+      "patch": "",
+      "review_status": "",
+      "verify_status": "",
+      "why": "命中 neverallow 红线：禁止自动放权（转人工）"
+    },
+    {
+      "fp": "ee89abbda34b",
+      "count": 1,
+      "permissive": 1,
+      "enforcing": 0,
+      "permissive_unknown": 0,
+      "src": "file",
+      "tgt": "system_core_hap",
+      "cls": "binder",
+      "perms": [
+        "transfer"
+      ],
+      "ioctl": "",
+      "comms": [
+        "/system/bin/sa_main"
+      ],
+      "sample_raw": "# avc: denied {transfer} for pid=6408, comm=\"/system/bin/sa_main\" scontext=u:r:file:s0 tcontext=u:r:system_core_hap:s0 tclass=binder permissive=1",
+      "category": "needs_human",
+      "classification": "MISSING_RULE",
+      "patch": "allow file system_core_hap:binder { transfer };",
+      "review_status": "APPROVE",
+      "verify_status": "SUCCESS",
+      "why": "主体/目标「file」不在当前策略语料中（设备新增域、生成的数字 service 标签或标注异常），补丁无法落点验证，转人工"
+    },
+    {
+      "fp": "8ad2dd2a9034",
+      "count": 1,
+      "permissive": 0,
+      "enforcing": 1,
+      "permissive_unknown": 0,
+      "src": "hdcd",
+      "tgt": "dev_asanlog_file",
+      "cls": "dir",
+      "perms": [
+        "getattr"
+      ],
+      "ioctl": "",
+      "comms": [
+        "hdcd"
+      ],
+      "sample_raw": "#avc:  denied  { getattr } for  pid=1123 comm=\"hdcd\" path=\"/dev/asanlog\" dev=\"tmpfs\" ino=629 scontext=u:r:hdcd:s0 tcontext=u:object_r:dev_asanlog_file:s0 tclass=dir permissive=0",
+      "category": "auto_repairable",
+      "classification": "MISSING_RULE",
+      "patch": "allow hdcd dev_asanlog_file:dir { getattr };",
+      "review_status": "APPROVE",
+      "verify_status": "SUCCESS",
+      "why": "最小权限补齐"
+    },
+    {
+      "fp": "b6531496bac5",
+      "count": 1,
+      "permissive": 1,
+      "enforcing": 0,
+      "permissive_unknown": 0,
+      "src": "hdcd",
+      "tgt": "dev_asanlog_file",
+      "cls": "file",
+      "perms": [
+        "write",
+        "create",
+        "open"
+      ],
+      "ioctl": "",
+      "comms": [
+        "hdcd"
+      ],
+      "sample_raw": "#avc:  denied  { write create open } for  pid=1358 comm=\"hdcd\" path=\"/dev/asanlog/asan.log.3273\" dev=\"tmpfs\" ino=727 scontext=u:r:hdcd:s0 tcontext=u:object_r:dev_asanlog_file:s0 tclass=file permissive=1",
+      "category": "auto_repairable",
+      "classification": "MISSING_RULE",
+      "patch": "allow hdcd dev_asanlog_file:file { open };",
+      "review_status": "APPROVE",
+      "verify_status": "SUCCESS",
+      "why": "最小权限补齐"
+    },
+    {
+      "fp": "0dd6baffb970",
+      "count": 1,
+      "permissive": 0,
+      "enforcing": 1,
+      "permissive_unknown": 0,
+      "src": "hiview",
+      "tgt": "dev_file",
+      "cls": "dir",
+      "perms": [
+        "read"
+      ],
+      "ioctl": "",
+      "comms": [
+        "hiview"
+      ],
+      "sample_raw": "#avc:  denied  { read } for  pid=3520 comm=\"hiview\" name=\"asanlog\" dev=\"tmpfs\" ino=726 scontext=u:r:hiview:s0 tcontext=u:object_r:dev_file:s0 tclass=dir permissive=0",
+      "category": "auto_repairable",
+      "classification": "MISSING_RULE",
+      "patch": "allow hiview dev_file:dir { read };",
+      "review_status": "APPROVE",
+      "verify_status": "SUCCESS",
+      "why": "最小权限补齐"
+    },
+    {
+      "fp": "23ea5508b6b6",
+      "count": 1,
+      "permissive": 0,
+      "enforcing": 1,
+      "permissive_unknown": 0,
+      "src": "hiview",
+      "tgt": "dev_file",
+      "cls": "file",
+      "perms": [
+        "read"
+      ],
+      "ioctl": "",
+      "comms": [
+        "hiview"
+      ],
+      "sample_raw": "#avc:  denied  { read } for  pid=449 comm=\"hiview\" name=\"asan.log.2718\" dev=\"tmpfs\" ino=731 scontext=u:r:hiview:s0 tcontext=u:object_r:dev_file:s0 tclass=file permissive=0",
+      "category": "needs_human",
+      "classification": "POTENTIAL_ESCALATION",
+      "patch": "",
+      "review_status": "",
+      "verify_status": "",
+      "why": "命中 neverallow 红线：禁止自动放权（转人工）"
+    },
+    {
+      "fp": "79172bd311a1",
+      "count": 1,
+      "permissive": 0,
+      "enforcing": 1,
+      "permissive_unknown": 0,
+      "src": "init",
+      "tgt": "dev_file",
+      "cls": "file",
+      "perms": [
+        "getattr"
+      ],
+      "ioctl": "",
+      "comms": [
+        "init"
+      ],
+      "sample_raw": "#avc:  denied  { getattr } for  pid=3281 comm=\"init\" path=\"/dev/asanlog/asan.log.2718\" dev=\"tmpfs\" ino=727 scontext=u:r:init:s0 tcontext=u:object_r:dev_file:s0 tclass=file permissive=0",
+      "category": "needs_human",
+      "classification": "POTENTIAL_ESCALATION",
+      "patch": "",
+      "review_status": "",
+      "verify_status": "",
+      "why": "命中 neverallow 红线：禁止自动放权（转人工）"
+    },
+    {
+      "fp": "5cdf7d2fd1e7",
+      "count": 1,
+      "permissive": 0,
+      "enforcing": 0,
+      "permissive_unknown": 1,
+      "src": "sh",
+      "tgt": "lnk_file",
+      "cls": "dir",
+      "perms": [
+        "create",
+        "getattr",
+        "read",
+        "unlink"
+      ],
+      "ioctl": "",
+      "comms": [
+        "bin/ln"
+      ],
+      "sample_raw": "# avc: denied { create getattr read unlink } for pid=45334, comm=\"bin/ln\" scontext=u:r:sh:s0 tcontext=u:object_r:lnk_file:s0 tclass=dir permissions=0",
+      "category": "needs_human",
+      "classification": "MISSING_RULE",
+      "patch": "allow sh lnk_file:dir { create getattr read unlink };",
+      "review_status": "APPROVE",
+      "verify_status": "SUCCESS",
+      "why": "主体/目标「lnk_file」不在当前策略语料中（设备新增域、生成的数字 service 标签或标注异常），补丁无法落点验证，转人工"
+    },
+    {
+      "fp": "dd1835989725",
+      "count": 1,
+      "permissive": 1,
+      "enforcing": 0,
+      "permissive_unknown": 0,
+      "src": "locationhub",
+      "tgt": "default_service",
+      "cls": "samgr_class",
+      "perms": [
+        "get"
+      ],
+      "ioctl": "",
+      "comms": [],
+      "sample_raw": "#avc:  denied  { get } for service=2801 pid=284 scontext=u:r:locationhub:s0 tcontext=u:object_r:default_service:s0 tclass=samgr_class permissive=1",
+      "category": "needs_human",
+      "classification": "POTENTIAL_ESCALATION",
+      "patch": "",
+      "review_status": "",
+      "verify_status": "",
+      "why": "命中 neverallow 红线：禁止自动放权（转人工）"
+    },
+    {
+      "fp": "5808b34905bd",
+      "count": 1,
+      "permissive": 1,
+      "enforcing": 0,
+      "permissive_unknown": 0,
+      "src": "download_server",
+      "tgt": "sock_file",
+      "cls": "sock_file",
+      "perms": [
+        "write"
+      ],
+      "ioctl": "",
+      "comms": [
+        "async-2"
+      ],
+      "sample_raw": "#avc:  denied  { write } for pid=6848 comm=\"async-2\" name=\"dnsproxyd\" dev=\"tmpfs\" ino=185 scontext=u:r:download_server:s0 tcontext=u:dev_unix_file:sock_file:s0 tclass=sock_file permissive=1",
+      "category": "needs_human",
+      "classification": "MISSING_RULE",
+      "patch": "allow download_server sock_file:sock_file { write };",
+      "review_status": "APPROVE",
+      "verify_status": "SUCCESS",
+      "why": "主体/目标「sock_file」不在当前策略语料中（设备新增域、生成的数字 service 标签或标注异常），补丁无法落点验证，转人工"
+    },
+    {
+      "fp": "2c58a73f3d10",
+      "count": 2,
+      "permissive": 0,
+      "enforcing": 2,
+      "permissive_unknown": 0,
+      "src": "download_server",
+      "tgt": "s0",
+      "cls": "file",
+      "perms": [
+        "read"
+      ],
+      "ioctl": "",
+      "comms": [
+        "example.mytest"
+      ],
+      "sample_raw": "#avc:  denied  { read } for  pid=1956 comm=\"example.mytest\" ... scontext=u:r:download_server:s0 tcontext=u:object_r：hmdfs:s0 tclass=file permissive=0",
+      "category": "needs_human",
+      "classification": "MISSING_RULE",
+      "patch": "allow download_server s0:file { read };",
+      "review_status": "APPROVE",
+      "verify_status": "SUCCESS",
+      "why": "目标上下文可疑（被解析成安全级别而非类型，多为日志/注释笔误，勿照抄规则）"
+    },
+    {
+      "fp": "87282fcefc1f",
+      "count": 1,
+      "permissive": 0,
+      "enforcing": 1,
+      "permissive_unknown": 0,
+      "src": "download_server",
+      "tgt": "s0",
+      "cls": "file",
+      "perms": [
+        "getattr"
+      ],
+      "ioctl": "",
+      "comms": [
+        "example.mytest"
+      ],
+      "sample_raw": "#avc:  denied  { getattr } for  pid=1956 comm=\"example.mytest\" ... scontext=u:r:download_server:s0 tcontext=u:object_r：hmdfs:s0 tclass=file permissive=0",
+      "category": "needs_human",
+      "classification": "MISSING_RULE",
+      "patch": "allow download_server s0:file { getattr };",
+      "review_status": "APPROVE",
+      "verify_status": "SUCCESS",
+      "why": "目标上下文可疑（被解析成安全级别而非类型，多为日志/注释笔误，勿照抄规则）"
+    },
+    {
+      "fp": "4274be0ec7fb",
+      "count": 1,
+      "permissive": 1,
+      "enforcing": 0,
+      "permissive_unknown": 0,
+      "src": "download_server",
+      "tgt": "s0",
+      "cls": "samgr_class",
+      "perms": [
+        "get"
+      ],
+      "ioctl": "",
+      "comms": [],
+      "sample_raw": "#avc:  denied  { get } for  service=401 sid=u:r:download_server:s0 scontext=u:r:download_server:s0 tcontext=u:object_r：sa_foundation_bms:s0 tclass=samgr_class permissive=1",
+      "category": "needs_human",
+      "classification": "MISSING_RULE",
+      "patch": "allow download_server s0:samgr_class { get };",
+      "review_status": "APPROVE",
+      "verify_status": "SUCCESS",
+      "why": "目标上下文可疑（被解析成安全级别而非类型，多为日志/注释笔误，勿照抄规则）"
+    },
+    {
+      "fp": "04aef0a48ca3",
+      "count": 1,
+      "permissive": 0,
+      "enforcing": 1,
+      "permissive_unknown": 0,
+      "src": "system_basic_hap",
+      "tgt": "sa_download_server",
+      "cls": "samgr_class",
+      "perms": [
+        "get"
+      ],
+      "ioctl": "",
+      "comms": [],
+      "sample_raw": "# avc:  denied  { get } for service=3706 pid=4299 scontext=u:r:system_basic_hap:s0 tcontext=u:object_r:sa_download_server:s0 tclass=samgr_class permissive=0",
+      "category": "needs_human",
+      "classification": "MISSING_RULE",
+      "patch": "allow system_basic_hap sa_download_server:samgr_class { get };",
+      "review_status": "APPROVE",
+      "verify_status": "SUCCESS",
+      "why": "主体/目标「sa_download_server」不在当前策略语料中（设备新增域、生成的数字 service 标签或标注异常），补丁无法落点验证，转人工"
+    },
+    {
+      "fp": "44cd0dbbd4bc",
+      "count": 1,
+      "permissive": 0,
+      "enforcing": 1,
+      "permissive_unknown": 0,
+      "src": "system_core_hap",
+      "tgt": "download_server",
+      "cls": "binder",
+      "perms": [
+        "get"
+      ],
+      "ioctl": "",
+      "comms": [
+        "1.ui"
+      ],
+      "sample_raw": "# avc:  denied  { get } for  pid=2095 comm=\"1.ui\" scontext=u:r:system_core_hap:s0 tcontext=u:r:download_server:s0 tclass=binder permissive=0",
+      "category": "needs_human",
+      "classification": "POTENTIAL_ESCALATION",
+      "patch": "",
+      "review_status": "",
+      "verify_status": "",
+      "why": "命中 neverallow 红线：禁止自动放权（转人工）"
+    },
+    {
+      "fp": "ab85504fe96b",
+      "count": 1,
+      "permissive": 1,
+      "enforcing": 0,
+      "permissive_unknown": 0,
+      "src": "input_isolate_debug_hap",
+      "tgt": "render_service",
+      "cls": "unix_stream_socket",
+      "perms": [
+        "transfer"
+      ],
+      "ioctl": "",
+      "comms": [
+        "/system/bin/appspawn"
+      ],
+      "sample_raw": "#avc:  denied { transfer } for pid=33917, comm=\"/system/bin/appspawn\" scontext=u:r:input_isolate_debug_hap:s0 tcontext=u:r:render_service:s0 tclass=unix_stream_socket permissive=1",
+      "category": "auto_repairable",
+      "classification": "MISSING_RULE",
+      "patch": "allow input_isolate_debug_hap render_service:unix_stream_socket { transfer };",
+      "review_status": "APPROVE",
+      "verify_status": "SUCCESS",
+      "why": "最小权限补齐"
+    },
+    {
+      "fp": "f6532bb30894",
+      "count": 1,
+      "permissive": 1,
+      "enforcing": 0,
+      "permissive_unknown": 0,
+      "src": "input_isolate_hap",
+      "tgt": "render_service",
+      "cls": "unix_stream_socket",
+      "perms": [
+        "transfer"
+      ],
+      "ioctl": "",
+      "comms": [
+        "/system/bin/appspawn"
+      ],
+      "sample_raw": "#avc: denied { transfer } for pid=33917, comm=\"/system/bin/appspawn\" scontext=u:r:input_isolate_hap:s0 tcontext=u:r:render_service:s0 tclass=unix_stream_socket permissive=1",
+      "category": "auto_repairable",
+      "classification": "MISSING_RULE",
+      "patch": "allow input_isolate_hap render_service:unix_stream_socket { transfer };",
+      "review_status": "APPROVE",
+      "verify_status": "SUCCESS",
+      "why": "最小权限补齐"
+    },
+    {
+      "fp": "15bb3f2ddcc7",
+      "count": 1,
+      "permissive": 1,
+      "enforcing": 0,
+      "permissive_unknown": 0,
+      "src": "sh",
+      "tgt": "inputmethod_service",
+      "cls": "process",
+      "perms": [
+        "signal"
+      ],
+      "ioctl": "",
+      "comms": [
+        "sh"
+      ],
+      "sample_raw": "#avc:  denied  { signal } for  pid=1549 comm=\"sh\" scontext=u:r:sh:s0 tcontext=u:r:inputmethod_service:s0 tclass=process permissive=1",
+      "category": "auto_repairable",
+      "classification": "MISSING_RULE",
+      "patch": "allow sh inputmethod_service:process { signal };",
+      "review_status": "APPROVE",
+      "verify_status": "SUCCESS",
+      "why": "最小权限补齐"
+    },
+    {
+      "fp": "7483a1695873",
+      "count": 1,
+      "permissive": 0,
+      "enforcing": 1,
+      "permissive_unknown": 0,
+      "src": "inputmethod_service",
+      "tgt": "sa_distributeddate_service",
+      "cls": "samgr_class",
+      "perms": [
+        "get"
+      ],
+      "ioctl": "",
+      "comms": [],
+      "sample_raw": "#avc:  denied  { get } for service=1301 pid=1216 scontext=u:r:inputmethod_service:s0 tcontext=u:object_r:sa_distributeddate_service:s0 tclass=samgr_class permissive=0",
+      "category": "needs_human",
+      "classification": "MISSING_RULE",
+      "patch": "allow inputmethod_service sa_distributeddate_service:samgr_class { get };",
+      "review_status": "APPROVE",
+      "verify_status": "SUCCESS",
+      "why": "主体/目标「sa_distributeddate_service」不在当前策略语料中（设备新增域、生成的数字 service 标签或标注异常），补丁无法落点验证，转人工"
+    },
+    {
+      "fp": "eafb9a42b846",
+      "count": 1,
+      "permissive": 1,
+      "enforcing": 0,
+      "permissive_unknown": 0,
+      "src": "sh",
+      "tgt": "pasteboard_service",
+      "cls": "fd",
+      "perms": [
+        "use"
+      ],
+      "ioctl": "",
+      "comms": [
+        "IPC_1_843"
+      ],
+      "sample_raw": "#avc:  denied  { use } for  pid=555 comm=\"IPC_1_843\" path=\"/dev/ashmem\" dev=\"tmpfs\" ino=166 scontext=u:r:sh:s0 tcontext=u:r:pasteboard_service:s0 tclass=fd permissive=1",
+      "category": "auto_repairable",
+      "classification": "MISSING_RULE",
+      "patch": "allow sh pasteboard_service:fd { use };",
+      "review_status": "APPROVE",
+      "verify_status": "SUCCESS",
+      "why": "最小权限补齐"
+    },
+    {
+      "fp": "8759cdda6a6d",
+      "count": 1,
+      "permissive": 1,
+      "enforcing": 0,
+      "permissive_unknown": 0,
+      "src": "time_service",
+      "tgt": "sock_file",
+      "cls": "sock_file",
+      "perms": [
+        "write"
+      ],
+      "ioctl": "",
+      "comms": [
+        "IPC_5_2549"
+      ],
+      "sample_raw": "#avc:  denied  { write } for pid=936 comm=\"IPC_5_2549\" name=\"dnsproxyd\" dev=\"tmpfs\" ino=805 scontext=u:r:time_service:s0 tcontext=u:dev_unix_file:sock_file:s0 tclass=sock_file permissive=1",
+      "category": "needs_human",
+      "classification": "MISSING_RULE",
+      "patch": "allow time_service sock_file:sock_file { write };",
+      "review_status": "APPROVE",
+      "verify_status": "SUCCESS",
+      "why": "主体/目标「sock_file」不在当前策略语料中（设备新增域、生成的数字 service 标签或标注异常），补丁无法落点验证，转人工"
+    },
+    {
+      "fp": "dd1846f5e80f",
+      "count": 1,
+      "permissive": 1,
+      "enforcing": 0,
+      "permissive_unknown": 0,
+      "src": "msdp_sa",
+      "tgt": "sceneboard_hap",
+      "cls": "binder",
+      "perms": [
+        "transfer"
+      ],
+      "ioctl": "",
+      "comms": [
+        "/system/bin/sa_main"
+      ],
+      "sample_raw": "# avc: denied { transfer } for pid=1211, comm=\"/system/bin/sa_main\"  scontext=u:r:msdp_sa:s0 tcontext=u:r:sceneboard_hap:s0 tclass=binder permissive=1",
+      "category": "needs_human",
+      "classification": "POTENTIAL_ESCALATION",
+      "patch": "",
+      "review_status": "",
+      "verify_status": "",
+      "why": "命中 neverallow 红线：禁止自动放权（转人工）"
+    },
+    {
+      "fp": "d38c4b08c36c",
+      "count": 2,
+      "permissive": 2,
+      "enforcing": 0,
+      "permissive_unknown": 0,
+      "src": "camera_service",
+      "tgt": "cameradaemon",
+      "cls": "fd",
+      "perms": [
+        "use"
+      ],
+      "ioctl": "",
+      "comms": [
+        "OS_FFRT_2_1"
+      ],
+      "sample_raw": "#avc:  denied  { use } for  pid=3966 comm=\"OS_FFRT_2_1\" path=\"/dev/ashmem\" dev=\"tmpfs\" ino=630 scontext=u:r:camera_service:s0 tcontext=u:r:cameradaemon:s0 tclass=fd permissive=1",
+      "category": "needs_human",
+      "classification": "MISSING_RULE",
+      "patch": "allow camera_service cameradaemon:fd { use };",
+      "review_status": "APPROVE",
+      "verify_status": "SUCCESS",
+      "why": "主体/目标「cameradaemon」不在当前策略语料中（设备新增域、生成的数字 service 标签或标注异常），补丁无法落点验证，转人工"
+    },
+    {
+      "fp": "ca272a2d0a38",
+      "count": 1,
+      "permissive": 0,
+      "enforcing": 1,
+      "permissive_unknown": 0,
+      "src": "camera_service",
+      "tgt": "audio_policy",
+      "cls": "binder",
+      "perms": [
+        "call"
+      ],
+      "ioctl": "",
+      "comms": [
+        "/system/bin/sa_main"
+      ],
+      "sample_raw": "#avc: denied { call } for pid=1478, comm=\"/system/bin/sa_main\"  scontext=u:r:camera_service:s0 tcontext=u:r:audio_policy:s0 tclass=binder permissive=0",
+      "category": "needs_human",
+      "classification": "POTENTIAL_ESCALATION",
+      "patch": "",
+      "review_status": "",
+      "verify_status": "",
+      "why": "命中 neverallow 红线：禁止自动放权（转人工）"
+    },
+    {
+      "fp": "246ea9db62de",
+      "count": 1,
+      "permissive": 1,
+      "enforcing": 0,
+      "permissive_unknown": 0,
+      "src": "su",
+      "tgt": "data_service_el1_file",
+      "cls": "dir",
+      "perms": [
+        "write",
+        "remove_name",
+        "search"
+      ],
+      "ioctl": "",
+      "comms": [
+        "/bin/rm"
+      ],
+      "sample_raw": "#avc: denied { write remove_name search } for pid=20408, comm=\"/bin/rm\"  name=\"/service/el1/public/camera_service\" dev=\"/dev/block/platform/fa500000.ufs/by-name/userdata\" ino=1473 scontext=u:r:su:s0 tcontext=u:object_r:data_service_el1_file:s0 tclass=dir permissive=1",
+      "category": "auto_repairable",
+      "classification": "MISSING_RULE",
+      "patch": "allow su data_service_el1_file:dir { remove_name search write };",
+      "review_status": "APPROVE",
+      "verify_status": "SUCCESS",
+      "why": "最小权限补齐"
+    },
+    {
+      "fp": "ab5680e8b16b",
+      "count": 1,
+      "permissive": 1,
+      "enforcing": 0,
+      "permissive_unknown": 0,
+      "src": "su",
+      "tgt": "data_service_el1_file",
+      "cls": "dir",
+      "perms": [
+        "getattr"
+      ],
+      "ioctl": "",
+      "comms": [
+        "/bin/ls"
+      ],
+      "sample_raw": "#avc: denied { getattr } for pid=20061, comm=\"/bin/ls\"  path=\"/data/service/el1/public/camera_service\" dev=\"/dev/block/platform/fa500000.ufs/by-name/userdata\" ino=1473 scontext=u:r:su:s0 tcontext=u:object_r:data_service_el1_file:s0 tclass=dir permissive=1",
+      "category": "auto_repairable",
+      "classification": "MISSING_RULE",
+      "patch": "allow su data_service_el1_file:dir { getattr };",
+      "review_status": "APPROVE",
+      "verify_status": "SUCCESS",
+      "why": "最小权限补齐"
+    },
+    {
+      "fp": "8eea97760483",
+      "count": 1,
+      "permissive": 1,
+      "enforcing": 0,
+      "permissive_unknown": 0,
+      "src": "su",
+      "tgt": "data_service_el1_file",
+      "cls": "file",
+      "perms": [
+        "unlink"
+      ],
+      "ioctl": "",
+      "comms": [
+        "/bin/rm"
+      ],
+      "sample_raw": "#avc: denied { unlink } for pid=20408, comm=\"/bin/rm\"  name=\"/service/el1/public/camera_service/temp.mp4\" dev=\"/dev/block/platform/fa500000.ufs/by-name/userdata\" ino=25420 scontext=u:r:su:s0 tcontext=u:object_r:data_service_el1_file:s0 tclass=file permissive=1",
+      "category": "needs_human",
+      "classification": "POTENTIAL_ESCALATION",
+      "patch": "",
+      "review_status": "",
+      "verify_status": "",
+      "why": "命中 neverallow 红线：禁止自动放权（转人工）"
+    },
+    {
+      "fp": "e1e1cd65e90a",
+      "count": 1,
+      "permissive": 1,
+      "enforcing": 0,
+      "permissive_unknown": 0,
+      "src": "su",
+      "tgt": "data_service_el1_file",
+      "cls": "file",
+      "perms": [
+        "getattr"
+      ],
+      "ioctl": "",
+      "comms": [
+        "/bin/ls"
+      ],
+      "sample_raw": "#avc: denied { getattr } for pid=20061, comm=\"/bin/ls\"  path=\"/data/service/el1/public/camera_service/temp.mp4\" dev=\"/dev/block/platform/fa500000.ufs/by-name/userdata\" ino=25420 scontext=u:r:su:s0 tcontext=u:object_r:data_service_el1_file:s0 tclass=file permissive=1",
+      "category": "needs_human",
+      "classification": "POTENTIAL_ESCALATION",
+      "patch": "",
+      "review_status": "",
+      "verify_status": "",
+      "why": "命中 neverallow 红线：禁止自动放权（转人工）"
+    },
+    {
+      "fp": "501bb4b29ed5",
+      "count": 1,
+      "permissive": 0,
+      "enforcing": 1,
+      "permissive_unknown": 0,
+      "src": "media_service",
+      "tgt": "data_file",
+      "cls": "file",
+      "perms": [
+        "write"
+      ],
+      "ioctl": "",
+      "comms": [
+        "recorder_unit_t"
+      ],
+      "sample_raw": "#avc:  denied  { write } for  pid=12844 comm=\"recorder_unit_t\" path=\"/data/test/recorder_video_yuv_mpeg4.mp4\" dev=\"mmcblk0p11\" ino=391698 scontext=u:r:media_service:s0 tcontext=u:object_r:data_file:s0 tclass=file permissive=0",
+      "category": "needs_human",
+      "classification": "POTENTIAL_ESCALATION",
+      "patch": "",
+      "review_status": "",
+      "verify_status": "",
+      "why": "命中 neverallow 红线：禁止自动放权（转人工）"
+    },
+    {
+      "fp": "30656f6c0f53",
+      "count": 1,
+      "permissive": 1,
+      "enforcing": 0,
+      "permissive_unknown": 0,
+      "src": "media_service",
+      "tgt": "data_test_file",
+      "cls": "file",
+      "perms": [
+        "getattr"
+      ],
+      "ioctl": "",
+      "comms": [
+        "media_service"
+      ],
+      "sample_raw": "#avc:  denied  { getattr } for  pid=507 comm=\"media_service\" path=\"/data/test/recorder_video_yuv_mpeg4.mp4\" dev=\"mmcblk0p11\" ino=1175048 scontext=u:r:media_service:s0 tcontext=u:object_r:data_test_file:s0 tclass=file permissive=1",
+      "category": "needs_human",
+      "classification": "POTENTIAL_ESCALATION",
+      "patch": "",
+      "review_status": "",
+      "verify_status": "",
+      "why": "命中 neverallow 红线：禁止自动放权（转人工）"
+    },
+    {
+      "fp": "280d2c6bd398",
+      "count": 1,
+      "permissive": 0,
+      "enforcing": 1,
+      "permissive_unknown": 0,
+      "src": "media_service",
+      "tgt": "data_test_file",
+      "cls": "file",
+      "perms": [
+        "read"
+      ],
+      "ioctl": "",
+      "comms": [
+        "recorder_unit_t"
+      ],
+      "sample_raw": "#avc:  denied  { read } for  pid=1968 comm=\"recorder_unit_t\" path=\"/data/test/recorder_video_yuv_mpeg4.mp4\" dev=\"mmcblk0p11\" ino=1175048 scontext=u:r:media_service:s0 tcontext=u:object_r:data_test_file:s0 tclass=file permissive=0",
+      "category": "needs_human",
+      "classification": "POTENTIAL_ESCALATION",
+      "patch": "",
+      "review_status": "",
+      "verify_status": "",
+      "why": "命中 neverallow 红线：禁止自动放权（转人工）"
+    },
+    {
+      "fp": "767b6ba3110c",
+      "count": 1,
+      "permissive": 1,
+      "enforcing": 0,
+      "permissive_unknown": 0,
+      "src": "charger",
+      "tgt": "s0",
+      "cls": "file",
+      "perms": [
+        "entrypoint"
+      ],
+      "ioctl": "",
+      "comms": [
+        "init"
+      ],
+      "sample_raw": "#avc:  denied  { entrypoint } for  pid=235 comm=\"init\" path=\"/vendor/bin/charger\" dev=\"mmcblk0p6\" ino=14 scontext=u:r:charger:s0 tcontext=u:charger_exec:s0 tclass=file permissive=1",
+      "category": "needs_human",
+      "classification": "MISSING_RULE",
+      "patch": "allow charger s0:file { entrypoint };",
+      "review_status": "APPROVE",
+      "verify_status": "SUCCESS",
+      "why": "目标上下文可疑（被解析成安全级别而非类型，多为日志/注释笔误，勿照抄规则）"
+    },
+    {
+      "fp": "2cbf267b96bd",
+      "count": 1,
+      "permissive": 0,
+      "enforcing": 1,
+      "permissive_unknown": 0,
+      "src": "charger",
+      "tgt": "s0",
+      "cls": "chr_file",
+      "perms": [
+        "getattr"
+      ],
+      "ioctl": "",
+      "comms": [
+        "charger"
+      ],
+      "sample_raw": "#avc:  denied  { getattr } for  pid=281 comm=\"charger\" path=\"/dev/dri/renderD128\" dev=\"tmpfs\" ino=80 scontext=u:r:charger:s0 tcontext=uobject_r:dev_dri_file:s0 tclass=chr_file permissive=0",
+      "category": "needs_human",
+      "classification": "MISSING_RULE",
+      "patch": "allow charger s0:chr_file { getattr };",
+      "review_status": "APPROVE",
+      "verify_status": "SUCCESS",
+      "why": "目标上下文可疑（被解析成安全级别而非类型，多为日志/注释笔误，勿照抄规则）"
+    },
+    {
+      "fp": "d0037e3823f1",
+      "count": 1,
+      "permissive": 1,
+      "enforcing": 0,
+      "permissive_unknown": 0,
+      "src": "init",
+      "tgt": "charger",
+      "cls": "file",
+      "perms": [
+        "execute"
+      ],
+      "ioctl": "",
+      "comms": [
+        "init"
+      ],
+      "sample_raw": "#avc:  denied  { execute } for  pid=235 comm=\"init\" path=\"/vendor/bin/charger\" dev=\"mmcblk0p6\" ino=14 scontext=u:r:init:s0 tcontext=u:object_r:charger:s0 tclass=file permissive=1",
+      "category": "needs_human",
+      "classification": "POTENTIAL_ESCALATION",
+      "patch": "",
+      "review_status": "",
+      "verify_status": "",
+      "why": "命中 neverallow 红线：禁止自动放权（转人工）"
+    },
+    {
+      "fp": "ed102056eeb0",
+      "count": 1,
+      "permissive": 0,
+      "enforcing": 1,
+      "permissive_unknown": 0,
+      "src": "powermgr",
+      "tgt": "sa_device_standby",
+      "cls": "samger_class",
+      "perms": [
+        "get"
+      ],
+      "ioctl": "",
+      "comms": [],
+      "sample_raw": "#avc: denied { get } for service=1914 pid=1434 scontext=u:r:powermgr:s0 tcontext=u:object_r:sa_device_standby:s0 tclass=samger_class permissive=0",
+      "category": "needs_human",
+      "classification": "MISSING_RULE",
+      "patch": "allow powermgr sa_device_standby:samger_class { get };",
+      "review_status": "APPROVE",
+      "verify_status": "SUCCESS",
+      "why": "对象类「samger_class」不在策略任何规则中出现（疑为日志笔误），补丁无法落点验证，转人工"
+    },
+    {
+      "fp": "244719fdc63e",
+      "count": 1,
+      "permissive": 1,
+      "enforcing": 0,
+      "permissive_unknown": 0,
+      "src": "powermgr",
+      "tgt": "configfs",
+      "cls": "file",
+      "perms": [
+        "search"
+      ],
+      "ioctl": "",
+      "comms": [],
+      "sample_raw": "# avc:  denied  { search } for  pid=1216 scontext=u:r:powermgr:s0 tcontext=u:r:configfs:s0 tclass=file permissive=1",
+      "category": "auto_repairable",
+      "classification": "MISSING_RULE",
+      "patch": "allow powermgr configfs:file { search };",
+      "review_status": "APPROVE",
+      "verify_status": "SUCCESS",
+      "why": "最小权限补齐"
+    },
+    {
+      "fp": "72fec66e5f99",
+      "count": 1,
+      "permissive": 1,
+      "enforcing": 0,
+      "permissive_unknown": 0,
+      "src": "powermgr",
+      "tgt": "data_init_agent",
+      "cls": "dir",
+      "perms": [
+        "getattr",
+        "map",
+        "read",
+        "open"
+      ],
+      "ioctl": "",
+      "comms": [],
+      "sample_raw": "# avc:  denied  { getattr map read open } for  pid=1216 scontext=u:r:powermgr:s0 tcontext=u:r:data_init_agent:s0 tclass=dir permissive=1",
+      "category": "auto_repairable",
+      "classification": "MISSING_RULE",
+      "patch": "allow powermgr data_init_agent:dir { getattr map open read };",
+      "review_status": "APPROVE",
+      "verify_status": "SUCCESS",
+      "why": "最小权限补齐"
+    },
+    {
+      "fp": "947c7b21495a",
+      "count": 1,
+      "permissive": 1,
+      "enforcing": 0,
+      "permissive_unknown": 0,
+      "src": "powermgr",
+      "tgt": "data_service_el1_file",
+      "cls": "dir",
+      "perms": [
+        "create",
+        "getattr",
+        "map",
+        "read",
+        "open"
+      ],
+      "ioctl": "",
+      "comms": [],
+      "sample_raw": "# avc:  denied  { create getattr map read open } for  pid=1216 scontext=u:r:powermgr:s0 tcontext=u:r:data_service_el1_file:s0 tclass=dir permissive=1",
+      "category": "auto_repairable",
+      "classification": "MISSING_RULE",
+      "patch": "allow powermgr data_service_el1_file:dir { map read };",
+      "review_status": "APPROVE",
+      "verify_status": "SUCCESS",
+      "why": "最小权限补齐"
+    },
+    {
+      "fp": "2e4ba9d38ff0",
+      "count": 1,
+      "permissive": 1,
+      "enforcing": 0,
+      "permissive_unknown": 0,
+      "src": "powermgr",
+      "tgt": "persist_param",
+      "cls": "parameter_service",
+      "perms": [
+        "map",
+        "open",
+        "read"
+      ],
+      "ioctl": "",
+      "comms": [],
+      "sample_raw": "# avc:  denied  { map open read } for  pid=1216 scontext=u:r:powermgr:s0 tcontext=u:object_r:persist_param:s0 tclass=parameter_service permissive=1",
+      "category": "auto_repairable",
+      "classification": "MISSING_RULE",
+      "patch": "allow powermgr persist_param:parameter_service { map open read };",
+      "review_status": "APPROVE",
+      "verify_status": "SUCCESS",
+      "why": "最小权限补齐"
+    },
+    {
+      "fp": "58f49e8395eb",
+      "count": 1,
+      "permissive": 1,
+      "enforcing": 0,
+      "permissive_unknown": 0,
+      "src": "powermgr",
+      "tgt": "startup_param",
+      "cls": "file",
+      "perms": [
+        "semap",
+        "open",
+        "readt"
+      ],
+      "ioctl": "",
+      "comms": [],
+      "sample_raw": "# avc:  denied  { semap open readt } for  pid=1216 scontext=u:r:powermgr:s0 tcontext=u:object_r:startup_param:s0 tclass=file permissive=1",
+      "category": "needs_human",
+      "classification": "POTENTIAL_ESCALATION",
+      "patch": "",
+      "review_status": "",
+      "verify_status": "",
+      "why": "命中 neverallow 红线：禁止自动放权（转人工）"
+    },
+    {
+      "fp": "7931ffa3b2ea",
+      "count": 1,
+      "permissive": 1,
+      "enforcing": 0,
+      "permissive_unknown": 0,
+      "src": "normal_hap",
+      "tgt": "sa_thermal_service",
+      "cls": "samgr_class",
+      "perms": [
+        "get"
+      ],
+      "ioctl": "",
+      "comms": [],
+      "sample_raw": "#avc:  denied  { get } for service=3303 pid=10482 scontext=u:r:normal_hap:s0 tcontext=u:object_r:sa_thermal_service:s0 tclass=samgr_class permissive=1",
+      "category": "needs_human",
+      "classification": "MISSING_RULE",
+      "patch": "allow normal_hap sa_thermal_service:samgr_class { get };",
+      "review_status": "APPROVE",
+      "verify_status": "SUCCESS",
+      "why": "主体/目标「sa_thermal_service」不在当前策略语料中（设备新增域、生成的数字 service 标签或标注异常），补丁无法落点验证，转人工"
+    },
+    {
+      "fp": "2d547ef6e952",
+      "count": 1,
+      "permissive": 1,
+      "enforcing": 0,
+      "permissive_unknown": 0,
+      "src": "thermal",
+      "tgt": "normal_hap",
+      "cls": "binder",
+      "perms": [
+        "call"
+      ],
+      "ioctl": "",
+      "comms": [
+        "thermal"
+      ],
+      "sample_raw": "#avc:  denied  { call } for  pid=472 comm=\"thermal\" scontext=u:r:thermal:s0 tcontext=u:r:normal_hap:s0 tclass=binder permissive=1",
+      "category": "needs_human",
+      "classification": "MISSING_RULE",
+      "patch": "allow thermal normal_hap:binder { call };",
+      "review_status": "APPROVE",
+      "verify_status": "SUCCESS",
+      "why": "主体/目标「thermal」不在当前策略语料中（设备新增域、生成的数字 service 标签或标注异常），补丁无法落点验证，转人工"
+    },
+    {
+      "fp": "23e0434fb8b0",
+      "count": 1,
+      "permissive": 1,
+      "enforcing": 0,
+      "permissive_unknown": 0,
+      "src": "thermal",
+      "tgt": "sa_resource_schedule_socperf_server",
+      "cls": "samgr_class",
+      "perms": [
+        "get"
+      ],
+      "ioctl": "",
+      "comms": [],
+      "sample_raw": "#avc:  denied  { get } for service=1906 pid=470 scontext=u:r:thermal:s0 tcontext=u:object_r:sa_resource_schedule_socperf_server:s0 tclass=samgr_class permissive=1",
+      "category": "needs_human",
+      "classification": "POTENTIAL_ESCALATION",
+      "patch": "",
+      "review_status": "",
+      "verify_status": "",
+      "why": "命中 neverallow 红线：禁止自动放权（转人工）"
+    },
+    {
+      "fp": "7f3323c20a2e",
+      "count": 1,
+      "permissive": 1,
+      "enforcing": 0,
+      "permissive_unknown": 0,
+      "src": "thermal",
+      "tgt": "vendor_etc_file",
+      "cls": "file",
+      "perms": [
+        "add"
+      ],
+      "ioctl": "",
+      "comms": [],
+      "sample_raw": "#avc:  denied  { add } for service=3303 pid=530 scontext=u:r:thermal:s0 tcontext=u:object_r:vendor_etc_file:s0 tclass=file permissive=1",
+      "category": "needs_human",
+      "classification": "POTENTIAL_ESCALATION",
+      "patch": "",
+      "review_status": "",
+      "verify_status": "",
+      "why": "命中 neverallow 红线：禁止自动放权（转人工）"
+    },
+    {
+      "fp": "35f4d9928c82",
+      "count": 1,
+      "permissive": 1,
+      "enforcing": 0,
+      "permissive_unknown": 0,
+      "src": "thermal",
+      "tgt": "sa_audio_policy_service",
+      "cls": "samgr_class",
+      "perms": [
+        "get"
+      ],
+      "ioctl": "",
+      "comms": [],
+      "sample_raw": "#avc:  denied  { get } for service=3009 pid=2003 scontext=u:r:thermal:s0 tcontext=u:object_r:sa_audio_policy_service:s0 tclass=samgr_class permissive=1",
+      "category": "needs_human",
+      "classification": "POTENTIAL_ESCALATION",
+      "patch": "",
+      "review_status": "",
+      "verify_status": "",
+      "why": "命中 neverallow 红线：禁止自动放权（转人工）"
+    },
+    {
+      "fp": "9d706da98817",
+      "count": 1,
+      "permissive": 1,
+      "enforcing": 0,
+      "permissive_unknown": 0,
+      "src": "powermgr",
+      "tgt": "sa_thermal_service",
+      "cls": "samgr_class",
+      "perms": [
+        "add"
+      ],
+      "ioctl": "",
+      "comms": [],
+      "sample_raw": "#avc:  denied  { add } for service=3303 pid=487 scontext=u:r:powermgr:s0 tcontext=u:object_r:sa_thermal_service:s0 tclass=samgr_class permissive=1",
+      "category": "needs_human",
+      "classification": "MISSING_RULE",
+      "patch": "allow powermgr sa_thermal_service:samgr_class { add };",
+      "review_status": "APPROVE",
+      "verify_status": "SUCCESS",
+      "why": "主体/目标「sa_thermal_service」不在当前策略语料中（设备新增域、生成的数字 service 标签或标注异常），补丁无法落点验证，转人工"
+    },
+    {
+      "fp": "e79c74043c5f",
+      "count": 1,
+      "permissive": 1,
+      "enforcing": 0,
+      "permissive_unknown": 0,
+      "src": "powermgr",
+      "tgt": "sysfs_pg",
+      "cls": "file",
+      "perms": [
+        "getattr"
+      ],
+      "ioctl": "",
+      "comms": [
+        "/system/bin/sa_main"
+      ],
+      "sample_raw": "# avc_audit_slow:276] avc: denied { getattr } for pid=1434, comm=\"/system/bin/sa_main\"  path=\"/sys/devices/virtual/thermal/thermal_zone0/percore_num\" dev=\"\" ino=37869 scontext=u:r:powermgr:s0 tcontext=u:object_r:sysfs_pg:s0 tclass=file permissive=1",
+      "category": "needs_human",
+      "classification": "MISSING_RULE",
+      "patch": "allow powermgr sysfs_pg:file { getattr };",
+      "review_status": "APPROVE",
+      "verify_status": "SUCCESS",
+      "why": "主体/目标「sysfs_pg」不在当前策略语料中（设备新增域、生成的数字 service 标签或标注异常），补丁无法落点验证，转人工"
+    },
+    {
+      "fp": "9007cba53b53",
+      "count": 2,
+      "permissive": 2,
+      "enforcing": 0,
+      "permissive_unknown": 0,
+      "src": "powermgr",
+      "tgt": "sysfs_pg",
+      "cls": "file",
+      "perms": [
+        "ioctl"
+      ],
+      "ioctl": "0x5413",
+      "comms": [
+        "/system/bin/sa_main"
+      ],
+      "sample_raw": "# avc_audit_slow:276] avc: denied { ioctl } for pid=1434, comm=\"/system/bin/sa_main\"  path=\"/sys/devices/virtual/thermal/thermal_zone0/percore_num\" dev=\"\" ino=37869 ioctlcmd=0x5413 scontext=u:r:powermgr:s0 tcontext=u:object_r:sysfs_pg:s0 tclass=file permissive=1",
+      "category": "needs_human",
+      "classification": "MISSING_RULE",
+      "patch": "allow powermgr sysfs_pg:file { ioctl };",
+      "review_status": "APPROVE",
+      "verify_status": "SUCCESS",
+      "why": "主体/目标「sysfs_pg」不在当前策略语料中（设备新增域、生成的数字 service 标签或标注异常），补丁无法落点验证，转人工"
+    },
+    {
+      "fp": "9f8a5c53137a",
+      "count": 1,
+      "permissive": 1,
+      "enforcing": 0,
+      "permissive_unknown": 0,
+      "src": "powermgr",
+      "tgt": "sysfs_pg",
+      "cls": "file",
+      "perms": [
+        "open"
+      ],
+      "ioctl": "",
+      "comms": [
+        "/system/bin/sa_main"
+      ],
+      "sample_raw": "# avc_audit_slow:276] avc: denied { open } for pid=1434, comm=\"/system/bin/sa_main\"  path=\"/sys/devices/virtual/thermal/thermal_zone0/percore_num\" dev=\"\" ino=37869 scontext=u:r:powermgr:s0 tcontext=u:object_r:sysfs_pg:s0 tclass=file permissive=1",
+      "category": "needs_human",
+      "classification": "MISSING_RULE",
+      "patch": "allow powermgr sysfs_pg:file { open };",
+      "review_status": "APPROVE",
+      "verify_status": "SUCCESS",
+      "why": "主体/目标「sysfs_pg」不在当前策略语料中（设备新增域、生成的数字 service 标签或标注异常），补丁无法落点验证，转人工"
+    },
+    {
+      "fp": "cc533340a2cc",
+      "count": 1,
+      "permissive": 1,
+      "enforcing": 0,
+      "permissive_unknown": 0,
+      "src": "powermgr",
+      "tgt": "sysfs_pg",
+      "cls": "file",
+      "perms": [
+        "read",
+        "write"
+      ],
+      "ioctl": "",
+      "comms": [
+        "/system/bin/sa_main"
+      ],
+      "sample_raw": "# avc_audit_slow:276] avc: denied { read write } for pid=1434, comm=\"/system/bin/sa_main\"  path=\"/sys/devices/virtual/thermal/thermal_zone0/percore_num\" dev=\"\" ino=37869 scontext=u:r:powermgr:s0 tcontext=u:object_r:sysfs_pg:s0 tclass=file permissive=1",
+      "category": "needs_human",
+      "classification": "MISSING_RULE",
+      "patch": "allow powermgr sysfs_pg:file { read write };",
+      "review_status": "APPROVE",
+      "verify_status": "SUCCESS",
+      "why": "主体/目标「sysfs_pg」不在当前策略语料中（设备新增域、生成的数字 service 标签或标注异常），补丁无法落点验证，转人工"
+    },
+    {
+      "fp": "27b5291d3df4",
+      "count": 1,
+      "permissive": 1,
+      "enforcing": 0,
+      "permissive_unknown": 0,
+      "src": "bgtaskmgr_service",
+      "tgt": "data_service_el1_file",
+      "cls": "file",
+      "perms": [
+        "add_name"
+      ],
+      "ioctl": "",
+      "comms": [],
+      "sample_raw": "#avc: denied { add_name } for pid=1067, scontext=u:r:bgtaskmgr_service:s0 tcontext=u:object_r:data_service_el1_file:s0 tclass=file permissive=1",
+      "category": "needs_human",
+      "classification": "POTENTIAL_ESCALATION",
+      "patch": "",
+      "review_status": "",
+      "verify_status": "",
+      "why": "命中 neverallow 红线：禁止自动放权（转人工）"
+    },
+    {
+      "fp": "1b75211a848a",
+      "count": 1,
+      "permissive": 1,
+      "enforcing": 0,
+      "permissive_unknown": 0,
+      "src": "bgtaskmgr_service",
+      "tgt": "data_service_el1_file",
+      "cls": "file",
+      "perms": [
+        "0x5413"
+      ],
+      "ioctl": "",
+      "comms": [],
+      "sample_raw": "#avc: denied { 0x5413 } for pid=1067, scontext=u:r:bgtaskmgr_service:s0 tcontext=u:object_r:data_service_el1_file:s0 tclass=file ioctl permissive=1",
+      "category": "needs_human",
+      "classification": "POTENTIAL_ESCALATION",
+      "patch": "",
+      "review_status": "",
+      "verify_status": "",
+      "why": "命中 neverallow 红线：禁止自动放权（转人工）"
+    },
+    {
+      "fp": "0db8a8094314",
+      "count": 1,
+      "permissive": 1,
+      "enforcing": 0,
+      "permissive_unknown": 0,
+      "src": "bgtaskmgr_service",
+      "tgt": "data_service_el1_file",
+      "cls": "file",
+      "perms": [
+        "0xf50c"
+      ],
+      "ioctl": "",
+      "comms": [],
+      "sample_raw": "#avc: denied { 0xf50c } for pid=1067, scontext=u:r:bgtaskmgr_service:s0 tcontext=u:object_r:data_service_el1_file:s0 tclass=file ioctl permissive=1",
+      "category": "needs_human",
+      "classification": "POTENTIAL_ESCALATION",
+      "patch": "",
+      "review_status": "",
+      "verify_status": "",
+      "why": "命中 neverallow 红线：禁止自动放权（转人工）"
+    },
+    {
+      "fp": "0e0f3ae52371",
+      "count": 1,
+      "permissive": 1,
+      "enforcing": 0,
+      "permissive_unknown": 0,
+      "src": "sa_device_standby",
+      "tgt": "resource_schedule_service",
+      "cls": "samgr_class",
+      "perms": [
+        "add"
+      ],
+      "ioctl": "",
+      "comms": [
+        "/system/bin/sa_man"
+      ],
+      "sample_raw": "# avc: denied  { add } for pid=946,comm=\"/system/bin/sa_man\" scontext=u:r:sa_device_standby:s0 tcontext=u:r:resource_schedule_service:s0 tclass=samgr_class permissive=1",
+      "category": "auto_repairable",
+      "classification": "MISSING_RULE",
+      "patch": "allow sa_device_standby resource_schedule_service:samgr_class { add };",
+      "review_status": "APPROVE",
+      "verify_status": "SUCCESS",
+      "why": "最小权限补齐"
+    },
+    {
+      "fp": "f43474daa83e",
+      "count": 1,
+      "permissive": 1,
+      "enforcing": 0,
+      "permissive_unknown": 0,
+      "src": "resource_schedule_service",
+      "tgt": "transfer",
+      "cls": "binder",
+      "perms": [
+        "transfer"
+      ],
+      "ioctl": "",
+      "comms": [
+        "IPC_3_2264"
+      ],
+      "sample_raw": "# avc: denied  { transfer } for pid=657 comm=\"IPC_3_2264\" scontext=u:r:resource_schedule_service:s0 tcontext=u:r:transfer:s0 tclass=binder permissive=1",
+      "category": "needs_human",
+      "classification": "POTENTIAL_ESCALATION",
+      "patch": "",
+      "review_status": "",
+      "verify_status": "",
+      "why": "命中 neverallow 红线：禁止自动放权（转人工）"
+    },
+    {
+      "fp": "8aaaf8446488",
+      "count": 1,
+      "permissive": 1,
+      "enforcing": 0,
+      "permissive_unknown": 0,
+      "src": "dlpmanager_hap",
+      "tgt": "fuse",
+      "cls": "file",
+      "perms": [
+        "read",
+        "write"
+      ],
+      "ioctl": "",
+      "comms": [
+        "com.ohos.dlpman"
+      ],
+      "sample_raw": "# avc:  denied  { read write } for  pid=3454 comm=\"com.ohos.dlpman\" name=\"default.dlp\" dev=\"fuse\" ino=547205767392 scontext=u:r:dlpmanager_hap:s0 tcontext=u:object_r:fuse:s0 tclass=file permissive=1",
+      "category": "needs_human",
+      "classification": "MISSING_RULE",
+      "patch": "allow dlpmanager_hap fuse:file { read write };",
+      "review_status": "APPROVE",
+      "verify_status": "SUCCESS",
+      "why": "主体/目标「fuse」不在当前策略语料中（设备新增域、生成的数字 service 标签或标注异常），补丁无法落点验证，转人工"
+    },
+    {
+      "fp": "7eaca5358f0f",
+      "count": 1,
+      "permissive": 1,
+      "enforcing": 0,
+      "permissive_unknown": 0,
+      "src": "sceneboard_hap",
+      "tgt": "security_collector",
+      "cls": "binder",
+      "perms": [
+        "call"
+      ],
+      "ioctl": "",
+      "comms": [
+        "IPC_1_1707"
+      ],
+      "sample_raw": "# avc:  denied  { call } for  pid=1696 comm=\"IPC_1_1707\" scontext=u:r:sceneboard_hap:s0 tcontext=u:r:security_collector:s0 tclass=binder permissive=1",
+      "category": "needs_human",
+      "classification": "MISSING_RULE",
+      "patch": "allow sceneboard_hap security_collector:binder { call };",
+      "review_status": "APPROVE",
+      "verify_status": "SUCCESS",
+      "why": "主体/目标「sceneboard_hap」不在当前策略语料中（设备新增域、生成的数字 service 标签或标注异常），补丁无法落点验证，转人工"
+    },
+    {
+      "fp": "7f58778ea458",
+      "count": 1,
+      "permissive": 1,
+      "enforcing": 0,
+      "permissive_unknown": 0,
+      "src": "sceneboard_hap",
+      "tgt": "security_collector",
+      "cls": "binder",
+      "perms": [
+        "transfer"
+      ],
+      "ioctl": "",
+      "comms": [
+        "IPC_5_2010"
+      ],
+      "sample_raw": "# avc:  denied  { transfer } for  pid=1758 comm=\"IPC_5_2010\" scontext=u:r:sceneboard_hap:s0 tcontext=u:r:security_collector:s0 tclass=binder permissive=1",
+      "category": "needs_human",
+      "classification": "MISSING_RULE",
+      "patch": "allow sceneboard_hap security_collector:binder { transfer };",
+      "review_status": "APPROVE",
+      "verify_status": "SUCCESS",
+      "why": "主体/目标「sceneboard_hap」不在当前策略语料中（设备新增域、生成的数字 service 标签或标注异常），补丁无法落点验证，转人工"
+    },
+    {
+      "fp": "90b49dce9cb3",
+      "count": 2,
+      "permissive": 2,
+      "enforcing": 0,
+      "permissive_unknown": 0,
+      "src": "sh",
+      "tgt": "data_log_sanitizer_file",
+      "cls": "file",
+      "perms": [
+        "getattr"
+      ],
+      "ioctl": "",
+      "comms": [
+        "ls",
+        "sh"
+      ],
+      "sample_raw": "#avc:  denied  { getattr } for  pid=1853 comm=\"ls\" path=\"/data/log/sanitizer/ubsan/ubsan.log.394\" dev=\"mmcblk0p11\" ino=4712 scontext=u:r:sh:s0 tcontext=u:object_r:data_log_sanitizer_file:s0 tclass=file permissive=1",
+      "category": "needs_human",
+      "classification": "POTENTIAL_ESCALATION",
+      "patch": "",
+      "review_status": "",
+      "verify_status": "",
+      "why": "命中 neverallow 红线：禁止自动放权（转人工）"
+    },
+    {
+      "fp": "9d0215235731",
+      "count": 1,
+      "permissive": 0,
+      "enforcing": 1,
+      "permissive_unknown": 0,
+      "src": "render_service",
+      "tgt": "sa_foundation_abilityms",
+      "cls": "samgr_class",
+      "perms": [
+        "get"
+      ],
+      "ioctl": "",
+      "comms": [],
+      "sample_raw": "#avc: denied { get } for service=180 pid=1453 scontext=u:r:render_service:s0 tcontext=u:object_r:sa_foundation_abilityms:s0 tclass=samgr_class permissive=0",
+      "category": "needs_human",
+      "classification": "POTENTIAL_ESCALATION",
+      "patch": "",
+      "review_status": "",
+      "verify_status": "",
+      "why": "命中 neverallow 红线：禁止自动放权（转人工）"
+    },
+    {
+      "fp": "91b1a1cf5727",
+      "count": 1,
+      "permissive": 0,
+      "enforcing": 1,
+      "permissive_unknown": 0,
+      "src": "appspawn",
+      "tgt": "nwebspawn",
+      "cls": "process",
+      "perms": [
+        "signal"
+      ],
+      "ioctl": "",
+      "comms": [
+        "appspawn"
+      ],
+      "sample_raw": "# avc:  denied  { signal } for  pid=2762 comm=\"appspawn\" scontext=u:r:appspawn:s0 tcontext=u:r:nwebspawn:s0 tclass=process permissive=0",
+      "category": "needs_human",
+      "classification": "POTENTIAL_ESCALATION",
+      "patch": "",
+      "review_status": "",
+      "verify_status": "",
+      "why": "命中 neverallow 红线：禁止自动放权（转人工）"
+    },
+    {
+      "fp": "325b06698d5e",
+      "count": 1,
+      "permissive": 1,
+      "enforcing": 0,
+      "permissive_unknown": 0,
+      "src": "selection_service",
+      "tgt": "default_service",
+      "cls": "samgr_class",
+      "perms": [
+        "add"
+      ],
+      "ioctl": "",
+      "comms": [],
+      "sample_raw": "# avc:  denied  { add } for service=8500 sid=u:r:selection_service:s0 scontext=u:r:selection_service:s0 tcontext=u:object_r:default_service:s0 tclass=samgr_class permissive=1",
+      "category": "needs_human",
+      "classification": "POTENTIAL_ESCALATION",
+      "patch": "",
+      "review_status": "",
+      "verify_status": "",
+      "why": "命中 neverallow 红线：禁止自动放权（转人工）"
+    },
+    {
+      "fp": "77642ff9a17f",
+      "count": 1,
+      "permissive": 0,
+      "enforcing": 1,
+      "permissive_unknown": 0,
+      "src": "selection_service",
+      "tgt": "devinfo_type_param",
+      "cls": "file",
+      "perms": [
+        "read"
+      ],
+      "ioctl": "",
+      "comms": [
+        "selection_servi"
+      ],
+      "sample_raw": "# avc:  denied  { read } for  pid=3391 comm=\"selection_servi\" name=\"u:object_r:devinfo_type_param:s0\" dev=\"tmpfs\" ino=116 scontext=u:r:selection_service:s0 tcontext=u:object_r:devinfo_type_param:s0 tclass=file permissive=0",
+      "category": "needs_human",
+      "classification": "POTENTIAL_ESCALATION",
+      "patch": "",
+      "review_status": "",
+      "verify_status": "",
+      "why": "命中 neverallow 红线：禁止自动放权（转人工）"
+    },
+    {
+      "fp": "841f53f4f48b",
+      "count": 1,
+      "permissive": 0,
+      "enforcing": 1,
+      "permissive_unknown": 0,
+      "src": "selection_service",
+      "tgt": "vendor_etc_file",
+      "cls": "dir",
+      "perms": [
+        "search"
+      ],
+      "ioctl": "",
+      "comms": [
+        "selection_servi"
+      ],
+      "sample_raw": "# avc:  denied  { search } for  pid=5494 comm=\"selection_servi\" name=\"etc\" dev=\"mmcblk0p8\" ino=20 scontext=u:r:selection_service:s0 tcontext=u:object_r:vendor_etc_file:s0 tclass=dir permissive=0",
+      "category": "needs_human",
+      "classification": "POTENTIAL_ESCALATION",
+      "patch": "",
+      "review_status": "",
+      "verify_status": "",
+      "why": "命中 neverallow 红线：禁止自动放权（转人工）"
+    },
+    {
+      "fp": "c8c89b895bbb",
+      "count": 1,
+      "permissive": 0,
+      "enforcing": 1,
+      "permissive_unknown": 0,
+      "src": "cadaemon",
+      "tgt": "sa_cadaemon_service",
+      "cls": "samgr_class",
+      "perms": [
+        "add"
+      ],
+      "ioctl": "",
+      "comms": [],
+      "sample_raw": "#avc:  denied  { add } for service=8001 pid=2904 scontext=u:r:cadaemon:s0 tcontext=u:object_r:sa_cadaemon_service:s0 tclass=samgr_class permissive=0",
+      "category": "needs_human",
+      "classification": "MISSING_RULE",
+      "patch": "allow cadaemon sa_cadaemon_service:samgr_class { add };",
+      "review_status": "APPROVE",
+      "verify_status": "SUCCESS",
+      "why": "主体/目标「sa_cadaemon_service」不在当前策略语料中（设备新增域、生成的数字 service 标签或标注异常），补丁无法落点验证，转人工"
+    },
+    {
+      "fp": "a0eb1c5bd70a",
+      "count": 4,
+      "permissive": 4,
+      "enforcing": 0,
+      "permissive_unknown": 0,
+      "src": "hilogd",
+      "tgt": "rootfs",
+      "cls": "file",
+      "perms": [
+        "write"
+      ],
+      "ioctl": "",
+      "comms": [
+        "hilogd.control"
+      ],
+      "sample_raw": "#avc: denied { write } for pid=230 comm=\"hilogd.control\" path=\"/data/log/hilog/.persisterInfo_2.info\" dev=\"rootfs\" ino=27737 scontext=u:r:hilogd:s0 tcontext=u:object_r:rootfs:s0 tclass=file permissive=1",
+      "category": "needs_human",
+      "classification": "POTENTIAL_ESCALATION",
+      "patch": "",
+      "review_status": "",
+      "verify_status": "",
+      "why": "命中 neverallow 红线：禁止自动放权（转人工）"
+    },
+    {
+      "fp": "76a9c74a0b6b",
+      "count": 1,
+      "permissive": 1,
+      "enforcing": 0,
+      "permissive_unknown": 0,
+      "src": "init",
+      "tgt": "write_updater_exec",
+      "cls": "file",
+      "perms": [
+        "execute"
+      ],
+      "ioctl": "",
+      "comms": [
+        "init"
+      ],
+      "sample_raw": "# avc:  denied  { execute } for  pid=1849 comm=\"init\" name=\"write_updater\" dev=\"mmcblk0p7\" ino=455 scontext=u:r:init:s0 tcontext=u:object_r:write_updater_exec:s0 tclass=file permissive=1",
+      "category": "needs_human",
+      "classification": "POTENTIAL_ESCALATION",
+      "patch": "",
+      "review_status": "",
+      "verify_status": "",
+      "why": "命中 neverallow 红线：禁止自动放权（转人工）"
+    },
+    {
+      "fp": "888148955a08",
+      "count": 1,
+      "permissive": 1,
+      "enforcing": 0,
+      "permissive_unknown": 0,
+      "src": "init",
+      "tgt": "write_updater_exec",
+      "cls": "file",
+      "perms": [
+        "execute_no_trans"
+      ],
+      "ioctl": "",
+      "comms": [
+        "init"
+      ],
+      "sample_raw": "# avc:  denied  { execute_no_trans } for  pid=1849 comm=\"init\" path=\"/system/bin/write_updater\" dev=\"mmcblk0p7\" ino=455 scontext=u:r:init:s0 tcontext=u:object_r:write_updater_exec:s0 tclass=file permissive=1",
+      "category": "needs_human",
+      "classification": "POTENTIAL_ESCALATION",
+      "patch": "",
+      "review_status": "",
+      "verify_status": "",
+      "why": "命中 neverallow 红线：禁止自动放权（转人工）"
+    },
+    {
+      "fp": "32426901bd12",
+      "count": 1,
+      "permissive": 1,
+      "enforcing": 0,
+      "permissive_unknown": 0,
+      "src": "init",
+      "tgt": "write_updater_exec",
+      "cls": "file",
+      "perms": [
+        "map"
+      ],
+      "ioctl": "",
+      "comms": [
+        "write_updater"
+      ],
+      "sample_raw": "# avc:  denied  { map } for  pid=1849 comm=\"write_updater\" path=\"/system/bin/write_updater\" dev=\"mmcblk0p7\" ino=455 scontext=u:r:init:s0 tcontext=u:object_r:write_updater_exec:s0 tclass=file permissive=1",
+      "category": "needs_human",
+      "classification": "POTENTIAL_ESCALATION",
+      "patch": "",
+      "review_status": "",
+      "verify_status": "",
+      "why": "命中 neverallow 红线：禁止自动放权（转人工）"
+    },
+    {
+      "fp": "969f893b2935",
+      "count": 1,
+      "permissive": 1,
+      "enforcing": 0,
+      "permissive_unknown": 0,
+      "src": "init",
+      "tgt": "write_updater_exec",
+      "cls": "file",
+      "perms": [
+        "read",
+        "open"
+      ],
+      "ioctl": "",
+      "comms": [
+        "init"
+      ],
+      "sample_raw": "# avc:  denied  { read open } for  pid=1849 comm=\"init\" path=\"/system/bin/write_updater\" dev=\"mmcblk0p7\" ino=455 scontext=u:r:init:s0 tcontext=u:object_r:write_updater_exec:s0 tclass=file permissive=1",
+      "category": "needs_human",
+      "classification": "POTENTIAL_ESCALATION",
+      "patch": "",
+      "review_status": "",
+      "verify_status": "",
+      "why": "命中 neverallow 红线：禁止自动放权（转人工）"
+    },
+    {
+      "fp": "c7ff13a982f2",
+      "count": 1,
+      "permissive": 0,
+      "enforcing": 1,
+      "permissive_unknown": 0,
+      "src": "updater",
+      "tgt": "dev_block_file",
+      "cls": "blk_file",
+      "perms": [
+        "map"
+      ],
+      "ioctl": "",
+      "comms": [
+        "updater_binary"
+      ],
+      "sample_raw": "# avc:  denied  { map } for  pid=267 comm=\"updater_binary\" path=\"/dev/block/mmcblk0p6\" dev=\"tmpfs\" ino=122 scontext=u:r:updater:s0 tcontext=u:object_r:dev_block_file:s0 tclass=blk_file permissive=0",
+      "category": "needs_human",
+      "classification": "POTENTIAL_ESCALATION",
+      "patch": "",
+      "review_status": "",
+      "verify_status": "",
+      "why": "命中 neverallow 红线：禁止自动放权（转人工）"
+    },
+    {
+      "fp": "af5f7be6e3f4",
+      "count": 1,
+      "permissive": 0,
+      "enforcing": 1,
+      "permissive_unknown": 0,
+      "src": "updater",
+      "tgt": "data_updater_file",
+      "cls": "file",
+      "perms": [
+        "rename"
+      ],
+      "ioctl": "",
+      "comms": [
+        "updater_binary"
+      ],
+      "sample_raw": "# avc:  denied  { rename } for  pid=268 comm=\"updater_binary\" name=\"vendor\" dev=\"mmcblk0p12\" ino=1006 scontext=u:r:updater:s0 tcontext=u:object_r:data_updater_file:s0 tclass=file permissive=0",
+      "category": "needs_human",
+      "classification": "POTENTIAL_ESCALATION",
+      "patch": "",
+      "review_status": "",
+      "verify_status": "",
+      "why": "命中 neverallow 红线：禁止自动放权（转人工）"
+    },
+    {
+      "fp": "e98b80bb2d78",
+      "count": 1,
+      "permissive": 1,
+      "enforcing": 0,
+      "permissive_unknown": 0,
+      "src": "fingerprintauth",
+      "tgt": "sa_useriam_fingerprintauth_service",
+      "cls": "samgr_class",
+      "perms": [
+        "add"
+      ],
+      "ioctl": "",
+      "comms": [],
+      "sample_raw": "#avc:  denied  { add } for service=943 pid=918 scontext=u:r:fingerprintauth:s0 tcontext=u:object_r:sa_useriam_fingerprintauth_service:s0 tclass=samgr_class permissive=1",
+      "category": "needs_human",
+      "classification": "POTENTIAL_ESCALATION",
+      "patch": "",
+      "review_status": "",
+      "verify_status": "",
+      "why": "命中 neverallow 红线：禁止自动放权（转人工）"
+    },
+    {
+      "fp": "5f8c72a541bf",
+      "count": 1,
+      "permissive": 1,
+      "enforcing": 0,
+      "permissive_unknown": 0,
+      "src": "fingerprintauth",
+      "tgt": "hdf_fingerprint_auth_interface_service",
+      "cls": "hdf_devmgr_class",
+      "perms": [
+        "get"
+      ],
+      "ioctl": "",
+      "comms": [],
+      "sample_raw": "#avc:  denied  { get } for service=fingerprint_auth_interface_service pid=918 scontext=u:r:fingerprintauth:s0 tcontext=u:object_r:hdf_fingerprint_auth_interface_service:s0 tclass=hdf_devmgr_class permissive=1",
+      "category": "needs_human",
+      "classification": "MISSING_RULE",
+      "patch": "allow fingerprintauth hdf_fingerprint_auth_interface_service:hdf_devmgr_class { get };",
+      "review_status": "APPROVE",
+      "verify_status": "SUCCESS",
+      "why": "主体/目标「fingerprintauth」不在当前策略语料中（设备新增域、生成的数字 service 标签或标注异常），补丁无法落点验证，转人工"
+    },
+    {
+      "fp": "41a1e8524bac",
+      "count": 1,
+      "permissive": 0,
+      "enforcing": 1,
+      "permissive_unknown": 0,
+      "src": "app_fwk_update_service",
+      "tgt": "webengine_param",
+      "cls": "parameter_service",
+      "perms": [
+        "set"
+      ],
+      "ioctl": "",
+      "comms": [],
+      "sample_raw": "# avc:  denied  { set } for parameter=web.engine.install.completed pid=12719 uid=3350 gid=3350 scontext=u:r:app_fwk_update_service:s0 tcontext=u:object_r:webengine_param:s0 tclass=parameter_service permissive=0",
+      "category": "needs_human",
+      "classification": "MISSING_RULE",
+      "patch": "allow app_fwk_update_service webengine_param:parameter_service { set };",
+      "review_status": "APPROVE",
+      "verify_status": "SUCCESS",
+      "why": "主体/目标「webengine_param」不在当前策略语料中（设备新增域、生成的数字 service 标签或标注异常），补丁无法落点验证，转人工"
+    },
+    {
+      "fp": "77cea85bdbc4",
+      "count": 1,
+      "permissive": 1,
+      "enforcing": 0,
+      "permissive_unknown": 0,
+      "src": "normal_hap",
+      "tgt": "sys_file",
+      "cls": "file",
+      "perms": [
+        "read"
+      ],
+      "ioctl": "",
+      "comms": [
+        "com.example.web"
+      ],
+      "sample_raw": "#avc:  denied  { read } for  pid=4884 comm=\"com.example.web\" name=\"midr_el1\" dev=\"sysfs\" ino=15102 scontext=u:r:normal_hap:s0 tcontext=u:object_r:sys_file:s0 tclass=file permissive=1",
+      "category": "needs_human",
+      "classification": "POTENTIAL_ESCALATION",
+      "patch": "",
+      "review_status": "",
+      "verify_status": "",
+      "why": "命中 neverallow 红线：禁止自动放权（转人工）"
+    },
+    {
+      "fp": "f89b05497f5b",
+      "count": 1,
+      "permissive": 1,
+      "enforcing": 0,
+      "permissive_unknown": 0,
+      "src": "normal_hap",
+      "tgt": "sys_file",
+      "cls": "file",
+      "perms": [
+        "open"
+      ],
+      "ioctl": "",
+      "comms": [
+        "com.example.web"
+      ],
+      "sample_raw": "#avc:  denied  { open } for  pid=4884 comm=\"com.example.web\" path=\"/sys/devices/system/cpu/cpu0/regs/identification/midr_el1\" dev=\"sysfs\" ino=15102 scontext=u:r:normal_hap:s0 tcontext=u:object_r:sys_file:s0 tclass=file permissive=1",
+      "category": "needs_human",
+      "classification": "POTENTIAL_ESCALATION",
+      "patch": "",
+      "review_status": "",
+      "verify_status": "",
+      "why": "命中 neverallow 红线：禁止自动放权（转人工）"
+    },
+    {
+      "fp": "dc9fdb54b00e",
+      "count": 1,
+      "permissive": 0,
+      "enforcing": 0,
+      "permissive_unknown": 1,
+      "src": "nwebspawn",
+      "tgt": "normal_hap",
+      "cls": "process",
+      "perms": [
+        "dyntransition"
+      ],
+      "ioctl": "",
+      "comms": [
+        "nwebspawn"
+      ],
+      "sample_raw": "#avc:  denied  { dyntransition } for  pid=4499 comm=\"nwebspawn\" scontext=u:r:nwebspawn:s0 tcontext=u:r:normal_hap:s0 tclass=process permissive=",
+      "category": "needs_human",
+      "classification": "POTENTIAL_ESCALATION",
+      "patch": "",
+      "review_status": "",
+      "verify_status": "",
+      "why": "命中 neverallow 红线：禁止自动放权（转人工）"
+    },
+    {
+      "fp": "211e39a5a5c1",
+      "count": 1,
+      "permissive": 1,
+      "enforcing": 0,
+      "permissive_unknown": 0,
+      "src": "normal_hap",
+      "tgt": "dev_file",
+      "cls": "dir",
+      "perms": [
+        "mounton"
+      ],
+      "ioctl": "",
+      "comms": [
+        "nwebspawn"
+      ],
+      "sample_raw": "#avc:  denied  { mounton } for  pid=4868 comm=\"nwebspawn\" path=\"/mnt/sandbox/com.example.web0422stage/dev\" dev=\"tmpfs\" ino=1 scontext=u:r:normal_hap:s0 tcontext=u:object_r:dev_file:s0 tclass=dir permissive=1",
+      "category": "auto_repairable",
+      "classification": "MISSING_RULE",
+      "patch": "allow normal_hap dev_file:dir { mounton };",
+      "review_status": "APPROVE",
+      "verify_status": "SUCCESS",
+      "why": "最小权限补齐"
+    },
+    {
+      "fp": "2d434c2985a2",
+      "count": 1,
+      "permissive": 1,
+      "enforcing": 0,
+      "permissive_unknown": 0,
+      "src": "nwebspawn",
+      "tgt": "data_service_el1_file",
+      "cls": "dit",
+      "perms": [
+        "mounton"
+      ],
+      "ioctl": "",
+      "comms": [
+        "/system/bin/appspawn"
+      ],
+      "sample_raw": "#avc_audit_slow:276] avc: denied { mounton } for pid=1, comm=\"/system/bin/appspawn\" path=\"/mnt/sandbox/com.ohos.render/com.example.webrender/data/service/el1/public/for-all-app\" dev=\"/dev/block/platform/b0000000.hi_pcie/by-name/userdata\" ino=134 scontext=u:r:nwebspawn:s0 tcontext=u:object_r:data_service_el1_file:s0 tclass=dit permissive=1",
+      "category": "needs_human",
+      "classification": "MISSING_RULE",
+      "patch": "allow nwebspawn data_service_el1_file:dit { mounton };",
+      "review_status": "APPROVE",
+      "verify_status": "SUCCESS",
+      "why": "对象类「dit」不在策略任何规则中出现（疑为日志笔误），补丁无法落点验证，转人工"
+    },
+    {
+      "fp": "aaf4b5b8f70b",
+      "count": 2,
+      "permissive": 0,
+      "enforcing": 2,
+      "permissive_unknown": 0,
+      "src": "appspawn",
+      "tgt": "default_param",
+      "cls": "parameter_service",
+      "perms": [
+        "set"
+      ],
+      "ioctl": "",
+      "comms": [],
+      "sample_raw": "# avc:  denied  { set } for parameter=web.engine.default pid=10001 uid=0 gid=0 scontext=u:r:appspawn:s0 tcontext=u:object_r:default_param:s0 tclass=parameter_service permissive=0",
+      "category": "needs_human",
+      "classification": "POTENTIAL_ESCALATION",
+      "patch": "",
+      "review_status": "",
+      "verify_status": "",
+      "why": "命中 neverallow 红线：禁止自动放权（转人工）"
+    }
+  ],
+  "auto_patch_lines": [
+    "allow distributed_isolate_hap distributed_isolate_hap:hmcap { supervsable };",
+    "allow distributedfiledaemon data_service_el2_file:dir { write };",
+    "allow hdcd dev_asanlog_file:dir { getattr };",
+    "allow hdcd dev_asanlog_file:file { open };",
+    "allow hdf_devmgr dev_file:chr_file { ioctl };",
+    "allow hiview dev_file:dir { read };",
+    "allow input_isolate_debug_hap render_service:unix_stream_socket { transfer };",
+    "allow input_isolate_hap render_service:unix_stream_socket { transfer };",
+    "allow input_user_host dev_file:chr_file { getattr };",
+    "allow normal_hap dev_file:dir { mounton };",
+    "allow powermgr configfs:file { search };",
+    "allow powermgr data_init_agent:dir { getattr map open read };",
+    "allow powermgr data_service_el1_file:dir { map read };",
+    "allow powermgr persist_param:parameter_service { map open read };",
+    "allow sa_device_standby resource_schedule_service:samgr_class { add };",
+    "allow sh data_hdc_pubkeys:dir { getattr };",
+    "allow sh dev_null_file:chr_file { ioctl };",
+    "allow sh hook_param:file { map };",
+    "allow sh hook_param:file { open };",
+    "allow sh init:fd { use };",
+    "allow sh inputmethod_service:process { signal };",
+    "allow sh pasteboard_service:fd { use };",
+    "allow sh startup_init_param:file { map };",
+    "allow sh startup_init_param:file { open };",
+    "allow sh startup_init_param:file { read };",
+    "allow storage_daemon data_chipset_el1_file:dir { remove_name };",
+    "allow storage_daemon data_chipset_el2_file:dir { remove_name };",
+    "allow storage_daemon dev_block_file:blk_file { create };",
+    "allow storage_daemon dev_block_file:blk_file { open read };",
+    "allow storage_daemon dev_block_file:blk_file { read };",
+    "allow storage_daemon dev_block_file:dir { add_name };",
+    "allow storage_daemon dev_block_file:dir { write };",
+    "allow storage_daemon unlabeled:dir { mounton };",
+    "allow su data_service_el1_file:dir { getattr };",
+    "allow su data_service_el1_file:dir { remove_name search write };",
+    "allow su pasteboard_service:fd { use };",
+    "allow wifi_host wifi_host:capability { dac_override };"
+  ],
+  "auto_patch_stats": {
+    "allow distributed_isolate_hap distributed_isolate_hap:hmcap { supervsable };": {
+      "cases": 1,
+      "denials": 1
+    },
+    "allow distributedfiledaemon data_service_el2_file:dir { write };": {
+      "cases": 1,
+      "denials": 1
+    },
+    "allow hdcd dev_asanlog_file:dir { getattr };": {
+      "cases": 1,
+      "denials": 1
+    },
+    "allow hdcd dev_asanlog_file:file { open };": {
+      "cases": 1,
+      "denials": 1
+    },
+    "allow hdf_devmgr dev_file:chr_file { ioctl };": {
+      "cases": 2,
+      "denials": 2
+    },
+    "allow hiview dev_file:dir { read };": {
+      "cases": 1,
+      "denials": 1
+    },
+    "allow input_isolate_debug_hap render_service:unix_stream_socket { transfer };": {
+      "cases": 1,
+      "denials": 1
+    },
+    "allow input_isolate_hap render_service:unix_stream_socket { transfer };": {
+      "cases": 1,
+      "denials": 1
+    },
+    "allow input_user_host dev_file:chr_file { getattr };": {
+      "cases": 1,
+      "denials": 1
+    },
+    "allow normal_hap dev_file:dir { mounton };": {
+      "cases": 1,
+      "denials": 1
+    },
+    "allow powermgr configfs:file { search };": {
+      "cases": 1,
+      "denials": 1
+    },
+    "allow powermgr data_init_agent:dir { getattr map open read };": {
+      "cases": 1,
+      "denials": 1
+    },
+    "allow powermgr data_service_el1_file:dir { map read };": {
+      "cases": 1,
+      "denials": 1
+    },
+    "allow powermgr persist_param:parameter_service { map open read };": {
+      "cases": 1,
+      "denials": 1
+    },
+    "allow sa_device_standby resource_schedule_service:samgr_class { add };": {
+      "cases": 1,
+      "denials": 1
+    },
+    "allow sh data_hdc_pubkeys:dir { getattr };": {
+      "cases": 1,
+      "denials": 1
+    },
+    "allow sh dev_null_file:chr_file { ioctl };": {
+      "cases": 1,
+      "denials": 1
+    },
+    "allow sh hook_param:file { map };": {
+      "cases": 1,
+      "denials": 1
+    },
+    "allow sh hook_param:file { open };": {
+      "cases": 1,
+      "denials": 1
+    },
+    "allow sh init:fd { use };": {
+      "cases": 1,
+      "denials": 1
+    },
+    "allow sh inputmethod_service:process { signal };": {
+      "cases": 1,
+      "denials": 1
+    },
+    "allow sh pasteboard_service:fd { use };": {
+      "cases": 1,
+      "denials": 1
+    },
+    "allow sh startup_init_param:file { map };": {
+      "cases": 1,
+      "denials": 1
+    },
+    "allow sh startup_init_param:file { open };": {
+      "cases": 1,
+      "denials": 1
+    },
+    "allow sh startup_init_param:file { read };": {
+      "cases": 1,
+      "denials": 1
+    },
+    "allow storage_daemon data_chipset_el1_file:dir { remove_name };": {
+      "cases": 1,
+      "denials": 1
+    },
+    "allow storage_daemon data_chipset_el2_file:dir { remove_name };": {
+      "cases": 1,
+      "denials": 1
+    },
+    "allow storage_daemon dev_block_file:blk_file { create };": {
+      "cases": 1,
+      "denials": 1
+    },
+    "allow storage_daemon dev_block_file:blk_file { open read };": {
+      "cases": 1,
+      "denials": 1
+    },
+    "allow storage_daemon dev_block_file:blk_file { read };": {
+      "cases": 1,
+      "denials": 1
+    },
+    "allow storage_daemon dev_block_file:dir { add_name };": {
+      "cases": 1,
+      "denials": 1
+    },
+    "allow storage_daemon dev_block_file:dir { write };": {
+      "cases": 1,
+      "denials": 1
+    },
+    "allow storage_daemon unlabeled:dir { mounton };": {
+      "cases": 1,
+      "denials": 1
+    },
+    "allow su data_service_el1_file:dir { getattr };": {
+      "cases": 1,
+      "denials": 1
+    },
+    "allow su data_service_el1_file:dir { remove_name search write };": {
+      "cases": 1,
+      "denials": 1
+    },
+    "allow su pasteboard_service:fd { use };": {
+      "cases": 1,
+      "denials": 1
+    },
+    "allow wifi_host wifi_host:capability { dac_override };": {
+      "cases": 1,
+      "denials": 3
+    }
+  },
+  "human_items": [
+    {
+      "case": "bacb9d957dd1",
+      "count": 1,
+      "src": "intell_voice_service",
+      "tgt": "default_hdf_service",
+      "cls": "hdf_devmgr_class",
+      "perms": [
+        "get"
+      ],
+      "classification": "POTENTIAL_ESCALATION",
+      "review": "",
+      "verify": "",
+      "why": "命中 neverallow 红线：禁止自动放权（转人工）",
+      "sample": "# avc:  denied  { get } for service=intell_voice_trigger_manager_service pid=633 scontext=u:r:intell_voice_service:s0 tcontext=u:object_r:default_hdf_service:s0 tclass=hdf_devmgr_class permissive=1"
+    },
+    {
+      "case": "70a81770dae2",
+      "count": 1,
+      "src": "intell_voice_service",
+      "tgt": "default_service",
+      "cls": "samgr_class",
+      "perms": [
+        "add"
+      ],
+      "classification": "POTENTIAL_ESCALATION",
+      "review": "",
+      "verify": "",
+      "why": "命中 neverallow 红线：禁止自动放权（转人工）",
+      "sample": "# avc:  denied  { add } for service=312 pid=633 scontext=u:r:intell_voice_service:s0 tcontext=u:object_r:default_service:s0 tclass=samgr_class permissive=1"
+    },
+    {
+      "case": "8d1a44eb2371",
+      "count": 1,
+      "src": "normal_hap",
+      "tgt": "default_service",
+      "cls": "samgr_class",
+      "perms": [
+        "get"
+      ],
+      "classification": "POTENTIAL_ESCALATION",
+      "review": "",
+      "verify": "",
+      "why": "命中 neverallow 红线：禁止自动放权（转人工）",
+      "sample": "# avc:  denied  { get } for service=312 pid=3548 scontext=u:r:normal_hap:s0 tcontext=u:object_r:default_service:s0 tclass=samgr_class permissive=0"
+    },
+    {
+      "case": "7b9c53cf0c7e",
+      "count": 1,
+      "src": "system_basic_hap",
+      "tgt": "default_service",
+      "cls": "samgr_class",
+      "perms": [
+        "get"
+      ],
+      "classification": "POTENTIAL_ESCALATION",
+      "review": "",
+      "verify": "",
+      "why": "命中 neverallow 红线：禁止自动放权（转人工）",
+      "sample": "# avc:  denied  { get } for service=312 pid=2633 scontext=u:r:system_basic_hap:s0 tcontext=u:object_r:default_service:s0 tclass=samgr_class permissive=0"
+    },
+    {
+      "case": "3d3f77807e8b",
+      "count": 1,
+      "src": "bluetooth_service",
+      "tgt": "data_data_pudata_bluetoothlse_dir",
+      "cls": "file",
+      "perms": [
+        "getattr"
+      ],
+      "classification": "MISSING_RULE",
+      "review": "APPROVE",
+      "verify": "SUCCESS",
+      "why": "主体/目标「data_data_pudata_bluetoothlse_dir」不在当前策略语料中（设备新增域、生成的数字 service 标签或标注异常），补丁无法落点验证，转人工",
+      "sample": "#avc:  denied  { getattr } for pid=371 comm=\"threaded-ml\" path=\"/data/data/.pulse_dir/state\" dev=\"mmcblk0p7\" ino=1436167 scontext=u:r:bluetooth_service:s0 tcontext=u:object_r:data_data_pudata_bluetoot"
+    },
+    {
+      "case": "2413518fd7bb",
+      "count": 1,
+      "src": "vpnmanager",
+      "tgt": "devpts",
+      "cls": "chr_file",
+      "perms": [
+        "open"
+      ],
+      "classification": "MISSING_RULE",
+      "review": "APPROVE",
+      "verify": "SUCCESS",
+      "why": "主体/目标「vpnmanager」不在当前策略语料中（设备新增域、生成的数字 service 标签或标注异常），补丁无法落点验证，转人工",
+      "sample": "# avc:  denied  { open } for  pid=2719 comm=\"xl2tpd\" path=\"/dev/pts/1\" dev=\"devpts\" ino=4 scontext=u:r:vpnmanager:s0 tcontext=u:object_r:devpts:s0 tclass=chr_file permissive=1"
+    },
+    {
+      "case": "65c620839118",
+      "count": 1,
+      "src": "vpnmanager",
+      "tgt": "devpts",
+      "cls": "chr_file",
+      "perms": [
+        "getattr"
+      ],
+      "classification": "MISSING_RULE",
+      "review": "APPROVE",
+      "verify": "SUCCESS",
+      "why": "主体/目标「vpnmanager」不在当前策略语料中（设备新增域、生成的数字 service 标签或标注异常），补丁无法落点验证，转人工",
+      "sample": "# avc:  denied  { getattr } for  pid=2359 comm=\"pppd\" path=\"/dev/pts/1\" dev=\"devpts\" ino=4 scontext=u:r:vpnmanager:s0 tcontext=u:object_r:devpts:s0 tclass=chr_file permissive=1"
+    },
+    {
+      "case": "1ac1a82916b0",
+      "count": 1,
+      "src": "edm_sa",
+      "tgt": "sa_net_policy_manager",
+      "cls": "samar_class",
+      "perms": [
+        "get"
+      ],
+      "classification": "MISSING_RULE",
+      "review": "APPROVE",
+      "verify": "SUCCESS",
+      "why": "对象类「samar_class」不在策略任何规则中出现（疑为日志笔误），补丁无法落点验证，转人工",
+      "sample": "# avc: denied { get } for service=1152 sid=u:r:edm_sa:s0 scontext=u:r:edm_sa:s0 tcontext=u:object_r:sa_net_policy_manager:s0 tclass=samar_class permissive=0"
+    },
+    {
+      "case": "853ffe911641",
+      "count": 1,
+      "src": "edm_sa",
+      "tgt": "sa_pulseaudio_audio_service",
+      "cls": "samar_class",
+      "perms": [
+        "get"
+      ],
+      "classification": "MISSING_RULE",
+      "review": "APPROVE",
+      "verify": "SUCCESS",
+      "why": "对象类「samar_class」不在策略任何规则中出现（疑为日志笔误），补丁无法落点验证，转人工",
+      "sample": "# avc:  denied  { get } for service=3001 pid=6793 scontext=u:r:edm_sa:s0 tcontext=u:object_r:sa_pulseaudio_audio_service:s0 tclass=samar_class permissive=0"
+    },
+    {
+      "case": "6afac188e97e",
+      "count": 1,
+      "src": "hdcd_user_permit",
+      "tgt": "sceneboard_hap",
+      "cls": "binder",
+      "perms": [
+        "call"
+      ],
+      "classification": "POTENTIAL_ESCALATION",
+      "review": "",
+      "verify": "",
+      "why": "命中 neverallow 红线：禁止自动放权（转人工）",
+      "sample": "#avc: denied { call } for pid=5470, comm=\"/system/bin/hdcd_user_permit\" scontext=u:r:hdcd_user_permit:s0 tcontext=u:r:sceneboard_hap:s0 tclass=binder permissive=1"
+    },
+    {
+      "case": "34058a45c021",
+      "count": 1,
+      "src": "hdcd_user_permit",
+      "tgt": "sceneboard_hap",
+      "cls": "binder",
+      "perms": [
+        "transfer"
+      ],
+      "classification": "POTENTIAL_ESCALATION",
+      "review": "",
+      "verify": "",
+      "why": "命中 neverallow 红线：禁止自动放权（转人工）",
+      "sample": "#avc: denied { transfer } for pid=5470, comm=\"/system/bin/hdcd_user_permit\" scontext=u:r:hdcd_user_permit:s0 tcontext=u:r:sceneboard_hap:s0 tclass=binder permissive=1"
+    },
+    {
+      "case": "c0c18512fb26",
+      "count": 1,
+      "src": "su",
+      "tgt": "inputmethod_service",
+      "cls": "process",
+      "perms": [
+        "signal"
+      ],
+      "classification": "POTENTIAL_ESCALATION",
+      "review": "",
+      "verify": "",
+      "why": "命中 neverallow 红线：禁止自动放权（转人工）",
+      "sample": "#avc:  denied  { signal } for  pid=1549 comm=\"su\" scontext=u:r:su:s0 tcontext=u:r:inputmethod_service:s0 tclass=process permissive=1"
+    },
+    {
+      "case": "10b13b2cd0fe",
+      "count": 1,
+      "src": "thermal",
+      "tgt": "su",
+      "cls": "binder",
+      "perms": [
+        "call"
+      ],
+      "classification": "MISSING_RULE",
+      "review": "APPROVE",
+      "verify": "SUCCESS",
+      "why": "主体/目标「thermal」不在当前策略语料中（设备新增域、生成的数字 service 标签或标注异常），补丁无法落点验证，转人工",
+      "sample": "#avc:  denied  { call } for  pid=472 comm=\"thermal\" scontext=u:r:thermal:s0 tcontext=u:r:su:s0 tclass=binder permissive=1"
+    },
+    {
+      "case": "c38e35e14a0e",
+      "count": 1,
+      "src": "dcamera",
+      "tgt": "sa_device_security_level_manager_service",
+      "cls": "samgr_class",
+      "perms": [
+        "get"
+      ],
+      "classification": "POTENTIAL_ESCALATION",
+      "review": "",
+      "verify": "",
+      "why": "命中 neverallow 红线：禁止自动放权（转人工）",
+      "sample": "#avc: denied  { get } for service=3511 pid=4213 scontext=u:r:dcamera:s0 tcontext=u:r:sa_device_security_level_manager_service:s0 tclass=samgr_class permissive=0;"
+    },
+    {
+      "case": "a305e7e2eb0f",
+      "count": 1,
+      "src": "distributedsche",
+      "tgt": "sa_1401_service",
+      "cls": "samgr_class",
+      "perms": [
+        "add"
+      ],
+      "classification": "MISSING_RULE",
+      "review": "APPROVE",
+      "verify": "SUCCESS",
+      "why": "主体/目标「sa_1401_service」不在当前策略语料中（设备新增域、生成的数字 service 标签或标注异常），补丁无法落点验证，转人工",
+      "sample": "#avc:  denied  { add } for service=1401 pid=406 scontext=u:r:distributedsche:s0 tcontext=u:object_r:sa_1401_service:s0 tclass=samgr_class permissive=1"
+    },
+    {
+      "case": "94d8299a197d",
+      "count": 1,
+      "src": "distributedsche",
+      "tgt": "d-bms",
+      "cls": "binder",
+      "perms": [
+        "call"
+      ],
+      "classification": "POTENTIAL_ESCALATION",
+      "review": "",
+      "verify": "",
+      "why": "命中 neverallow 红线：禁止自动放权（转人工）",
+      "sample": "#avc:  denied  { call } for  pid=479 comm=\"continue_manage\" scontext=u:r:distributedsche:s0 tcontext=u:r:d-bms:s0 tclass=binder permissive=0"
+    },
+    {
+      "case": "e552be583b82",
+      "count": 1,
+      "src": "sample_host",
+      "tgt": "default_hdf_service",
+      "cls": "hdf_devmgr_class",
+      "perms": [
+        "add"
+      ],
+      "classification": "POTENTIAL_ESCALATION",
+      "review": "",
+      "verify": "",
+      "why": "命中 neverallow 红线：禁止自动放权（转人工）",
+      "sample": "#avc:  denied  { add } for service=sample_driver_service2 pid=2005 scontext=u:r:sample_host:s0 tcontext=u:object_r:default_hdf_service:s0 tclass=hdf_devmgr_class permissive=1"
+    },
+    {
+      "case": "4f417f151864",
+      "count": 1,
+      "src": "audio_host",
+      "tgt": "default_hdf_service",
+      "cls": "hdf_devmgr_class",
+      "perms": [
+        "add"
+      ],
+      "classification": "POTENTIAL_ESCALATION",
+      "review": "",
+      "verify": "",
+      "why": "命中 neverallow 红线：禁止自动放权（转人工）",
+      "sample": "# avc:  denied  { add } for service=intell_voice_trigger_manager_service pid=1070 scontext=u:r:audio_host:s0 tcontext=u:object_r:default_hdf_service:s0 tclass=hdf_devmgr_class permissive=1"
+    },
+    {
+      "case": "825853ad6500",
+      "count": 1,
+      "src": "intell_voice_host",
+      "tgt": "default_hdf_service",
+      "cls": "hdf_devmgr_class",
+      "perms": [
+        "add"
+      ],
+      "classification": "POTENTIAL_ESCALATION",
+      "review": "",
+      "verify": "",
+      "why": "命中 neverallow 红线：禁止自动放权（转人工）",
+      "sample": "# avc:  denied  { add } for service=intell_voice_engine_manager_service pid=1022 scontext=u:r:intell_voice_host:s0 tcontext=u:object_r:default_hdf_service:s0 tclass=hdf_devmgr_class permissive=1"
+    },
+    {
+      "case": "ade7bdc1dafc",
+      "count": 1,
+      "src": "face_auth_host",
+      "tgt": "default_service",
+      "cls": "hdf_devmgr_class",
+      "perms": [
+        "get"
+      ],
+      "classification": "MISSING_RULE",
+      "review": "APPROVE",
+      "verify": "SUCCESS",
+      "why": "目标为 default_* 占位符（service 需映射到具体 sa_*/hdf 类型才能落规则），转人工",
+      "sample": "#avc:  denied  { get } for service=5100 pid=403 scontext=u:r:face_auth_host:s0 tcontext=u:object_r:default_service:s0 tclass=hdf_devmgr_class permissive=1"
+    },
+    {
+      "case": "b0f665f5382c",
+      "count": 1,
+      "src": "fingerprint_auth_host",
+      "tgt": "default_service",
+      "cls": "hdf_devmgr_class",
+      "perms": [
+        "get"
+      ],
+      "classification": "MISSING_RULE",
+      "review": "APPROVE",
+      "verify": "SUCCESS",
+      "why": "目标为 default_* 占位符（service 需映射到具体 sa_*/hdf 类型才能落规则），转人工",
+      "sample": "#avc:  denied  { get } for service=5100 pid=369 scontext=u:r:fingerprint_auth_host:s0 tcontext=u:object_r:default_service:s0 tclass=hdf_devmgr_class permissive=1"
+    },
+    {
+      "case": "3f60d5b5b854",
+      "count": 1,
+      "src": "pin_auth_host",
+      "tgt": "default_service",
+      "cls": "hdf_devmgr_class",
+      "perms": [
+        "get"
+      ],
+      "classification": "MISSING_RULE",
+      "review": "APPROVE",
+      "verify": "SUCCESS",
+      "why": "目标为 default_* 占位符（service 需映射到具体 sa_*/hdf 类型才能落规则），转人工",
+      "sample": "#avc:  denied  { get } for service=5100 pid=402 scontext=u:r:pin_auth_host:s0 tcontext=u:object_r:default_service:s0 tclass=hdf_devmgr_class permissive=1"
+    },
+    {
+      "case": "c5e2a50d0a2d",
+      "count": 1,
+      "src": "wifi_host",
+      "tgt": "default_hdf_service",
+      "cls": "hdf_devmgr_class",
+      "perms": [
+        "add"
+      ],
+      "classification": "POTENTIAL_ESCALATION",
+      "review": "",
+      "verify": "",
+      "why": "命中 neverallow 红线：禁止自动放权（转人工）",
+      "sample": "#avc:  denied  { add } for service=wlan_interface_service pid=569 scontext=u:r:wifi_host:s0 tcontext=u:object_r:default_hdf_service:s0 tclass=hdf_devmgr_class permissive=1"
+    },
+    {
+      "case": "79e21e00fd5d",
+      "count": 1,
+      "src": "distributedfiledaemon",
+      "tgt": "data_service_el2_file",
+      "cls": "file",
+      "perms": [
+        "open",
+        "read",
+        "write"
+      ],
+      "classification": "POTENTIAL_ESCALATION",
+      "review": "",
+      "verify": "",
+      "why": "命中 neverallow 红线：禁止自动放权（转人工）",
+      "sample": "#avc:  denied  { read write open } for  pid=183 comm=\"kworker/u8:4\" path=2F646174612F736572766963652F656C322F3130302F686D6466732F63616368652F6163636F756E745F63616368652F23333933303937202864656C6574656"
+    },
+    {
+      "case": "4b1c09a7a38d",
+      "count": 1,
+      "src": "system_basic_hap",
+      "tgt": "storage_manager",
+      "cls": "binderpermissive=1",
+      "perms": [
+        "call"
+      ],
+      "classification": "MISSING_RULE",
+      "review": "APPROVE",
+      "verify": "FAILED",
+      "why": "最小权限补齐",
+      "sample": "#avc:  denied  { call } for  pid=1550 comm=\"e.volumemanager\" scontext=u:r:system_basic_hap:s0 tcontext=u:r:storage_manager:s0 tclass=binderpermissive=1"
+    },
+    {
+      "case": "714ce1ca1c84",
+      "count": 1,
+      "src": "storage_daemon",
+      "tgt": "hmdfs",
+      "cls": "file",
+      "perms": [
+        "getattr"
+      ],
+      "classification": "POTENTIAL_ESCALATION",
+      "review": "",
+      "verify": "",
+      "why": "命中 neverallow 红线：禁止自动放权（转人工）",
+      "sample": "#avc:  denied  { getattr } for  pid=179 comm=\"kworker/u8:3\" path=\"/mnt/hmdfs/100/account/device_view/local/files/Camera/IMG_2022629_152726.jpg\" dev=\"hmdfs\" ino=2305843009213824715 scontext=u:r:storage"
+    },
+    {
+      "case": "8bbfd4a386eb",
+      "count": 1,
+      "src": "storage_daemon",
+      "tgt": "hmdfs",
+      "cls": "file",
+      "perms": [
+        "read"
+      ],
+      "classification": "POTENTIAL_ESCALATION",
+      "review": "",
+      "verify": "",
+      "why": "命中 neverallow 红线：禁止自动放权（转人工）",
+      "sample": "#avc:  denied  { read } for  pid=179 comm=\"kworker/u8:3\" name=\"IMG_2022629_152726.jpg\" dev=\"hmdfs\" ino=2305843009213824715 scontext=u:r:storage_daemon:s0 tcontext=u:object_r:hmdfs:s0 tclass=file permi"
+    },
+    {
+      "case": "f53fdde71fd0",
+      "count": 1,
+      "src": "storage_daemon",
+      "tgt": "hmdfs",
+      "cls": "file",
+      "perms": [
+        "read",
+        "write"
+      ],
+      "classification": "POTENTIAL_ESCALATION",
+      "review": "",
+      "verify": "",
+      "why": "命中 neverallow 红线：禁止自动放权（转人工）",
+      "sample": "#avc:  denied  { read write } for  pid=179 comm=\"kworker/u8:3\" name=\"IMG_2022629_152726.jpg\" dev=\"hmdfs\" ino=2305843009213824715 scontext=u:r:storage_daemon:s0 tcontext=u:object_r:hmdfs:s0 tclass=file"
+    },
+    {
+      "case": "3e1f2c0baea3",
+      "count": 1,
+      "src": "storage_daemon",
+      "tgt": "hmdfs",
+      "cls": "file",
+      "perms": [
+        "open",
+        "read",
+        "write"
+      ],
+      "classification": "POTENTIAL_ESCALATION",
+      "review": "",
+      "verify": "",
+      "why": "命中 neverallow 红线：禁止自动放权（转人工）",
+      "sample": "#avc:  denied  { read write open } for  pid=179 comm=\"kworker/u8:3\" path=\"/mnt/hmdfs/100/account/device_view/local/files/Camera/IMG_2022629_152726.jpg\" dev=\"hmdfs\" ino=2305843009213824715 scontext=u:r"
+    },
+    {
+      "case": "5a39a27caeac",
+      "count": 1,
+      "src": "storage_daemon",
+      "tgt": "distributedfiledaemon",
+      "cls": "binder",
+      "perms": [
+        "call"
+      ],
+      "classification": "POTENTIAL_ESCALATION",
+      "review": "",
+      "verify": "",
+      "why": "命中 neverallow 红线：禁止自动放权（转人工）",
+      "sample": "# avc:  denied  { call } for  pid=2153 comm=\"IPC_1_2158\" scontext=u:r:storage_daemon:s0 tcontext=u:r:distributedfiledaemon:s0 tclass=binder permissive=1"
+    },
+    {
+      "case": "541beb1692bf",
+      "count": 1,
+      "src": "storage_daemon",
+      "tgt": "fuse_file",
+      "cls": "filesystem",
+      "perms": [
+        "unmount"
+      ],
+      "classification": "POTENTIAL_ESCALATION",
+      "review": "",
+      "verify": "",
+      "why": "命中 neverallow 红线：禁止自动放权（转人工）",
+      "sample": "# avc: denied { unmount } for pid=5206, comm=\"/bin/umount\"  scontext=u:r:storage_daemon:s0 tcontext=u:object_r:fuse_file:s0 tclass=filesystem permissive=1"
+    },
+    {
+      "case": "ee89abbda34b",
+      "count": 1,
+      "src": "file",
+      "tgt": "system_core_hap",
+      "cls": "binder",
+      "perms": [
+        "transfer"
+      ],
+      "classification": "MISSING_RULE",
+      "review": "APPROVE",
+      "verify": "SUCCESS",
+      "why": "主体/目标「file」不在当前策略语料中（设备新增域、生成的数字 service 标签或标注异常），补丁无法落点验证，转人工",
+      "sample": "# avc: denied {transfer} for pid=6408, comm=\"/system/bin/sa_main\" scontext=u:r:file:s0 tcontext=u:r:system_core_hap:s0 tclass=binder permissive=1"
+    },
+    {
+      "case": "23ea5508b6b6",
+      "count": 1,
+      "src": "hiview",
+      "tgt": "dev_file",
+      "cls": "file",
+      "perms": [
+        "read"
+      ],
+      "classification": "POTENTIAL_ESCALATION",
+      "review": "",
+      "verify": "",
+      "why": "命中 neverallow 红线：禁止自动放权（转人工）",
+      "sample": "#avc:  denied  { read } for  pid=449 comm=\"hiview\" name=\"asan.log.2718\" dev=\"tmpfs\" ino=731 scontext=u:r:hiview:s0 tcontext=u:object_r:dev_file:s0 tclass=file permissive=0"
+    },
+    {
+      "case": "79172bd311a1",
+      "count": 1,
+      "src": "init",
+      "tgt": "dev_file",
+      "cls": "file",
+      "perms": [
+        "getattr"
+      ],
+      "classification": "POTENTIAL_ESCALATION",
+      "review": "",
+      "verify": "",
+      "why": "命中 neverallow 红线：禁止自动放权（转人工）",
+      "sample": "#avc:  denied  { getattr } for  pid=3281 comm=\"init\" path=\"/dev/asanlog/asan.log.2718\" dev=\"tmpfs\" ino=727 scontext=u:r:init:s0 tcontext=u:object_r:dev_file:s0 tclass=file permissive=0"
+    },
+    {
+      "case": "5cdf7d2fd1e7",
+      "count": 1,
+      "src": "sh",
+      "tgt": "lnk_file",
+      "cls": "dir",
+      "perms": [
+        "create",
+        "getattr",
+        "read",
+        "unlink"
+      ],
+      "classification": "MISSING_RULE",
+      "review": "APPROVE",
+      "verify": "SUCCESS",
+      "why": "主体/目标「lnk_file」不在当前策略语料中（设备新增域、生成的数字 service 标签或标注异常），补丁无法落点验证，转人工",
+      "sample": "# avc: denied { create getattr read unlink } for pid=45334, comm=\"bin/ln\" scontext=u:r:sh:s0 tcontext=u:object_r:lnk_file:s0 tclass=dir permissions=0"
+    },
+    {
+      "case": "dd1835989725",
+      "count": 1,
+      "src": "locationhub",
+      "tgt": "default_service",
+      "cls": "samgr_class",
+      "perms": [
+        "get"
+      ],
+      "classification": "POTENTIAL_ESCALATION",
+      "review": "",
+      "verify": "",
+      "why": "命中 neverallow 红线：禁止自动放权（转人工）",
+      "sample": "#avc:  denied  { get } for service=2801 pid=284 scontext=u:r:locationhub:s0 tcontext=u:object_r:default_service:s0 tclass=samgr_class permissive=1"
+    },
+    {
+      "case": "5808b34905bd",
+      "count": 1,
+      "src": "download_server",
+      "tgt": "sock_file",
+      "cls": "sock_file",
+      "perms": [
+        "write"
+      ],
+      "classification": "MISSING_RULE",
+      "review": "APPROVE",
+      "verify": "SUCCESS",
+      "why": "主体/目标「sock_file」不在当前策略语料中（设备新增域、生成的数字 service 标签或标注异常），补丁无法落点验证，转人工",
+      "sample": "#avc:  denied  { write } for pid=6848 comm=\"async-2\" name=\"dnsproxyd\" dev=\"tmpfs\" ino=185 scontext=u:r:download_server:s0 tcontext=u:dev_unix_file:sock_file:s0 tclass=sock_file permissive=1"
+    },
+    {
+      "case": "2c58a73f3d10",
+      "count": 2,
+      "src": "download_server",
+      "tgt": "s0",
+      "cls": "file",
+      "perms": [
+        "read"
+      ],
+      "classification": "MISSING_RULE",
+      "review": "APPROVE",
+      "verify": "SUCCESS",
+      "why": "目标上下文可疑（被解析成安全级别而非类型，多为日志/注释笔误，勿照抄规则）",
+      "sample": "#avc:  denied  { read } for  pid=1956 comm=\"example.mytest\" ... scontext=u:r:download_server:s0 tcontext=u:object_r：hmdfs:s0 tclass=file permissive=0"
+    },
+    {
+      "case": "87282fcefc1f",
+      "count": 1,
+      "src": "download_server",
+      "tgt": "s0",
+      "cls": "file",
+      "perms": [
+        "getattr"
+      ],
+      "classification": "MISSING_RULE",
+      "review": "APPROVE",
+      "verify": "SUCCESS",
+      "why": "目标上下文可疑（被解析成安全级别而非类型，多为日志/注释笔误，勿照抄规则）",
+      "sample": "#avc:  denied  { getattr } for  pid=1956 comm=\"example.mytest\" ... scontext=u:r:download_server:s0 tcontext=u:object_r：hmdfs:s0 tclass=file permissive=0"
+    },
+    {
+      "case": "4274be0ec7fb",
+      "count": 1,
+      "src": "download_server",
+      "tgt": "s0",
+      "cls": "samgr_class",
+      "perms": [
+        "get"
+      ],
+      "classification": "MISSING_RULE",
+      "review": "APPROVE",
+      "verify": "SUCCESS",
+      "why": "目标上下文可疑（被解析成安全级别而非类型，多为日志/注释笔误，勿照抄规则）",
+      "sample": "#avc:  denied  { get } for  service=401 sid=u:r:download_server:s0 scontext=u:r:download_server:s0 tcontext=u:object_r：sa_foundation_bms:s0 tclass=samgr_class permissive=1"
+    },
+    {
+      "case": "04aef0a48ca3",
+      "count": 1,
+      "src": "system_basic_hap",
+      "tgt": "sa_download_server",
+      "cls": "samgr_class",
+      "perms": [
+        "get"
+      ],
+      "classification": "MISSING_RULE",
+      "review": "APPROVE",
+      "verify": "SUCCESS",
+      "why": "主体/目标「sa_download_server」不在当前策略语料中（设备新增域、生成的数字 service 标签或标注异常），补丁无法落点验证，转人工",
+      "sample": "# avc:  denied  { get } for service=3706 pid=4299 scontext=u:r:system_basic_hap:s0 tcontext=u:object_r:sa_download_server:s0 tclass=samgr_class permissive=0"
+    },
+    {
+      "case": "44cd0dbbd4bc",
+      "count": 1,
+      "src": "system_core_hap",
+      "tgt": "download_server",
+      "cls": "binder",
+      "perms": [
+        "get"
+      ],
+      "classification": "POTENTIAL_ESCALATION",
+      "review": "",
+      "verify": "",
+      "why": "命中 neverallow 红线：禁止自动放权（转人工）",
+      "sample": "# avc:  denied  { get } for  pid=2095 comm=\"1.ui\" scontext=u:r:system_core_hap:s0 tcontext=u:r:download_server:s0 tclass=binder permissive=0"
+    },
+    {
+      "case": "7483a1695873",
+      "count": 1,
+      "src": "inputmethod_service",
+      "tgt": "sa_distributeddate_service",
+      "cls": "samgr_class",
+      "perms": [
+        "get"
+      ],
+      "classification": "MISSING_RULE",
+      "review": "APPROVE",
+      "verify": "SUCCESS",
+      "why": "主体/目标「sa_distributeddate_service」不在当前策略语料中（设备新增域、生成的数字 service 标签或标注异常），补丁无法落点验证，转人工",
+      "sample": "#avc:  denied  { get } for service=1301 pid=1216 scontext=u:r:inputmethod_service:s0 tcontext=u:object_r:sa_distributeddate_service:s0 tclass=samgr_class permissive=0"
+    },
+    {
+      "case": "8759cdda6a6d",
+      "count": 1,
+      "src": "time_service",
+      "tgt": "sock_file",
+      "cls": "sock_file",
+      "perms": [
+        "write"
+      ],
+      "classification": "MISSING_RULE",
+      "review": "APPROVE",
+      "verify": "SUCCESS",
+      "why": "主体/目标「sock_file」不在当前策略语料中（设备新增域、生成的数字 service 标签或标注异常），补丁无法落点验证，转人工",
+      "sample": "#avc:  denied  { write } for pid=936 comm=\"IPC_5_2549\" name=\"dnsproxyd\" dev=\"tmpfs\" ino=805 scontext=u:r:time_service:s0 tcontext=u:dev_unix_file:sock_file:s0 tclass=sock_file permissive=1"
+    },
+    {
+      "case": "dd1846f5e80f",
+      "count": 1,
+      "src": "msdp_sa",
+      "tgt": "sceneboard_hap",
+      "cls": "binder",
+      "perms": [
+        "transfer"
+      ],
+      "classification": "POTENTIAL_ESCALATION",
+      "review": "",
+      "verify": "",
+      "why": "命中 neverallow 红线：禁止自动放权（转人工）",
+      "sample": "# avc: denied { transfer } for pid=1211, comm=\"/system/bin/sa_main\"  scontext=u:r:msdp_sa:s0 tcontext=u:r:sceneboard_hap:s0 tclass=binder permissive=1"
+    },
+    {
+      "case": "d38c4b08c36c",
+      "count": 2,
+      "src": "camera_service",
+      "tgt": "cameradaemon",
+      "cls": "fd",
+      "perms": [
+        "use"
+      ],
+      "classification": "MISSING_RULE",
+      "review": "APPROVE",
+      "verify": "SUCCESS",
+      "why": "主体/目标「cameradaemon」不在当前策略语料中（设备新增域、生成的数字 service 标签或标注异常），补丁无法落点验证，转人工",
+      "sample": "#avc:  denied  { use } for  pid=3966 comm=\"OS_FFRT_2_1\" path=\"/dev/ashmem\" dev=\"tmpfs\" ino=630 scontext=u:r:camera_service:s0 tcontext=u:r:cameradaemon:s0 tclass=fd permissive=1"
+    },
+    {
+      "case": "ca272a2d0a38",
+      "count": 1,
+      "src": "camera_service",
+      "tgt": "audio_policy",
+      "cls": "binder",
+      "perms": [
+        "call"
+      ],
+      "classification": "POTENTIAL_ESCALATION",
+      "review": "",
+      "verify": "",
+      "why": "命中 neverallow 红线：禁止自动放权（转人工）",
+      "sample": "#avc: denied { call } for pid=1478, comm=\"/system/bin/sa_main\"  scontext=u:r:camera_service:s0 tcontext=u:r:audio_policy:s0 tclass=binder permissive=0"
+    },
+    {
+      "case": "8eea97760483",
+      "count": 1,
+      "src": "su",
+      "tgt": "data_service_el1_file",
+      "cls": "file",
+      "perms": [
+        "unlink"
+      ],
+      "classification": "POTENTIAL_ESCALATION",
+      "review": "",
+      "verify": "",
+      "why": "命中 neverallow 红线：禁止自动放权（转人工）",
+      "sample": "#avc: denied { unlink } for pid=20408, comm=\"/bin/rm\"  name=\"/service/el1/public/camera_service/temp.mp4\" dev=\"/dev/block/platform/fa500000.ufs/by-name/userdata\" ino=25420 scontext=u:r:su:s0 tcontext="
+    },
+    {
+      "case": "e1e1cd65e90a",
+      "count": 1,
+      "src": "su",
+      "tgt": "data_service_el1_file",
+      "cls": "file",
+      "perms": [
+        "getattr"
+      ],
+      "classification": "POTENTIAL_ESCALATION",
+      "review": "",
+      "verify": "",
+      "why": "命中 neverallow 红线：禁止自动放权（转人工）",
+      "sample": "#avc: denied { getattr } for pid=20061, comm=\"/bin/ls\"  path=\"/data/service/el1/public/camera_service/temp.mp4\" dev=\"/dev/block/platform/fa500000.ufs/by-name/userdata\" ino=25420 scontext=u:r:su:s0 tco"
+    },
+    {
+      "case": "501bb4b29ed5",
+      "count": 1,
+      "src": "media_service",
+      "tgt": "data_file",
+      "cls": "file",
+      "perms": [
+        "write"
+      ],
+      "classification": "POTENTIAL_ESCALATION",
+      "review": "",
+      "verify": "",
+      "why": "命中 neverallow 红线：禁止自动放权（转人工）",
+      "sample": "#avc:  denied  { write } for  pid=12844 comm=\"recorder_unit_t\" path=\"/data/test/recorder_video_yuv_mpeg4.mp4\" dev=\"mmcblk0p11\" ino=391698 scontext=u:r:media_service:s0 tcontext=u:object_r:data_file:s0"
+    },
+    {
+      "case": "30656f6c0f53",
+      "count": 1,
+      "src": "media_service",
+      "tgt": "data_test_file",
+      "cls": "file",
+      "perms": [
+        "getattr"
+      ],
+      "classification": "POTENTIAL_ESCALATION",
+      "review": "",
+      "verify": "",
+      "why": "命中 neverallow 红线：禁止自动放权（转人工）",
+      "sample": "#avc:  denied  { getattr } for  pid=507 comm=\"media_service\" path=\"/data/test/recorder_video_yuv_mpeg4.mp4\" dev=\"mmcblk0p11\" ino=1175048 scontext=u:r:media_service:s0 tcontext=u:object_r:data_test_fil"
+    },
+    {
+      "case": "280d2c6bd398",
+      "count": 1,
+      "src": "media_service",
+      "tgt": "data_test_file",
+      "cls": "file",
+      "perms": [
+        "read"
+      ],
+      "classification": "POTENTIAL_ESCALATION",
+      "review": "",
+      "verify": "",
+      "why": "命中 neverallow 红线：禁止自动放权（转人工）",
+      "sample": "#avc:  denied  { read } for  pid=1968 comm=\"recorder_unit_t\" path=\"/data/test/recorder_video_yuv_mpeg4.mp4\" dev=\"mmcblk0p11\" ino=1175048 scontext=u:r:media_service:s0 tcontext=u:object_r:data_test_fil"
+    },
+    {
+      "case": "767b6ba3110c",
+      "count": 1,
+      "src": "charger",
+      "tgt": "s0",
+      "cls": "file",
+      "perms": [
+        "entrypoint"
+      ],
+      "classification": "MISSING_RULE",
+      "review": "APPROVE",
+      "verify": "SUCCESS",
+      "why": "目标上下文可疑（被解析成安全级别而非类型，多为日志/注释笔误，勿照抄规则）",
+      "sample": "#avc:  denied  { entrypoint } for  pid=235 comm=\"init\" path=\"/vendor/bin/charger\" dev=\"mmcblk0p6\" ino=14 scontext=u:r:charger:s0 tcontext=u:charger_exec:s0 tclass=file permissive=1"
+    },
+    {
+      "case": "2cbf267b96bd",
+      "count": 1,
+      "src": "charger",
+      "tgt": "s0",
+      "cls": "chr_file",
+      "perms": [
+        "getattr"
+      ],
+      "classification": "MISSING_RULE",
+      "review": "APPROVE",
+      "verify": "SUCCESS",
+      "why": "目标上下文可疑（被解析成安全级别而非类型，多为日志/注释笔误，勿照抄规则）",
+      "sample": "#avc:  denied  { getattr } for  pid=281 comm=\"charger\" path=\"/dev/dri/renderD128\" dev=\"tmpfs\" ino=80 scontext=u:r:charger:s0 tcontext=uobject_r:dev_dri_file:s0 tclass=chr_file permissive=0"
+    },
+    {
+      "case": "d0037e3823f1",
+      "count": 1,
+      "src": "init",
+      "tgt": "charger",
+      "cls": "file",
+      "perms": [
+        "execute"
+      ],
+      "classification": "POTENTIAL_ESCALATION",
+      "review": "",
+      "verify": "",
+      "why": "命中 neverallow 红线：禁止自动放权（转人工）",
+      "sample": "#avc:  denied  { execute } for  pid=235 comm=\"init\" path=\"/vendor/bin/charger\" dev=\"mmcblk0p6\" ino=14 scontext=u:r:init:s0 tcontext=u:object_r:charger:s0 tclass=file permissive=1"
+    },
+    {
+      "case": "ed102056eeb0",
+      "count": 1,
+      "src": "powermgr",
+      "tgt": "sa_device_standby",
+      "cls": "samger_class",
+      "perms": [
+        "get"
+      ],
+      "classification": "MISSING_RULE",
+      "review": "APPROVE",
+      "verify": "SUCCESS",
+      "why": "对象类「samger_class」不在策略任何规则中出现（疑为日志笔误），补丁无法落点验证，转人工",
+      "sample": "#avc: denied { get } for service=1914 pid=1434 scontext=u:r:powermgr:s0 tcontext=u:object_r:sa_device_standby:s0 tclass=samger_class permissive=0"
+    },
+    {
+      "case": "58f49e8395eb",
+      "count": 1,
+      "src": "powermgr",
+      "tgt": "startup_param",
+      "cls": "file",
+      "perms": [
+        "open",
+        "readt",
+        "semap"
+      ],
+      "classification": "POTENTIAL_ESCALATION",
+      "review": "",
+      "verify": "",
+      "why": "命中 neverallow 红线：禁止自动放权（转人工）",
+      "sample": "# avc:  denied  { semap open readt } for  pid=1216 scontext=u:r:powermgr:s0 tcontext=u:object_r:startup_param:s0 tclass=file permissive=1"
+    },
+    {
+      "case": "7931ffa3b2ea",
+      "count": 1,
+      "src": "normal_hap",
+      "tgt": "sa_thermal_service",
+      "cls": "samgr_class",
+      "perms": [
+        "get"
+      ],
+      "classification": "MISSING_RULE",
+      "review": "APPROVE",
+      "verify": "SUCCESS",
+      "why": "主体/目标「sa_thermal_service」不在当前策略语料中（设备新增域、生成的数字 service 标签或标注异常），补丁无法落点验证，转人工",
+      "sample": "#avc:  denied  { get } for service=3303 pid=10482 scontext=u:r:normal_hap:s0 tcontext=u:object_r:sa_thermal_service:s0 tclass=samgr_class permissive=1"
+    },
+    {
+      "case": "2d547ef6e952",
+      "count": 1,
+      "src": "thermal",
+      "tgt": "normal_hap",
+      "cls": "binder",
+      "perms": [
+        "call"
+      ],
+      "classification": "MISSING_RULE",
+      "review": "APPROVE",
+      "verify": "SUCCESS",
+      "why": "主体/目标「thermal」不在当前策略语料中（设备新增域、生成的数字 service 标签或标注异常），补丁无法落点验证，转人工",
+      "sample": "#avc:  denied  { call } for  pid=472 comm=\"thermal\" scontext=u:r:thermal:s0 tcontext=u:r:normal_hap:s0 tclass=binder permissive=1"
+    },
+    {
+      "case": "23e0434fb8b0",
+      "count": 1,
+      "src": "thermal",
+      "tgt": "sa_resource_schedule_socperf_server",
+      "cls": "samgr_class",
+      "perms": [
+        "get"
+      ],
+      "classification": "POTENTIAL_ESCALATION",
+      "review": "",
+      "verify": "",
+      "why": "命中 neverallow 红线：禁止自动放权（转人工）",
+      "sample": "#avc:  denied  { get } for service=1906 pid=470 scontext=u:r:thermal:s0 tcontext=u:object_r:sa_resource_schedule_socperf_server:s0 tclass=samgr_class permissive=1"
+    },
+    {
+      "case": "7f3323c20a2e",
+      "count": 1,
+      "src": "thermal",
+      "tgt": "vendor_etc_file",
+      "cls": "file",
+      "perms": [
+        "add"
+      ],
+      "classification": "POTENTIAL_ESCALATION",
+      "review": "",
+      "verify": "",
+      "why": "命中 neverallow 红线：禁止自动放权（转人工）",
+      "sample": "#avc:  denied  { add } for service=3303 pid=530 scontext=u:r:thermal:s0 tcontext=u:object_r:vendor_etc_file:s0 tclass=file permissive=1"
+    },
+    {
+      "case": "35f4d9928c82",
+      "count": 1,
+      "src": "thermal",
+      "tgt": "sa_audio_policy_service",
+      "cls": "samgr_class",
+      "perms": [
+        "get"
+      ],
+      "classification": "POTENTIAL_ESCALATION",
+      "review": "",
+      "verify": "",
+      "why": "命中 neverallow 红线：禁止自动放权（转人工）",
+      "sample": "#avc:  denied  { get } for service=3009 pid=2003 scontext=u:r:thermal:s0 tcontext=u:object_r:sa_audio_policy_service:s0 tclass=samgr_class permissive=1"
+    },
+    {
+      "case": "9d706da98817",
+      "count": 1,
+      "src": "powermgr",
+      "tgt": "sa_thermal_service",
+      "cls": "samgr_class",
+      "perms": [
+        "add"
+      ],
+      "classification": "MISSING_RULE",
+      "review": "APPROVE",
+      "verify": "SUCCESS",
+      "why": "主体/目标「sa_thermal_service」不在当前策略语料中（设备新增域、生成的数字 service 标签或标注异常），补丁无法落点验证，转人工",
+      "sample": "#avc:  denied  { add } for service=3303 pid=487 scontext=u:r:powermgr:s0 tcontext=u:object_r:sa_thermal_service:s0 tclass=samgr_class permissive=1"
+    },
+    {
+      "case": "e79c74043c5f",
+      "count": 1,
+      "src": "powermgr",
+      "tgt": "sysfs_pg",
+      "cls": "file",
+      "perms": [
+        "getattr"
+      ],
+      "classification": "MISSING_RULE",
+      "review": "APPROVE",
+      "verify": "SUCCESS",
+      "why": "主体/目标「sysfs_pg」不在当前策略语料中（设备新增域、生成的数字 service 标签或标注异常），补丁无法落点验证，转人工",
+      "sample": "# avc_audit_slow:276] avc: denied { getattr } for pid=1434, comm=\"/system/bin/sa_main\"  path=\"/sys/devices/virtual/thermal/thermal_zone0/percore_num\" dev=\"\" ino=37869 scontext=u:r:powermgr:s0 tcontext"
+    },
+    {
+      "case": "9007cba53b53",
+      "count": 2,
+      "src": "powermgr",
+      "tgt": "sysfs_pg",
+      "cls": "file",
+      "perms": [
+        "ioctl"
+      ],
+      "classification": "MISSING_RULE",
+      "review": "APPROVE",
+      "verify": "SUCCESS",
+      "why": "主体/目标「sysfs_pg」不在当前策略语料中（设备新增域、生成的数字 service 标签或标注异常），补丁无法落点验证，转人工",
+      "sample": "# avc_audit_slow:276] avc: denied { ioctl } for pid=1434, comm=\"/system/bin/sa_main\"  path=\"/sys/devices/virtual/thermal/thermal_zone0/percore_num\" dev=\"\" ino=37869 ioctlcmd=0x5413 scontext=u:r:powerm"
+    },
+    {
+      "case": "9f8a5c53137a",
+      "count": 1,
+      "src": "powermgr",
+      "tgt": "sysfs_pg",
+      "cls": "file",
+      "perms": [
+        "open"
+      ],
+      "classification": "MISSING_RULE",
+      "review": "APPROVE",
+      "verify": "SUCCESS",
+      "why": "主体/目标「sysfs_pg」不在当前策略语料中（设备新增域、生成的数字 service 标签或标注异常），补丁无法落点验证，转人工",
+      "sample": "# avc_audit_slow:276] avc: denied { open } for pid=1434, comm=\"/system/bin/sa_main\"  path=\"/sys/devices/virtual/thermal/thermal_zone0/percore_num\" dev=\"\" ino=37869 scontext=u:r:powermgr:s0 tcontext=u:"
+    },
+    {
+      "case": "cc533340a2cc",
+      "count": 1,
+      "src": "powermgr",
+      "tgt": "sysfs_pg",
+      "cls": "file",
+      "perms": [
+        "read",
+        "write"
+      ],
+      "classification": "MISSING_RULE",
+      "review": "APPROVE",
+      "verify": "SUCCESS",
+      "why": "主体/目标「sysfs_pg」不在当前策略语料中（设备新增域、生成的数字 service 标签或标注异常），补丁无法落点验证，转人工",
+      "sample": "# avc_audit_slow:276] avc: denied { read write } for pid=1434, comm=\"/system/bin/sa_main\"  path=\"/sys/devices/virtual/thermal/thermal_zone0/percore_num\" dev=\"\" ino=37869 scontext=u:r:powermgr:s0 tcont"
+    },
+    {
+      "case": "27b5291d3df4",
+      "count": 1,
+      "src": "bgtaskmgr_service",
+      "tgt": "data_service_el1_file",
+      "cls": "file",
+      "perms": [
+        "add_name"
+      ],
+      "classification": "POTENTIAL_ESCALATION",
+      "review": "",
+      "verify": "",
+      "why": "命中 neverallow 红线：禁止自动放权（转人工）",
+      "sample": "#avc: denied { add_name } for pid=1067, scontext=u:r:bgtaskmgr_service:s0 tcontext=u:object_r:data_service_el1_file:s0 tclass=file permissive=1"
+    },
+    {
+      "case": "1b75211a848a",
+      "count": 1,
+      "src": "bgtaskmgr_service",
+      "tgt": "data_service_el1_file",
+      "cls": "file",
+      "perms": [
+        "0x5413"
+      ],
+      "classification": "POTENTIAL_ESCALATION",
+      "review": "",
+      "verify": "",
+      "why": "命中 neverallow 红线：禁止自动放权（转人工）",
+      "sample": "#avc: denied { 0x5413 } for pid=1067, scontext=u:r:bgtaskmgr_service:s0 tcontext=u:object_r:data_service_el1_file:s0 tclass=file ioctl permissive=1"
+    },
+    {
+      "case": "0db8a8094314",
+      "count": 1,
+      "src": "bgtaskmgr_service",
+      "tgt": "data_service_el1_file",
+      "cls": "file",
+      "perms": [
+        "0xf50c"
+      ],
+      "classification": "POTENTIAL_ESCALATION",
+      "review": "",
+      "verify": "",
+      "why": "命中 neverallow 红线：禁止自动放权（转人工）",
+      "sample": "#avc: denied { 0xf50c } for pid=1067, scontext=u:r:bgtaskmgr_service:s0 tcontext=u:object_r:data_service_el1_file:s0 tclass=file ioctl permissive=1"
+    },
+    {
+      "case": "f43474daa83e",
+      "count": 1,
+      "src": "resource_schedule_service",
+      "tgt": "transfer",
+      "cls": "binder",
+      "perms": [
+        "transfer"
+      ],
+      "classification": "POTENTIAL_ESCALATION",
+      "review": "",
+      "verify": "",
+      "why": "命中 neverallow 红线：禁止自动放权（转人工）",
+      "sample": "# avc: denied  { transfer } for pid=657 comm=\"IPC_3_2264\" scontext=u:r:resource_schedule_service:s0 tcontext=u:r:transfer:s0 tclass=binder permissive=1"
+    },
+    {
+      "case": "8aaaf8446488",
+      "count": 1,
+      "src": "dlpmanager_hap",
+      "tgt": "fuse",
+      "cls": "file",
+      "perms": [
+        "read",
+        "write"
+      ],
+      "classification": "MISSING_RULE",
+      "review": "APPROVE",
+      "verify": "SUCCESS",
+      "why": "主体/目标「fuse」不在当前策略语料中（设备新增域、生成的数字 service 标签或标注异常），补丁无法落点验证，转人工",
+      "sample": "# avc:  denied  { read write } for  pid=3454 comm=\"com.ohos.dlpman\" name=\"default.dlp\" dev=\"fuse\" ino=547205767392 scontext=u:r:dlpmanager_hap:s0 tcontext=u:object_r:fuse:s0 tclass=file permissive=1"
+    },
+    {
+      "case": "7eaca5358f0f",
+      "count": 1,
+      "src": "sceneboard_hap",
+      "tgt": "security_collector",
+      "cls": "binder",
+      "perms": [
+        "call"
+      ],
+      "classification": "MISSING_RULE",
+      "review": "APPROVE",
+      "verify": "SUCCESS",
+      "why": "主体/目标「sceneboard_hap」不在当前策略语料中（设备新增域、生成的数字 service 标签或标注异常），补丁无法落点验证，转人工",
+      "sample": "# avc:  denied  { call } for  pid=1696 comm=\"IPC_1_1707\" scontext=u:r:sceneboard_hap:s0 tcontext=u:r:security_collector:s0 tclass=binder permissive=1"
+    },
+    {
+      "case": "7f58778ea458",
+      "count": 1,
+      "src": "sceneboard_hap",
+      "tgt": "security_collector",
+      "cls": "binder",
+      "perms": [
+        "transfer"
+      ],
+      "classification": "MISSING_RULE",
+      "review": "APPROVE",
+      "verify": "SUCCESS",
+      "why": "主体/目标「sceneboard_hap」不在当前策略语料中（设备新增域、生成的数字 service 标签或标注异常），补丁无法落点验证，转人工",
+      "sample": "# avc:  denied  { transfer } for  pid=1758 comm=\"IPC_5_2010\" scontext=u:r:sceneboard_hap:s0 tcontext=u:r:security_collector:s0 tclass=binder permissive=1"
+    },
+    {
+      "case": "90b49dce9cb3",
+      "count": 2,
+      "src": "sh",
+      "tgt": "data_log_sanitizer_file",
+      "cls": "file",
+      "perms": [
+        "getattr"
+      ],
+      "classification": "POTENTIAL_ESCALATION",
+      "review": "",
+      "verify": "",
+      "why": "命中 neverallow 红线：禁止自动放权（转人工）",
+      "sample": "#avc:  denied  { getattr } for  pid=1853 comm=\"ls\" path=\"/data/log/sanitizer/ubsan/ubsan.log.394\" dev=\"mmcblk0p11\" ino=4712 scontext=u:r:sh:s0 tcontext=u:object_r:data_log_sanitizer_file:s0 tclass=fil"
+    },
+    {
+      "case": "9d0215235731",
+      "count": 1,
+      "src": "render_service",
+      "tgt": "sa_foundation_abilityms",
+      "cls": "samgr_class",
+      "perms": [
+        "get"
+      ],
+      "classification": "POTENTIAL_ESCALATION",
+      "review": "",
+      "verify": "",
+      "why": "命中 neverallow 红线：禁止自动放权（转人工）",
+      "sample": "#avc: denied { get } for service=180 pid=1453 scontext=u:r:render_service:s0 tcontext=u:object_r:sa_foundation_abilityms:s0 tclass=samgr_class permissive=0"
+    },
+    {
+      "case": "91b1a1cf5727",
+      "count": 1,
+      "src": "appspawn",
+      "tgt": "nwebspawn",
+      "cls": "process",
+      "perms": [
+        "signal"
+      ],
+      "classification": "POTENTIAL_ESCALATION",
+      "review": "",
+      "verify": "",
+      "why": "命中 neverallow 红线：禁止自动放权（转人工）",
+      "sample": "# avc:  denied  { signal } for  pid=2762 comm=\"appspawn\" scontext=u:r:appspawn:s0 tcontext=u:r:nwebspawn:s0 tclass=process permissive=0"
+    },
+    {
+      "case": "325b06698d5e",
+      "count": 1,
+      "src": "selection_service",
+      "tgt": "default_service",
+      "cls": "samgr_class",
+      "perms": [
+        "add"
+      ],
+      "classification": "POTENTIAL_ESCALATION",
+      "review": "",
+      "verify": "",
+      "why": "命中 neverallow 红线：禁止自动放权（转人工）",
+      "sample": "# avc:  denied  { add } for service=8500 sid=u:r:selection_service:s0 scontext=u:r:selection_service:s0 tcontext=u:object_r:default_service:s0 tclass=samgr_class permissive=1"
+    },
+    {
+      "case": "77642ff9a17f",
+      "count": 1,
+      "src": "selection_service",
+      "tgt": "devinfo_type_param",
+      "cls": "file",
+      "perms": [
+        "read"
+      ],
+      "classification": "POTENTIAL_ESCALATION",
+      "review": "",
+      "verify": "",
+      "why": "命中 neverallow 红线：禁止自动放权（转人工）",
+      "sample": "# avc:  denied  { read } for  pid=3391 comm=\"selection_servi\" name=\"u:object_r:devinfo_type_param:s0\" dev=\"tmpfs\" ino=116 scontext=u:r:selection_service:s0 tcontext=u:object_r:devinfo_type_param:s0 tc"
+    },
+    {
+      "case": "841f53f4f48b",
+      "count": 1,
+      "src": "selection_service",
+      "tgt": "vendor_etc_file",
+      "cls": "dir",
+      "perms": [
+        "search"
+      ],
+      "classification": "POTENTIAL_ESCALATION",
+      "review": "",
+      "verify": "",
+      "why": "命中 neverallow 红线：禁止自动放权（转人工）",
+      "sample": "# avc:  denied  { search } for  pid=5494 comm=\"selection_servi\" name=\"etc\" dev=\"mmcblk0p8\" ino=20 scontext=u:r:selection_service:s0 tcontext=u:object_r:vendor_etc_file:s0 tclass=dir permissive=0"
+    },
+    {
+      "case": "c8c89b895bbb",
+      "count": 1,
+      "src": "cadaemon",
+      "tgt": "sa_cadaemon_service",
+      "cls": "samgr_class",
+      "perms": [
+        "add"
+      ],
+      "classification": "MISSING_RULE",
+      "review": "APPROVE",
+      "verify": "SUCCESS",
+      "why": "主体/目标「sa_cadaemon_service」不在当前策略语料中（设备新增域、生成的数字 service 标签或标注异常），补丁无法落点验证，转人工",
+      "sample": "#avc:  denied  { add } for service=8001 pid=2904 scontext=u:r:cadaemon:s0 tcontext=u:object_r:sa_cadaemon_service:s0 tclass=samgr_class permissive=0"
+    },
+    {
+      "case": "a0eb1c5bd70a",
+      "count": 4,
+      "src": "hilogd",
+      "tgt": "rootfs",
+      "cls": "file",
+      "perms": [
+        "write"
+      ],
+      "classification": "POTENTIAL_ESCALATION",
+      "review": "",
+      "verify": "",
+      "why": "命中 neverallow 红线：禁止自动放权（转人工）",
+      "sample": "#avc: denied { write } for pid=230 comm=\"hilogd.control\" path=\"/data/log/hilog/.persisterInfo_2.info\" dev=\"rootfs\" ino=27737 scontext=u:r:hilogd:s0 tcontext=u:object_r:rootfs:s0 tclass=file permissive"
+    },
+    {
+      "case": "76a9c74a0b6b",
+      "count": 1,
+      "src": "init",
+      "tgt": "write_updater_exec",
+      "cls": "file",
+      "perms": [
+        "execute"
+      ],
+      "classification": "POTENTIAL_ESCALATION",
+      "review": "",
+      "verify": "",
+      "why": "命中 neverallow 红线：禁止自动放权（转人工）",
+      "sample": "# avc:  denied  { execute } for  pid=1849 comm=\"init\" name=\"write_updater\" dev=\"mmcblk0p7\" ino=455 scontext=u:r:init:s0 tcontext=u:object_r:write_updater_exec:s0 tclass=file permissive=1"
+    },
+    {
+      "case": "888148955a08",
+      "count": 1,
+      "src": "init",
+      "tgt": "write_updater_exec",
+      "cls": "file",
+      "perms": [
+        "execute_no_trans"
+      ],
+      "classification": "POTENTIAL_ESCALATION",
+      "review": "",
+      "verify": "",
+      "why": "命中 neverallow 红线：禁止自动放权（转人工）",
+      "sample": "# avc:  denied  { execute_no_trans } for  pid=1849 comm=\"init\" path=\"/system/bin/write_updater\" dev=\"mmcblk0p7\" ino=455 scontext=u:r:init:s0 tcontext=u:object_r:write_updater_exec:s0 tclass=file permi"
+    },
+    {
+      "case": "32426901bd12",
+      "count": 1,
+      "src": "init",
+      "tgt": "write_updater_exec",
+      "cls": "file",
+      "perms": [
+        "map"
+      ],
+      "classification": "POTENTIAL_ESCALATION",
+      "review": "",
+      "verify": "",
+      "why": "命中 neverallow 红线：禁止自动放权（转人工）",
+      "sample": "# avc:  denied  { map } for  pid=1849 comm=\"write_updater\" path=\"/system/bin/write_updater\" dev=\"mmcblk0p7\" ino=455 scontext=u:r:init:s0 tcontext=u:object_r:write_updater_exec:s0 tclass=file permissiv"
+    },
+    {
+      "case": "969f893b2935",
+      "count": 1,
+      "src": "init",
+      "tgt": "write_updater_exec",
+      "cls": "file",
+      "perms": [
+        "open",
+        "read"
+      ],
+      "classification": "POTENTIAL_ESCALATION",
+      "review": "",
+      "verify": "",
+      "why": "命中 neverallow 红线：禁止自动放权（转人工）",
+      "sample": "# avc:  denied  { read open } for  pid=1849 comm=\"init\" path=\"/system/bin/write_updater\" dev=\"mmcblk0p7\" ino=455 scontext=u:r:init:s0 tcontext=u:object_r:write_updater_exec:s0 tclass=file permissive=1"
+    },
+    {
+      "case": "c7ff13a982f2",
+      "count": 1,
+      "src": "updater",
+      "tgt": "dev_block_file",
+      "cls": "blk_file",
+      "perms": [
+        "map"
+      ],
+      "classification": "POTENTIAL_ESCALATION",
+      "review": "",
+      "verify": "",
+      "why": "命中 neverallow 红线：禁止自动放权（转人工）",
+      "sample": "# avc:  denied  { map } for  pid=267 comm=\"updater_binary\" path=\"/dev/block/mmcblk0p6\" dev=\"tmpfs\" ino=122 scontext=u:r:updater:s0 tcontext=u:object_r:dev_block_file:s0 tclass=blk_file permissive=0"
+    },
+    {
+      "case": "af5f7be6e3f4",
+      "count": 1,
+      "src": "updater",
+      "tgt": "data_updater_file",
+      "cls": "file",
+      "perms": [
+        "rename"
+      ],
+      "classification": "POTENTIAL_ESCALATION",
+      "review": "",
+      "verify": "",
+      "why": "命中 neverallow 红线：禁止自动放权（转人工）",
+      "sample": "# avc:  denied  { rename } for  pid=268 comm=\"updater_binary\" name=\"vendor\" dev=\"mmcblk0p12\" ino=1006 scontext=u:r:updater:s0 tcontext=u:object_r:data_updater_file:s0 tclass=file permissive=0"
+    },
+    {
+      "case": "e98b80bb2d78",
+      "count": 1,
+      "src": "fingerprintauth",
+      "tgt": "sa_useriam_fingerprintauth_service",
+      "cls": "samgr_class",
+      "perms": [
+        "add"
+      ],
+      "classification": "POTENTIAL_ESCALATION",
+      "review": "",
+      "verify": "",
+      "why": "命中 neverallow 红线：禁止自动放权（转人工）",
+      "sample": "#avc:  denied  { add } for service=943 pid=918 scontext=u:r:fingerprintauth:s0 tcontext=u:object_r:sa_useriam_fingerprintauth_service:s0 tclass=samgr_class permissive=1"
+    },
+    {
+      "case": "5f8c72a541bf",
+      "count": 1,
+      "src": "fingerprintauth",
+      "tgt": "hdf_fingerprint_auth_interface_service",
+      "cls": "hdf_devmgr_class",
+      "perms": [
+        "get"
+      ],
+      "classification": "MISSING_RULE",
+      "review": "APPROVE",
+      "verify": "SUCCESS",
+      "why": "主体/目标「fingerprintauth」不在当前策略语料中（设备新增域、生成的数字 service 标签或标注异常），补丁无法落点验证，转人工",
+      "sample": "#avc:  denied  { get } for service=fingerprint_auth_interface_service pid=918 scontext=u:r:fingerprintauth:s0 tcontext=u:object_r:hdf_fingerprint_auth_interface_service:s0 tclass=hdf_devmgr_class perm"
+    },
+    {
+      "case": "41a1e8524bac",
+      "count": 1,
+      "src": "app_fwk_update_service",
+      "tgt": "webengine_param",
+      "cls": "parameter_service",
+      "perms": [
+        "set"
+      ],
+      "classification": "MISSING_RULE",
+      "review": "APPROVE",
+      "verify": "SUCCESS",
+      "why": "主体/目标「webengine_param」不在当前策略语料中（设备新增域、生成的数字 service 标签或标注异常），补丁无法落点验证，转人工",
+      "sample": "# avc:  denied  { set } for parameter=web.engine.install.completed pid=12719 uid=3350 gid=3350 scontext=u:r:app_fwk_update_service:s0 tcontext=u:object_r:webengine_param:s0 tclass=parameter_service pe"
+    },
+    {
+      "case": "77cea85bdbc4",
+      "count": 1,
+      "src": "normal_hap",
+      "tgt": "sys_file",
+      "cls": "file",
+      "perms": [
+        "read"
+      ],
+      "classification": "POTENTIAL_ESCALATION",
+      "review": "",
+      "verify": "",
+      "why": "命中 neverallow 红线：禁止自动放权（转人工）",
+      "sample": "#avc:  denied  { read } for  pid=4884 comm=\"com.example.web\" name=\"midr_el1\" dev=\"sysfs\" ino=15102 scontext=u:r:normal_hap:s0 tcontext=u:object_r:sys_file:s0 tclass=file permissive=1"
+    },
+    {
+      "case": "f89b05497f5b",
+      "count": 1,
+      "src": "normal_hap",
+      "tgt": "sys_file",
+      "cls": "file",
+      "perms": [
+        "open"
+      ],
+      "classification": "POTENTIAL_ESCALATION",
+      "review": "",
+      "verify": "",
+      "why": "命中 neverallow 红线：禁止自动放权（转人工）",
+      "sample": "#avc:  denied  { open } for  pid=4884 comm=\"com.example.web\" path=\"/sys/devices/system/cpu/cpu0/regs/identification/midr_el1\" dev=\"sysfs\" ino=15102 scontext=u:r:normal_hap:s0 tcontext=u:object_r:sys_f"
+    },
+    {
+      "case": "dc9fdb54b00e",
+      "count": 1,
+      "src": "nwebspawn",
+      "tgt": "normal_hap",
+      "cls": "process",
+      "perms": [
+        "dyntransition"
+      ],
+      "classification": "POTENTIAL_ESCALATION",
+      "review": "",
+      "verify": "",
+      "why": "命中 neverallow 红线：禁止自动放权（转人工）",
+      "sample": "#avc:  denied  { dyntransition } for  pid=4499 comm=\"nwebspawn\" scontext=u:r:nwebspawn:s0 tcontext=u:r:normal_hap:s0 tclass=process permissive="
+    },
+    {
+      "case": "2d434c2985a2",
+      "count": 1,
+      "src": "nwebspawn",
+      "tgt": "data_service_el1_file",
+      "cls": "dit",
+      "perms": [
+        "mounton"
+      ],
+      "classification": "MISSING_RULE",
+      "review": "APPROVE",
+      "verify": "SUCCESS",
+      "why": "对象类「dit」不在策略任何规则中出现（疑为日志笔误），补丁无法落点验证，转人工",
+      "sample": "#avc_audit_slow:276] avc: denied { mounton } for pid=1, comm=\"/system/bin/appspawn\" path=\"/mnt/sandbox/com.ohos.render/com.example.webrender/data/service/el1/public/for-all-app\" dev=\"/dev/block/platfo"
+    },
+    {
+      "case": "aaf4b5b8f70b",
+      "count": 2,
+      "src": "appspawn",
+      "tgt": "default_param",
+      "cls": "parameter_service",
+      "perms": [
+        "set"
+      ],
+      "classification": "POTENTIAL_ESCALATION",
+      "review": "",
+      "verify": "",
+      "why": "命中 neverallow 红线：禁止自动放权（转人工）",
+      "sample": "# avc:  denied  { set } for parameter=web.engine.default pid=10001 uid=0 gid=0 scontext=u:r:appspawn:s0 tcontext=u:object_r:default_param:s0 tclass=parameter_service permissive=0"
+    }
+  ],
+  "noise_cases": 0,
+  "target_note": "落点提示：请按 OpenHarmony sepolicy 组织把该规则放到所属子系统的 system/ 或 vendor/ 目录（跨组件类型定义放 public/），本工具不自动写盘。",
+  "dedup_ratio": 1.07,
+  "readiness_note": "日志 144 条 → 去重后 134 个唯一案例（噪声/已允许 0）。其中 38 类可自动出最小权限补丁、96 类需人工决策（占唯一案例约 72%）。只建议，不写盘；真机上 enforcing 回归验证留待 L4。"
+}

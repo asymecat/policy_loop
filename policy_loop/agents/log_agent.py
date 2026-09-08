@@ -2,11 +2,8 @@
 
 from __future__ import annotations
 
-import hashlib
-import json
-
 from policy_loop.agents.base import AgentResult, BaseAgent
-from policy_loop.denial import parse as parse_denials
+from policy_loop.denial import fingerprint, parse as parse_denials
 
 
 class LogAgent(BaseAgent):
@@ -21,15 +18,8 @@ class LogAgent(BaseAgent):
                                summary="denial 无法解析", data={})
         rec = records[0].to_dict()
         case.record = rec
-
-        # fingerprint for clustering/dedup (subject/target/class/perms)
-        fp_src = hashlib.sha1(json.dumps({
-            "src": rec.get("source_domain"),
-            "tgt": rec.get("target_type"),
-            "cls": rec.get("tclass"),
-            "perms": rec.get("permissions"),
-            "ioctl": rec.get("ioctl_cmd"),
-        }, sort_keys=True).encode("utf-8")).hexdigest()[:12]
+        # canonical dedup key (shared with the batch converge tool)
+        fp_src = fingerprint(records[0])
 
         detail = (f"{rec.get('source_domain')} -> {rec.get('target_type')}"
                   f":{rec.get('tclass')} {{{','.join(rec.get('permissions') or [])}}}"
