@@ -1,0 +1,817 @@
+{
+  "policy_rules": 21790,
+  "pairs_total": 3367,
+  "by_kind": {
+    "trusted": 2147,
+    "attr_or_name_gap": 169,
+    "mispair": 990,
+    "service_gap": 7,
+    "unparseable": 42,
+    "partial_fix": 12
+  },
+  "by_kind_detail": {
+    "trusted": {
+      "pairs": 2147,
+      "denials": 3515
+    },
+    "attr_or_name_gap": {
+      "pairs": 169,
+      "denials": 196
+    },
+    "mispair": {
+      "pairs": 990,
+      "denials": 1378
+    },
+    "service_gap": {
+      "pairs": 7,
+      "denials": 7
+    },
+    "unparseable": {
+      "pairs": 42,
+      "denials": 44
+    },
+    "partial_fix": {
+      "pairs": 12,
+      "denials": 12
+    }
+  },
+  "denials_by_verdict": {
+    "matches": 3651,
+    "tgt_mismatch": 288,
+    "class_mismatch": 870,
+    "src_mismatch": 166,
+    "perm_disjoint": 111,
+    "service_gap": 10,
+    "unparseable": 44,
+    "partial": 12
+  },
+  "trusted_denials": 3522,
+  "kept_pairs": 2154,
+  "samples": {
+    "attr_or_name_gap": [
+      {
+        "file": "base/te/inputmethod_service.te",
+        "rule_line": 56,
+        "rule_raw": "allow inputmethod_service ui_service:binder { call transfer };",
+        "direction": "rule_first",
+        "denial": {
+          "raw": "# avc:  denied  { call } for  pid=492 comm=\"MmiClientRecvEv\" scontext=u:r:inputmethod_service:s0 tcontext=u:r:multimodalinput:s0 tclass=binder permissive=1",
+          "source_domain": "inputmethod_service",
+          "target_type": "multimodalinput",
+          "tclass": "binder",
+          "permissions": [
+            "call"
+          ],
+          "permissive": true,
+          "comm": "MmiClientRecvEv",
+          "pid": 492,
+          "path": null,
+          "name": null,
+          "ioctl_cmd": null,
+          "parameter": null,
+          "service": null
+        },
+        "note": "主体类权限相符，但目标类型不同（名称/文件粒度）"
+      },
+      {
+        "file": "ohos_policy/account/os_account/system/pinauth.te",
+        "rule_line": 14,
+        "rule_raw": "allow pinauth accountmgr:binder { call };",
+        "direction": "rule_first",
+        "denial": {
+          "raw": "# avc:  denied  { call } for  pid=858 comm=\"IPC_1_914\" scontext=u:r:pinauth:s0 tcontext=u:r:sh:s0 tclass=binder permissive=0",
+          "source_domain": "pinauth",
+          "target_type": "sh",
+          "tclass": "binder",
+          "permissions": [
+            "call"
+          ],
+          "permissive": false,
+          "comm": "IPC_1_914",
+          "pid": 858,
+          "path": null,
+          "name": null,
+          "ioctl_cmd": null,
+          "parameter": null,
+          "service": null
+        },
+        "note": "主体类权限相符，但目标类型不同（名称/文件粒度）"
+      },
+      {
+        "file": "ohos_policy/communication/bluetooth/system/bluetooth_service.te",
+        "rule_line": 27,
+        "rule_raw": "allow bluetooth_service data_bluetooth:file { getattr open read };",
+        "direction": "comment_first",
+        "denial": {
+          "raw": "#avc:  denied  { getattr } for pid=371 comm=\"threaded-ml\" path=\"/data/data/.pulse_dir/state\" dev=\"mmcblk0p7\" ino=1436167 scontext=u:r:bluetooth_service:s0 tcontext=u:object_r:data_data_pudata_bluetoothlse_dir:s0 tclass=file permissive=1",
+          "source_domain": "bluetooth_service",
+          "target_type": "data_data_pudata_bluetoothlse_dir",
+          "tclass": "file",
+          "permissions": [
+            "getattr"
+          ],
+          "permissive": true,
+          "comm": "threaded-ml",
+          "pid": 371,
+          "path": "/data/data/.pulse_dir/state",
+          "name": null,
+          "ioctl_cmd": null,
+          "parameter": null,
+          "service": null
+        },
+        "note": "主体类权限相符，但目标类型不同（名称/文件粒度）"
+      },
+      {
+        "file": "ohos_policy/communication/bluetooth/system/bluetooth_service.te",
+        "rule_line": 54,
+        "rule_raw": "allow bluetooth_service sa_telephony_tel_core_service:samgr_class { get };",
+        "direction": "rule_first",
+        "denial": {
+          "raw": "#avc:  denied  { get } for service=4005 pid=278 scontext=u:r:bluetooth_service:s0 tcontext=u:r:sa_foundation_tel_call_manager:s0 tclass=samgr_class permissive=1",
+          "source_domain": "bluetooth_service",
+          "target_type": "sa_foundation_tel_call_manager",
+          "tclass": "samgr_class",
+          "permissions": [
+            "get"
+          ],
+          "permissive": true,
+          "comm": null,
+          "pid": 278,
+          "path": null,
+          "name": null,
+          "ioctl_cmd": null,
+          "parameter": null,
+          "service": "4005"
+        },
+        "note": "主体类权限相符，但目标类型不同（名称/文件粒度）"
+      },
+      {
+        "file": "ohos_policy/communication/bluetooth/system/bluetooth_service.te",
+        "rule_line": 87,
+        "rule_raw": "allow bluetooth_service normal_hap_attr:binder { call transfer };",
+        "direction": "rule_first",
+        "denial": {
+          "raw": "#avc:  denied  { call } for  pid=380 comm=\"1IPC_450\" scontext=u:r:bluetooth_service:s0 tcontext=u:r:system_core_hap:s0 tclass=binder permissive=1",
+          "source_domain": "bluetooth_service",
+          "target_type": "system_core_hap",
+          "tclass": "binder",
+          "permissions": [
+            "call"
+          ],
+          "permissive": true,
+          "comm": "1IPC_450",
+          "pid": 380,
+          "path": null,
+          "name": null,
+          "ioctl_cmd": null,
+          "parameter": null,
+          "service": null
+        },
+        "note": "主体类权限相符，但目标类型不同（名称/文件粒度）"
+      },
+      {
+        "file": "ohos_policy/communication/wifi/system/wifi_hal_service.te",
+        "rule_line": 89,
+        "rule_raw": "allow wifi_hal_service hdf_device_manager:hdf_devmgr_class { get };",
+        "direction": "rule_first",
+        "denial": {
+          "raw": "#avc:  denied  { get } for service=wpa_interface_service pid=481 scontext=u:r:wifi_hal_service:s0 tcontext=u:object_r:hdf_wpa_interface_service:s0 tclass=hdf_devmgr_class permissive=0",
+          "source_domain": "wifi_hal_service",
+          "target_type": "hdf_wpa_interface_service",
+          "tclass": "hdf_devmgr_class",
+          "permissions": [
+            "get"
+          ],
+          "permissive": false,
+          "comm": null,
+          "pid": 481,
+          "path": null,
+          "name": null,
+          "ioctl_cmd": null,
+          "parameter": null,
+          "service": "wpa_interface_service"
+        },
+        "note": "主体类权限相符，但目标类型不同（名称/文件粒度）"
+      },
+      {
+        "file": "ohos_policy/communication/wifi/system/wifi_manager_service.te",
+        "rule_line": 96,
+        "rule_raw": "allow wifi_manager_service sa_telephony_tel_core_service:samgr_class { get };",
+        "direction": "rule_first",
+        "denial": {
+          "raw": "# avc:  denied  { get } for service=4007 pid=1728 scontext=u:r:wifi_manager_service:s0 tcontext=u:object_r:sa_telephony_tel_cellular_data:s0 tclass=samgr_class permissive=0",
+          "source_domain": "wifi_manager_service",
+          "target_type": "sa_telephony_tel_cellular_data",
+          "tclass": "samgr_class",
+          "permissions": [
+            "get"
+          ],
+          "permissive": false,
+          "comm": null,
+          "pid": 1728,
+          "path": null,
+          "name": null,
+          "ioctl_cmd": null,
+          "parameter": null,
+          "service": "4007"
+        },
+        "note": "主体类权限相符，但目标类型不同（名称/文件粒度）"
+      },
+      {
+        "file": "ohos_policy/communication/wifi/system/wifi_manager_service.te",
+        "rule_line": 102,
+        "rule_raw": "allow wifi_manager_service telephony_sa:binder { call transfer };",
+        "direction": "rule_first",
+        "denial": {
+          "raw": "# avc:  denied  { transfer } for  pid=2121 comm=\"IPC_2_2419\" scontext=u:r:wifi_manager_service:s0 tcontext=u:r:locationhub:s0 tclass=binder permissive=1",
+          "source_domain": "wifi_manager_service",
+          "target_type": "locationhub",
+          "tclass": "binder",
+          "permissions": [
+            "transfer"
+          ],
+          "permissive": true,
+          "comm": "IPC_2_2419",
+          "pid": 2121,
+          "path": null,
+          "name": null,
+          "ioctl_cmd": null,
+          "parameter": null,
+          "service": null
+        },
+        "note": "主体类权限相符，但目标类型不同（名称/文件粒度）"
+      }
+    ],
+    "mispair": [
+      {
+        "file": "base/te/inputmethod_service.te",
+        "rule_line": 62,
+        "rule_raw": "allow inputmethod_service multimodalinput:binder { call };",
+        "direction": "comment_first",
+        "denial": {
+          "raw": "# avc:  denied  { use } for  pid=248 comm=\"IPC_0_279\" path=\"socket:[27945]\" dev=\"sockfs\" ino=27945 scontext=u:r:inputmethod_service:s0 tcontext=u:r:multimodalinput:s0 tclass=fd permissive=1",
+          "source_domain": "inputmethod_service",
+          "target_type": "multimodalinput",
+          "tclass": "fd",
+          "permissions": [
+            "use"
+          ],
+          "permissive": true,
+          "comm": "IPC_0_279",
+          "pid": 248,
+          "path": "socket:[27945]",
+          "name": null,
+          "ioctl_cmd": null,
+          "parameter": null,
+          "service": null
+        },
+        "note": "存在规则无法修复的 denial（域/类/权限不符）"
+      },
+      {
+        "file": "base/te/nwebspawn.te",
+        "rule_line": 69,
+        "rule_raw": "allow nwebspawn vendor_lib_file:dir { mounton };",
+        "direction": "rule_first",
+        "denial": {
+          "raw": "# avc: denied { map } for pid=2795 comm=\"appspawn\" path=\"/system/bin/appspawn\" dev=\"mmcblk0p7\" ino=136 scontext=u:r:nwebspawn:s0 tcontext=u:object_r:appspawn_exec:s0 tclass=file permissive=0",
+          "source_domain": "nwebspawn",
+          "target_type": "appspawn_exec",
+          "tclass": "file",
+          "permissions": [
+            "map"
+          ],
+          "permissive": false,
+          "comm": "appspawn",
+          "pid": 2795,
+          "path": "/system/bin/appspawn",
+          "name": null,
+          "ioctl_cmd": null,
+          "parameter": null,
+          "service": null
+        },
+        "note": "存在规则无法修复的 denial（域/类/权限不符）"
+      },
+      {
+        "file": "ohos_policy/ability/ability_runtime/system/aa.te",
+        "rule_line": 59,
+        "rule_raw": "allow aa sa_foundation_dms:samgr_class { get };",
+        "direction": "rule_first",
+        "denial": {
+          "raw": "# avc:  denied  { transfer } scontext=u:r:aa:s0 tcontext=u:r:samgr:s0 tclass=binder permissive=0",
+          "source_domain": "aa",
+          "target_type": "samgr",
+          "tclass": "binder",
+          "permissions": [
+            "transfer"
+          ],
+          "permissive": false,
+          "comm": null,
+          "pid": null,
+          "path": null,
+          "name": null,
+          "ioctl_cmd": null,
+          "parameter": null,
+          "service": null
+        },
+        "note": "存在规则无法修复的 denial（域/类/权限不符）"
+      },
+      {
+        "file": "ohos_policy/ability/dmsfwk/public/distributed_isolate_hap.te",
+        "rule_line": 64,
+        "rule_raw": "allow distributed_isolate_hap sa_devattest_service:samgr_class { get };",
+        "direction": "rule_first",
+        "denial": {
+          "raw": "# avc: denied { dyntransition } for pid=9870, comm=\"/system/bin/appspawn\"  scontext=u:r:appspawn:s0 tcontext=u:r:distributed_isolate_hap:s0 tclass=process permissive=1",
+          "source_domain": "appspawn",
+          "target_type": "distributed_isolate_hap",
+          "tclass": "process",
+          "permissions": [
+            "dyntransition"
+          ],
+          "permissive": true,
+          "comm": "/system/bin/appspawn",
+          "pid": 9870,
+          "path": null,
+          "name": null,
+          "ioctl_cmd": null,
+          "parameter": null,
+          "service": null
+        },
+        "note": "存在规则无法修复的 denial（域/类/权限不符）"
+      },
+      {
+        "file": "ohos_policy/ability/dmsfwk/public/distributed_isolate_hap.te",
+        "rule_line": 68,
+        "rule_raw": "allow distributed_isolate_hap data_service_el1_file:dir { open read };",
+        "direction": "rule_first",
+        "denial": {
+          "raw": "# avc: denied { getattr } for pid=9682, comm=\"/system/bin/appspawn\"  path=\"/data/themes/a/app/flag\" dev=\"/dev/block/platform/fa500000.ufs/by-name/userdata\" ino=13448 scontext=u:r:distributed_isolate_hap:s0 tcontext=u:object_r:data_service_el1_file:s0 tclass=file permissive=1",
+          "source_domain": "distributed_isolate_hap",
+          "target_type": "data_service_el1_file",
+          "tclass": "file",
+          "permissions": [
+            "getattr"
+          ],
+          "permissive": true,
+          "comm": "/system/bin/appspawn",
+          "pid": 9682,
+          "path": "/data/themes/a/app/flag",
+          "name": null,
+          "ioctl_cmd": null,
+          "parameter": null,
+          "service": null
+        },
+        "note": "存在规则无法修复的 denial（域/类/权限不符）"
+      },
+      {
+        "file": "ohos_policy/ability/dmsfwk/public/distributed_isolate_hap.te",
+        "rule_line": 71,
+        "rule_raw": "allow distributed_isolate_hap data_service_el1_file:file { getattr };",
+        "direction": "rule_first",
+        "denial": {
+          "raw": "# avc: denied { open } for pid=9682, comm=\"/system/bin/appspawn\"  path=\"/dev/ashmem\" dev=\"\" ino=1 scontext=u:r:distributed_isolate_hap:s0 tcontext=u:object_r:dev_ashmem_file:s0 tclass=chr_file permissive=1",
+          "source_domain": "distributed_isolate_hap",
+          "target_type": "dev_ashmem_file",
+          "tclass": "chr_file",
+          "permissions": [
+            "open"
+          ],
+          "permissive": true,
+          "comm": "/system/bin/appspawn",
+          "pid": 9682,
+          "path": "/dev/ashmem",
+          "name": null,
+          "ioctl_cmd": null,
+          "parameter": null,
+          "service": null
+        },
+        "note": "存在规则无法修复的 denial（域/类/权限不符）"
+      },
+      {
+        "file": "ohos_policy/ability/dmsfwk/public/distributed_isolate_hap.te",
+        "rule_line": 74,
+        "rule_raw": "allow distributed_isolate_hap dev_ashmem_file:chr_file { open };",
+        "direction": "rule_first",
+        "denial": {
+          "raw": "# avc: denied { supervsable } for pid=9682, comm=\"/system/bin/appspawn\"  scontext=u:r:distributed_isolate_hap:s0 tcontext=u:r:distributed_isolate_hap:s0 tclass=hmcap permissive=1",
+          "source_domain": "distributed_isolate_hap",
+          "target_type": "distributed_isolate_hap",
+          "tclass": "hmcap",
+          "permissions": [
+            "supervsable"
+          ],
+          "permissive": true,
+          "comm": "/system/bin/appspawn",
+          "pid": 9682,
+          "path": null,
+          "name": null,
+          "ioctl_cmd": null,
+          "parameter": null,
+          "service": null
+        },
+        "note": "存在规则无法修复的 denial（域/类/权限不符）"
+      },
+      {
+        "file": "ohos_policy/ability/dmsfwk/public/distributed_isolate_hap.te",
+        "rule_line": 111,
+        "rule_raw": "allowxperm distributed_isolate_hap normal_hap_data_file:dir ioctl { 0xf546 };",
+        "direction": "rule_first",
+        "denial": {
+          "raw": "# avc: denied { append } for pid=9682, comm=\"/system/bin/appspawn\"  path=\"/data/storage/el2/base/files/hiappevent/app_event_20250331.log\" dev=\"/dev/block/platform/fa500000.ufs/by-name/userdata\" ino=62300 scontext=u:r:distributed_isolate_hap:s0 tcontext=u:object_r:normal_hap_data_file:s0 tclass=file permissive=1",
+          "source_domain": "distributed_isolate_hap",
+          "target_type": "normal_hap_data_file",
+          "tclass": "file",
+          "permissions": [
+            "append"
+          ],
+          "permissive": true,
+          "comm": "/system/bin/appspawn",
+          "pid": 9682,
+          "path": "/data/storage/el2/base/files/hiappevent/app_event_20250331.log",
+          "name": null,
+          "ioctl_cmd": null,
+          "parameter": null,
+          "service": null
+        },
+        "note": "存在规则无法修复的 denial（域/类/权限不符）"
+      }
+    ],
+    "service_gap": [
+      {
+        "file": "ohos_policy/ai/intelligent_voice_framework/system/intell_voice_service.te",
+        "rule_line": 15,
+        "rule_raw": "allow intell_voice_service hdf_intell_voice_trigger_manager_service:hdf_devmgr_class { get };",
+        "direction": "comment_first",
+        "denial": {
+          "raw": "# avc:  denied  { get } for service=intell_voice_trigger_manager_service pid=633 scontext=u:r:intell_voice_service:s0 tcontext=u:object_r:default_hdf_service:s0 tclass=hdf_devmgr_class permissive=1",
+          "source_domain": "intell_voice_service",
+          "target_type": "default_hdf_service",
+          "tclass": "hdf_devmgr_class",
+          "permissions": [
+            "get"
+          ],
+          "permissive": true,
+          "comm": null,
+          "pid": 633,
+          "path": null,
+          "name": null,
+          "ioctl_cmd": null,
+          "parameter": null,
+          "service": "intell_voice_trigger_manager_service"
+        },
+        "note": "目标为 default_* 占位，需 service->类型映射（M3）"
+      },
+      {
+        "file": "ohos_policy/ai/intelligent_voice_framework/system/intell_voice_service.te",
+        "rule_line": 21,
+        "rule_raw": "allow intell_voice_service sa_intell_voice_service:samgr_class { add };",
+        "direction": "comment_first",
+        "denial": {
+          "raw": "# avc:  denied  { add } for service=312 pid=633 scontext=u:r:intell_voice_service:s0 tcontext=u:object_r:default_service:s0 tclass=samgr_class permissive=1",
+          "source_domain": "intell_voice_service",
+          "target_type": "default_service",
+          "tclass": "samgr_class",
+          "permissions": [
+            "add"
+          ],
+          "permissive": true,
+          "comm": null,
+          "pid": 633,
+          "path": null,
+          "name": null,
+          "ioctl_cmd": null,
+          "parameter": null,
+          "service": "312"
+        },
+        "note": "目标为 default_* 占位，需 service->类型映射（M3）"
+      },
+      {
+        "file": "ohos_policy/ai/intelligent_voice_framework/system/normal_hap.te",
+        "rule_line": 15,
+        "rule_raw": "allow normal_hap_attr sa_intell_voice_service:samgr_class { get };",
+        "direction": "comment_first",
+        "denial": {
+          "raw": "# avc:  denied  { get } for service=312 pid=3548 scontext=u:r:normal_hap:s0 tcontext=u:object_r:default_service:s0 tclass=samgr_class permissive=0",
+          "source_domain": "normal_hap",
+          "target_type": "default_service",
+          "tclass": "samgr_class",
+          "permissions": [
+            "get"
+          ],
+          "permissive": false,
+          "comm": null,
+          "pid": 3548,
+          "path": null,
+          "name": null,
+          "ioctl_cmd": null,
+          "parameter": null,
+          "service": "312"
+        },
+        "note": "目标为 default_* 占位，需 service->类型映射（M3）"
+      },
+      {
+        "file": "ohos_policy/ai/intelligent_voice_framework/system/system_basic_hap.te",
+        "rule_line": 15,
+        "rule_raw": "allow system_basic_hap_attr sa_intell_voice_service:samgr_class { get };",
+        "direction": "comment_first",
+        "denial": {
+          "raw": "# avc:  denied  { get } for service=312 pid=2633 scontext=u:r:system_basic_hap:s0 tcontext=u:object_r:default_service:s0 tclass=samgr_class permissive=0",
+          "source_domain": "system_basic_hap",
+          "target_type": "default_service",
+          "tclass": "samgr_class",
+          "permissions": [
+            "get"
+          ],
+          "permissive": false,
+          "comm": null,
+          "pid": 2633,
+          "path": null,
+          "name": null,
+          "ioctl_cmd": null,
+          "parameter": null,
+          "service": "312"
+        },
+        "note": "目标为 default_* 占位，需 service->类型映射（M3）"
+      },
+      {
+        "file": "ohos_policy/drivers/peripheral/audio/vendor/audio_host.te",
+        "rule_line": 112,
+        "rule_raw": "allow audio_host hdf_intell_voice_trigger_manager_service:hdf_devmgr_class { add };",
+        "direction": "comment_first",
+        "denial": {
+          "raw": "# avc:  denied  { add } for service=intell_voice_trigger_manager_service pid=1070 scontext=u:r:audio_host:s0 tcontext=u:object_r:default_hdf_service:s0 tclass=hdf_devmgr_class permissive=1",
+          "source_domain": "audio_host",
+          "target_type": "default_hdf_service",
+          "tclass": "hdf_devmgr_class",
+          "permissions": [
+            "add"
+          ],
+          "permissive": true,
+          "comm": null,
+          "pid": 1070,
+          "path": null,
+          "name": null,
+          "ioctl_cmd": null,
+          "parameter": null,
+          "service": "intell_voice_trigger_manager_service"
+        },
+        "note": "目标为 default_* 占位，需 service->类型映射（M3）"
+      },
+      {
+        "file": "ohos_policy/drivers/peripheral/intelligent_voice/vendor/intell_voice_host.te",
+        "rule_line": 15,
+        "rule_raw": "allow intell_voice_host hdf_intell_voice_engine_manager_service:hdf_devmgr_class { add };",
+        "direction": "comment_first",
+        "denial": {
+          "raw": "# avc:  denied  { add } for service=intell_voice_engine_manager_service pid=1022 scontext=u:r:intell_voice_host:s0 tcontext=u:object_r:default_hdf_service:s0 tclass=hdf_devmgr_class permissive=1",
+          "source_domain": "intell_voice_host",
+          "target_type": "default_hdf_service",
+          "tclass": "hdf_devmgr_class",
+          "permissions": [
+            "add"
+          ],
+          "permissive": true,
+          "comm": null,
+          "pid": 1022,
+          "path": null,
+          "name": null,
+          "ioctl_cmd": null,
+          "parameter": null,
+          "service": "intell_voice_engine_manager_service"
+        },
+        "note": "目标为 default_* 占位，需 service->类型映射（M3）"
+      },
+      {
+        "file": "ohos_policy/systemabilitymgr/selection_fwk/system/selection_service.te",
+        "rule_line": 15,
+        "rule_raw": "allow selection_service sa_selection_service:samgr_class { add get };",
+        "direction": "comment_first",
+        "denial": {
+          "raw": "# avc:  denied  { add } for service=8500 sid=u:r:selection_service:s0 scontext=u:r:selection_service:s0 tcontext=u:object_r:default_service:s0 tclass=samgr_class permissive=1",
+          "source_domain": "selection_service",
+          "target_type": "default_service",
+          "tclass": "samgr_class",
+          "permissions": [
+            "add"
+          ],
+          "permissive": true,
+          "comm": null,
+          "pid": null,
+          "path": null,
+          "name": null,
+          "ioctl_cmd": null,
+          "parameter": null,
+          "service": "8500"
+        },
+        "note": "目标为 default_* 占位，需 service->类型映射（M3）"
+      }
+    ],
+    "partial_fix": [
+      {
+        "file": "ohos_policy/customization/enterprise_device_management/system/edm.te",
+        "rule_line": 81,
+        "rule_raw": "allow edm edm_sa:binder { call };",
+        "direction": "rule_first",
+        "denial": {
+          "raw": "# avc:  denied  { call transfer } for  pid=2193 comm=\"edm\" scontext=u:r:edm:s0 tcontext=u:r:samgr:s0 tclass=binder permissive=0",
+          "source_domain": "edm",
+          "target_type": "samgr",
+          "tclass": "binder",
+          "permissions": [
+            "call",
+            "transfer"
+          ],
+          "permissive": false,
+          "comm": "edm",
+          "pid": 2193,
+          "path": null,
+          "name": null,
+          "ioctl_cmd": null,
+          "parameter": null,
+          "service": null
+        },
+        "note": "规则仅覆盖部分请求权限"
+      },
+      {
+        "file": "ohos_policy/distributedschedule/distributedsche/system/distributedsche.te",
+        "rule_line": 100,
+        "rule_raw": "allow distributedsche dev_kmsg_file:chr_file { write };",
+        "direction": "rule_first",
+        "denial": {
+          "raw": "#avc: denied { read write } for pid=2684, comm=\"/system/bin/sa_main\"  path=\"/dev/tty0\" dev=\"\" ino=44 scontext=u:r:distributedsche:s0 tcontext=u:object_r:tty_device:s0 tclass=chr_file permissive=1",
+          "source_domain": "distributedsche",
+          "target_type": "tty_device",
+          "tclass": "chr_file",
+          "permissions": [
+            "read",
+            "write"
+          ],
+          "permissive": true,
+          "comm": "/system/bin/sa_main",
+          "pid": 2684,
+          "path": "/dev/tty0",
+          "name": null,
+          "ioctl_cmd": null,
+          "parameter": null,
+          "service": null
+        },
+        "note": "规则仅覆盖部分请求权限"
+      },
+      {
+        "file": "ohos_policy/filemanagement/storage_service/system/storage_daemon.te",
+        "rule_line": 136,
+        "rule_raw": "allow storage_daemon dev_unix_socket:dir { search };",
+        "direction": "rule_first",
+        "denial": {
+          "raw": "#avc:  denied  { write search } for  pid=241 comm=\"storage_daemon\" name=\"block\" dev=\"tmpfs\" ino=7 scontext=u:r:storage_daemon:s0 tcontext=u:object_r:dev_block_file:s0 tclass=dir permissive=1",
+          "source_domain": "storage_daemon",
+          "target_type": "dev_block_file",
+          "tclass": "dir",
+          "permissions": [
+            "write",
+            "search"
+          ],
+          "permissive": true,
+          "comm": "storage_daemon",
+          "pid": 241,
+          "path": null,
+          "name": "block",
+          "ioctl_cmd": null,
+          "parameter": null,
+          "service": null
+        },
+        "note": "规则仅覆盖部分请求权限"
+      },
+      {
+        "file": "ohos_policy/hiviewdfx/hiview/system/hiview.te",
+        "rule_line": 126,
+        "rule_raw": "allow hdcd dev_asanlog_file:file { write create read_file_perms };",
+        "direction": "comment_first",
+        "denial": {
+          "raw": "#avc:  denied  { write create open } for  pid=1358 comm=\"hdcd\" path=\"/dev/asanlog/asan.log.3273\" dev=\"tmpfs\" ino=727 scontext=u:r:hdcd:s0 tcontext=u:object_r:dev_asanlog_file:s0 tclass=file permissive=1",
+          "source_domain": "hdcd",
+          "target_type": "dev_asanlog_file",
+          "tclass": "file",
+          "permissions": [
+            "write",
+            "create",
+            "open"
+          ],
+          "permissive": true,
+          "comm": "hdcd",
+          "pid": 1358,
+          "path": "/dev/asanlog/asan.log.3273",
+          "name": null,
+          "ioctl_cmd": null,
+          "parameter": null,
+          "service": null
+        },
+        "note": "规则仅覆盖部分请求权限"
+      },
+      {
+        "file": "ohos_policy/msdp/devicestatus/system/msdp_sa.te",
+        "rule_line": 243,
+        "rule_raw": "allow msdp_sa dev_kmsg_file:chr_file { write };",
+        "direction": "rule_first",
+        "denial": {
+          "raw": "#avc: denied { read write } for pid=1087, comm=\"/system/bin/sa_main\"  path=\"/dev/tty0\" dev=\"\" ino=50 scontext=u:r:msdp_sa:s0 tcontext=u:object_r:tty_device:s0 tclass=chr_file permissive=0",
+          "source_domain": "msdp_sa",
+          "target_type": "tty_device",
+          "tclass": "chr_file",
+          "permissions": [
+            "read",
+            "write"
+          ],
+          "permissive": false,
+          "comm": "/system/bin/sa_main",
+          "pid": 1087,
+          "path": "/dev/tty0",
+          "name": null,
+          "ioctl_cmd": null,
+          "parameter": null,
+          "service": null
+        },
+        "note": "规则仅覆盖部分请求权限"
+      },
+      {
+        "file": "ohos_policy/powermgr/power_manager/public/powermgr.te",
+        "rule_line": 102,
+        "rule_raw": "allow powermgr data_service_el1_file:dir { add_name create remove_name search open write getattr rmdir setattr };",
+        "direction": "comment_first",
+        "denial": {
+          "raw": "# avc:  denied  { create getattr map read open } for  pid=1216 scontext=u:r:powermgr:s0 tcontext=u:r:data_service_el1_file:s0 tclass=dir permissive=1",
+          "source_domain": "powermgr",
+          "target_type": "data_service_el1_file",
+          "tclass": "dir",
+          "permissions": [
+            "create",
+            "getattr",
+            "map",
+            "read",
+            "open"
+          ],
+          "permissive": true,
+          "comm": null,
+          "pid": 1216,
+          "path": null,
+          "name": null,
+          "ioctl_cmd": null,
+          "parameter": null,
+          "service": null
+        },
+        "note": "规则仅覆盖部分请求权限"
+      },
+      {
+        "file": "ohos_policy/powermgr/power_manager/public/powermgr.te",
+        "rule_line": 175,
+        "rule_raw": "allow powermgr hiviewdfx_hiview_param:file { open read };",
+        "direction": "rule_first",
+        "denial": {
+          "raw": "# avc:  denied  { read write } for  pid=1216 scontext=u:r:powermgr:s0 tcontext=u:r:hmdfs:s0 tclass=file permissive=1",
+          "source_domain": "powermgr",
+          "target_type": "hmdfs",
+          "tclass": "file",
+          "permissions": [
+            "read",
+            "write"
+          ],
+          "permissive": true,
+          "comm": null,
+          "pid": 1216,
+          "path": null,
+          "name": null,
+          "ioctl_cmd": null,
+          "parameter": null,
+          "service": null
+        },
+        "note": "规则仅覆盖部分请求权限"
+      },
+      {
+        "file": "ohos_policy/powermgr/power_manager/public/powermgr.te",
+        "rule_line": 178,
+        "rule_raw": "allow powermgr hmdfs:file { read write };",
+        "direction": "rule_first",
+        "denial": {
+          "raw": "# avc:  denied  { map open read } for  pid=1216 scontext=u:r:powermgr:s0 tcontext=u:object_r:hw_sc_build_os_param:s0 tclass=file permissive=1",
+          "source_domain": "powermgr",
+          "target_type": "hw_sc_build_os_param",
+          "tclass": "file",
+          "permissions": [
+            "map",
+            "open",
+            "read"
+          ],
+          "permissive": true,
+          "comm": null,
+          "pid": 1216,
+          "path": null,
+          "name": null,
+          "ioctl_cmd": null,
+          "parameter": null,
+          "service": null
+        },
+        "note": "规则仅覆盖部分请求权限"
+      }
+    ]
+  }
+}
