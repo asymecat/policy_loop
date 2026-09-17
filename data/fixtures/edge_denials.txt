@@ -1,0 +1,102 @@
+# Synthetic AVC edge cases (corpus D).
+#
+# Every line here is a shape the real corpus does not reliably exercise, and
+# each was chosen because some plausible implementation gets it wrong. Parsed by
+# both the Python engine and the device tool; tests/diff_device.py requires the
+# two to agree byte for byte on all of it.
+#
+# --- standard line, the baseline everything else varies from ---
+audit: type=1400 audit(1700000000.123:456): avc:  denied  { read } for  pid=1234 comm="media_service" name="foo" dev="dm-3" ino=123 scontext=u:r:media_service:s0 tcontext=u:object_r:dev_camera_file:s0 tclass=chr_file permissive=0
+
+# --- kernel printk prefix and a bare, unprefixed line ---
+<5>[ 1234.567890] audit: type=1400 audit(1700000000.200:457): avc: denied { write open } for pid=99 comm="camera_host" scontext=u:r:camera_host:s0 tcontext=u:object_r:dev_camera_file:s0 tclass=chr_file permissive=1
+avc: denied { ioctl } for pid=5 comm="x" scontext=u:r:a:s0 tcontext=u:object_r:b:s0 tclass=chr_file ioctlcmd=0x641f permissive=0
+
+# --- marker spacing and case: all of these ARE denials ---
+avc:denied { read } for scontext=u:r:a:s0 tcontext=u:object_r:b:s0 tclass=file
+AVC : DENIED { read } for scontext=u:r:a:s0 tcontext=u:object_r:b:s0 tclass=file
+[hmseh:392] avc:   denied   { read } for scontext=u:r:a:s0 tcontext=u:object_r:b:s0 tclass=file
+
+# --- 'avcx' is NOT the marker (the \b plus \s* must both fail) ---
+avcx: denied { read } for scontext=u:r:should_not_parse:s0 tcontext=u:object_r:b:s0 tclass=file
+xavc: denied { read } for scontext=u:r:should_not_parse:s0 tcontext=u:object_r:b:s0 tclass=file
+
+# --- a 'denied' with no brace must not be read as a permission set ---
+audit: avc: denied for pid=1 comm="y" scontext=u:r:a:s0 tcontext=u:object_r:b:s0 tclass=file
+audit: avc: denied read write scontext=u:r:a:s0 tcontext=u:object_r:b:s0 tclass=file
+
+# --- permission-set shapes ---
+avc: denied {  } for scontext=u:r:a:s0 tcontext=u:object_r:b:s0 tclass=file
+avc: denied {} for scontext=u:r:a:s0 tcontext=u:object_r:b:s0 tclass=file
+avc: denied {   read    write   } for scontext=u:r:a:s0 tcontext=u:object_r:b:s0 tclass=file
+avc: denied { read write } for scontext=u:r:a:s0 tcontext=u:object_r:b:s0 tclass=file
+avc: denied { ioctl read } for scontext=u:r:a:s0 tcontext=u:object_r:b:s0 tclass=file ioctlcmd=0x7003
+
+# --- OpenHarmony-specific classes ---
+avc: denied { read } for pid=7 comm="sa_main" scontext=u:r:sa_main:s0 tcontext=u:object_r:default_service:s0 tclass=samgr_class service=1234 permissive=0
+avc: denied { read } for pid=7 comm="sa_main" scontext=u:r:sa_main:s0 tcontext=u:object_r:default_service:s0 tclass=samgr_class service=media_service permissive=0
+avc: denied { write } for pid=8 comm="hdf_devmgr" scontext=u:r:hdf_devmgr:s0 tcontext=u:object_r:default_hdf_service:s0 tclass=hdf_devmgr_class
+avc: denied { read } for pid=9 comm="param_watcher" scontext=u:r:param_watcher:s0 tcontext=u:object_r:default_param:s0 tclass=parameter_service parameter=persist.foo.bar permissive=1
+
+# --- missing / empty fields ---
+avc: denied { read } for pid=1 comm="no_tcontext" scontext=u:r:a:s0 tclass=file
+avc: denied { read } for pid=1 comm="empty_tcontext" scontext=u:r:a:s0 tcontext= tclass=file
+avc: denied { read } for pid=1 comm="quoted_empty_tcontext" scontext=u:r:a:s0 tcontext="" tclass=file
+avc: denied { read } for pid=1 comm="quoted_empty_scontext" scontext="" tcontext=u:object_r:b:s0 tclass=file
+avc: denied { read } for pid=1 comm="short_scontext" scontext=foo tcontext=u:object_r:b:s0 tclass=file
+avc: denied { read } for pid=1 comm="no_tclass" scontext=u:r:a:s0 tcontext=u:object_r:b:s0
+avc: denied { read } for pid=1 comm="empty_tclass" scontext=u:r:a:s0 tcontext=u:object_r:b:s0 tclass=""
+
+# --- MLS in tcontext, and a context with many colons ---
+avc: denied { read } for pid=1 comm="z" scontext=u:r:a:s0:c1.c2 tcontext=u:object_r:b:s0:c3.c4 tclass=file
+avc: denied { read } for pid=1 comm="z" scontext=u:r:a:s0 tcontext=u:object_r:default_service:s0:c0.c1023 tclass=samgr_class
+
+# --- permissive tri-state: 1 / 0 / other / absent ---
+avc: denied { read } for pid=1 comm="p1" scontext=u:r:a:s0 tcontext=u:object_r:b:s0 tclass=file permissive=1
+avc: denied { read } for pid=1 comm="p0" scontext=u:r:a:s0 tcontext=u:object_r:b:s0 tclass=file permissive=0
+avc: denied { read } for pid=1 comm="p2" scontext=u:r:a:s0 tcontext=u:object_r:b:s0 tclass=file permissive=2
+avc: denied { read } for pid=1 comm="pnone" scontext=u:r:a:s0 tcontext=u:object_r:b:s0 tclass=file
+
+# --- quoted values, spacing, and commas ---
+avc: denied { read } for pid=42 comm="a b c" path="/data/local/tmp/a b.txt" scontext=u:r:a:s0 tcontext=u:object_r:b:s0 tclass=file
+avc: denied { read } for pid=42 comm="" scontext=u:r:a:s0 tcontext=u:object_r:b:s0 tclass=file
+avc: denied { read } for pid=42 comm=unterminated scontext=u:r:a:s0 tcontext=u:object_r:b:s0 tclass=file
+avc:  denied  { read }  for  pid = 77  comm = "spaced"  scontext = u:r:a:s0  tcontext = u:object_r:b:s0  tclass = file
+
+# --- pid shapes ---
+avc: denied { read } for pid=007 comm="leading_zero" scontext=u:r:a:s0 tcontext=u:object_r:b:s0 tclass=file
+avc: denied { read } for pid=abc comm="not_a_number" scontext=u:r:a:s0 tcontext=u:object_r:b:s0 tclass=file
+avc: denied { read } for pid= comm="empty_pid" scontext=u:r:a:s0 tcontext=u:object_r:b:s0 tclass=file
+
+# --- keys appearing mid-token (the upstream regex has no \b before the key) ---
+avc: denied { read } for xpid=5 xcomm="mid" scontext=u:r:a:s0 tcontext=u:object_r:b:s0 tclass=file
+
+# --- repeated keys: the first occurrence wins ---
+avc: denied { read } for pid=1 comm="first" comm="second" scontext=u:r:a:s0 tcontext=u:object_r:b:s0 tclass=file
+
+# --- a '# ' comment line inside an event block is dropped ---
+audit: type=1400 audit(1700000000.300:458): avc: denied { read } for pid=3 comm="with_comment" scontext=u:r:a:s0
+# this comment line carries no marker and must be dropped
+tcontext=u:object_r:b:s0 tclass=file permissive=0
+
+# --- a '# ' line that DOES carry a marker is kept (upstream .te fixtures) ---
+# avc: denied { write } for pid=4 comm="commented_denial" scontext=u:r:a:s0 tcontext=u:object_r:b:s0 tclass=file permissive=1
+
+# --- multi-line event: the marker and its fields are split across lines ---
+audit: type=1400 audit(1700000000.400:459): avc: denied { read ioctl } for pid=11 comm="wrapped"
+scontext=u:r:wrapped:s0 tcontext=u:object_r:b:s0 tclass=chr_file ioctlcmd=0x1234 permissive=0
+
+# --- backslash-newline continuation joins the lines before parsing ---
+audit: type=1400 audit(1700000000.500:460): avc: denied { read } for pid=12 \
+comm="continued" scontext=u:r:continued:s0 tcontext=u:object_r:b:s0 tclass=file permissive=0
+
+# --- two events whose markers share one line ---
+# Both markers snap to the same line start, so the first opens a zero-length
+# block (dropped) and the second opens a block covering the rest of the file.
+# The surviving record is therefore one where the FIRST marker's fields win:
+# its scontext/tclass/perms are the ones a reader would attribute to it, and
+# the second marker's fields are either ignored (key already seen) or contribute
+# only what the first did not have. Net effect: one record, first marker's data.
+# Reproduce the quirk rather than "fix" it -- the host engine behaves this way
+# and the device must agree with it.
+avc: denied { read } for scontext=u:r:first_on_line:s0 tcontext=u:object_r:b:s0 tclass=file avc: denied { write } for scontext=u:r:second_on_line:s0 tcontext=u:object_r:b:s0 tclass=file

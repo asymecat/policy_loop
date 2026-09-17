@@ -1,0 +1,44 @@
+# Query differential: host Python engine vs. on-device C++ --query
+
+Device      : DAYU200 (RK3568), OpenHarmony 6.1 Release
+Binary      : /system/bin/denial_check  (installed via install_enable = true)
+Date        : 2026-09-14
+
+## Inputs (hashes prove both sides saw the same bytes)
+
+  queries.tsv   1303790 B  sha256 2244b3b6de24fd9f875f98e1a4f521ffa7eb7575bb328f9ca0ae6d1f04d0806b
+  ohos-rk3568.pli 1239637 B sha256 8c5529d900a205b1159b2356ee55a60f2102a5eabad704d37ac257ca2d2e8ee4
+
+Query set: 27912 queries, generated deterministically by
+tests/diff_device.py::gen_queries(index, corpus, random_n=2000), seed 20260910.
+Corpus: data/corpus/real_denials.txt (5161 records).
+
+## Result
+
+  host  expected  sha256 9076f29327457e5a21b1b24c88d325d46f127b66d0fa2f98295ddc14172f9b66
+  device actual   sha256 9076f29327457e5a21b1b24c88d325d46f127b66d0fa2f98295ddc14172f9b66
+
+  27912 lines / 2984884 bytes on both sides. Byte identical.
+
+The digest covers every field the query path emits -- allowed, granted[],
+ioctl_allowed, ioctl_reason, neverallow -- so this is one comparison over all
+five, not five separate claims. A byte-identical digest on a 2.98 MB body is a
+stronger statement than a per-field counter would be.
+
+## Cost
+
+  device  71.25 s real for 27912 queries (2.55 ms/query, incl. 297 ms index load)
+  host    40.85 s for the same set               (1.46 ms/query)
+
+The device runs on an RK3568 (4x Cortex-A55) against a desktop x86 -- 1.7x the
+per-query cost on that hardware is the expected order, not a regression. What
+matters for the tool's purpose is that the query path needs no host PC at all.
+
+## Reproduce
+
+  # host
+  python3 /tmp/gen_queries.py            # -> /tmp/queries.tsv + expected digest
+  # device
+  hdc file send /tmp/queries.tsv /data/local/tmp/queries.tsv
+  hdc shell 'denial_check --index /data/local/tmp/ohos-rk3568.pli \
+             --query /data/local/tmp/queries.tsv | sha256sum'

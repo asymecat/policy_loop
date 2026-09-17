@@ -1,0 +1,2 @@
+source=cmd(cmd:hilog -x -t kmsg)  lines=1837  suppressed≈107  (sampled input; unique_cases is the robust metric)
+actual denials may be 620 + 107
