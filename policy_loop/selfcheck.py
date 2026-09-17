@@ -80,7 +80,13 @@ def run() -> list:
     attr_ok, _, _ = idx.has_access(
         "normal_hap", "sys_prod_file", "file", frozenset({"read"})
     )
-    nev = idx.neverallow_rules("normal_hap", "dev_bbox", "chr_file")
+    nev = idx.neverallow_rules("normal_hap", "dev_bbox", "chr_file",
+                               frozenset({"read"}))
+    # The paired negative is the point: `neverallow ... { read }` says nothing
+    # about ioctl, so a request for ioctl on the same triple must NOT report a
+    # red line. Dropping this half is how a permission-blind match looks correct.
+    nev_other_perm = idx.neverallow_rules("normal_hap", "dev_bbox", "chr_file",
+                                          frozenset({"ioctl"}))
 
     results.append((ok_ro, "policy: read allowed = True"))
     results.append((not ioctl_ok,
@@ -89,7 +95,9 @@ def run() -> list:
     results.append((attr_ok,
                     "policy: attribute expansion "
                     "(normal_hap via hap_domain) = True"))
-    results.append((len(nev) == 1, "neverallow: normal_hap -> dev_bbox blocked"))
+    results.append((len(nev) == 1 and not nev_other_perm,
+                    "neverallow: normal_hap -> dev_bbox blocked for {read}, "
+                    "and only for {read}"))
 
     # 5. data fixtures present (optional)
     root = Path(__file__).resolve().parents[1]
