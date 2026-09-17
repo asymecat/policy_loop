@@ -1,0 +1,84 @@
+diff --git a/BUILD.gn b/BUILD.gn
+index 4cce79f40..d6b7c7e78 100644
+--- a/BUILD.gn
++++ b/BUILD.gn
+@@ -445,6 +445,71 @@ ohos_executable("service_check") {
+   subsystem_name = "security"
+ }
+ 
++# ---------------------------------------------------------------------------
++# denial_check -- converge `avc: denied` events against the policy index on
++# device (see framework/tools/denial_check/test.cpp).
++#
++# The core is a static library, not part of libservice_checker or any other
++# library that ships: it must not pull in hilog or libselinux, because its whole
++# point is to run under any domain that can read its input and to report on
++# stdout rather than through hilog. Keeping it separate is what makes that
++# dependency rule checkable -- the target has no external_deps at all, so the
++# only things it can link against are libc/libc++/libm.
++#
++# -std=c++17 is stated rather than inherited: this part is built by several
++# product configurations with different defaults, and the core uses
++# std::string_view-adjacent library features plus `if` initializers that a
++# laxer default would silently stop compiling.
++# ---------------------------------------------------------------------------
++ohos_static_library("libdenial_check_core") {
++  branch_protector_ret = "pac_ret"
++  output_name = "libdenial_check_core"
++  sources = [
++    "framework/policycoreutils/src/pl_avc_parser.cpp",
++    "framework/policycoreutils/src/pl_converge.cpp",
++    "framework/policycoreutils/src/pl_index.cpp",
++    "framework/policycoreutils/src/pl_log_source.cpp",
++    "framework/policycoreutils/src/pl_report.cpp",
++    "framework/policycoreutils/src/pl_sha1.cpp",
++  ]
++  include_dirs = [ "interfaces/policycoreutils/include" ]
++  # Propagated to dependents: the tool includes the same headers, and a `deps`
++  # edge alone does not carry include_dirs in GN.
++  public_configs = [ ":selinux_core_config" ]
++  cflags = [
++    "-D_GNU_SOURCE",
++    "-Wall",
++    "-Werror",
++    "-std=c++17",
++  ]
++  license_file = "LICENSE"
++  part_name = "selinux_adapter"
++  subsystem_name = "security"
++}
++
++ohos_executable("denial_check") {
++  branch_protector_ret = "pac_ret"
++  # Installed into the system image (/system/bin/denial_check): auditing a
++  # device's own policy is platform capability, not something that should
++  # require a host PC and a serial cable to exist on the device at all.
++  #
++  # The /data push recipe in the README stays the supported path for *updating*
++  # the tool: a security review must be able to run a newer build without
++  # flashing the device. Image copy = baseline capability, pushed copy = update.
++  install_enable = true
++  sources = [ "framework/tools/denial_check/test.cpp" ]
++  deps = [ ":libdenial_check_core" ]
++  cflags = [
++    "-D_GNU_SOURCE",
++    "-Wall",
++    "-Werror",
++    "-std=c++17",
++  ]
++  license_file = "LICENSE"
++  part_name = "selinux_adapter"
++  subsystem_name = "security"
++}
++
+ debug_version = "disable"
+ updater_version = "disable"
+ 
+@@ -1563,6 +1628,7 @@ group("selinux_group") {
+       ":app_allow_cfg",
+       ":build_updater_sepolicy",
+       ":config",
++      ":denial_check",
+       ":file_contexts",
+       ":file_contexts_updater",
+       ":filecontexts_toolchain",
