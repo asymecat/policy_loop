@@ -21,11 +21,17 @@ python -m policy_loop.converge \
 1. **聚类去重**：`denial.fingerprint` 按逻辑访问 `(src,tgt,class,perms,ioctl)` 做键
    （`perms` 排序无关），pid/comm/path 等噪音不参与 → 几千条塌缩成唯一案例。
 2. **快路判定**：每唯一案例先做廉价策略查询（`has_access`/`neverallow`/`ioctl`）：
-   - 撞 neverallow → 直接转人工（拒绝自动放权）；
+   - 撞 neverallow → 直接转人工（拒绝自动放权）。**neverallow 按权限匹配**：
+     `neverallow A B:file execmod` 只禁止 `execmod`，对同一三元组上的 `read`
+     一个字都没说；按三元组盲匹配会把同一条红线报给每一个请求（见下「权限盲」节）；
    - 已允许 + `permissive=1` → 噪声；
    - 已允许 + enforcing → 域/标签问题转人工；
    - 其余才进入完整 6-Agent 闭环（Log→Policy→Security→Repair→Review→Verify）。
    这一层把「逐条跑闭环」的成本降到只在真缺口上花。
+   查询前先做 **service 占位符解析**（M3，见下节）：日志里的 `default_service` /
+   `default_hdf_service` 是占位符，直接查它等于在问「策略允不允许访问占位符」——
+   永远不允许，于是每一条都被读成真缺口。解析成 `service=` 指名的具体
+   `sa_*`/`hdf_*` 之后再查，才分得清「早已允许」和「真缺规则」。
 3. **守门**：闭环判 AUTO 的补丁必须能作为最小修复落点验证，否则降级人工
    （见下）。通过后归入 `auto_repairable`。
 4. **产出**：去重比 / 各根因分布 / 去重后最小补丁集合（含覆盖案例与条数）/
@@ -34,28 +40,207 @@ python -m policy_loop.converge \
 ## 补丁守门（为什么自动项可信）
 
 闭环自身的 Review/Verify 只做「应用后能消除 denial、无回归」的名字级匹配，
-无法发现「规则本身引用的是不存在的类型/类」。converge 据此补了五道守门，
+无法发现「规则本身引用的是不存在的类型/类」。converge 据此补了六道守门，
 命中的一律从 AUTO 降级为 needs_human：
 
 | # | 情形 | 示例 | 处置 |
 |---|---|---|---|
 | 1 | 目标被解析成 MLS 级别 | `tcontext=u:charger_exec:s0`（丢 `object_r`）→ tgt=`s0` | 人工复核上下文 |
-| 2 | 目标是 `default_*` 占位符 | `allow X default_service:samgr_class get`（真实修复落到 `sa_*`/`hdf_device_manager`） | 交 M3 service 映射 |
+| 2 | 目标是 `default_*` 占位符 | `allow X default_service:samgr_class get`（真实修复落到 `sa_*`/`hdf_device_manager`） | 解析不出就转人工（M3） |
 | 3 | 主体/目标不在策略语料 | `src=file`、`tgt=sa_1401_service`（设备新增域 / 数字 service 标签） | 补丁无法落点验证 |
 | 4 | 对象类不存在 | 手写日志笔误 `samar_class`/`samger_class`/`dit` | 补丁无法编译 |
-| 5 | 空权限补丁 | ioctl-only 缺口经 allowxperm 语义后得 `allow A B:c { };` | 转人工给 allowxperm |
+| 5 | 权限位含非权限名 | `denied { 0x5413 }`（ioctl 命令号被写进权限位，`ioctl` 反被写在括号外）、`{ semap open readt }` | 补丁编译不过；且要告诉人**日志本身是坏的** |
+| 6 | 空权限补丁 | ioctl-only 缺口经 allowxperm 语义后得 `allow A B:c { };` | 转人工给 allowxperm |
 
 > 这些大多来自**上游 .te 里手维护的 denial 注释**（会缺 `object_r`、拼错类名、
 > 引用 CIL 生成/数字 service 类型），而非真实内核日志。真机 permissive dump 干净得多，
 > 守门主要是挡住"照抄可疑注释"这类误修复。
+>
+> 守门 5 值得单独说一句：**修法上刻意不改 parser**。把 `denied { 0x5413 }` 猜成
+> 「ioctl 命令号 0x5413」在语义上多半猜对，但 parser 是全项目「宿主↔设备逐字节
+> 一致」的地基（parse 门禁 5161 条），为语料里 2 行手抄笔误加模糊启发式，等于把
+> parser 的契约从「读它写的」降级成「猜它想写的」；而守门 5 除了拦住废补丁，还能
+> 把「你这行日志是坏的」这个真问题如实报给人。语料里命中 3 条（`real_denials.txt`
+> 的 `:3184` / `:3350` / `:3351`）。
+
+## M3：service 占位符解析（为什么解析了，守门还留着）
+
+走 service manager 的 denial 在日志里记的是**占位符** target，而真实规则必须落在
+具体的 `sa_*` / `hdf_*` 类型上。`policy/index.py::resolve_logical_target` 做这个映射，
+只有两条**声明校验过**的规则：
+
+| 情形 | 映射到 | 依据 |
+|---|---|---|
+| 具名 `service=` + `samgr_class` | `sa_<service>` | OH 以服务名命名 SA 类型 |
+| 具名 `service=` + `hdf_devmgr_class` | `hdf_<service>` | 同上 |
+| 数字 `service=` + samgr `add` | `sa_<src>` | SA 启动时以自身 id 向 samgr 注册自己 |
+| 数字 `service=` + `get` | **不解析** | 远端 SA 需要外部 samgr id→name 注册表 |
+| 候选类型未被策略声明 | **不解析** | 绝不臆造 target |
+
+**关键设计：解析结果只喂给那三次查询，不喂给补丁文本，也不喂给五道守门。**
+
+这不是保守，是两条硬约束：
+
+1. **补丁与验证必须自洽。** 闭环的 Review 复查 neverallow、Verify 重新查询，读的都是
+   `rec.target_type` 原始字段，而补丁文本用的是 `v.tgt`。若把解析结果写进 `v.tgt`，
+   补丁会写 `sa_*`、Verify 却拿 `default_service` 重查 → **必然 FAILED**。
+2. **守门 2 是真正在挡事的。** 解析得出的类型若仍然不许访问，修复路径写出的补丁是
+   `allow X default_service:samgr_class { … };`——它**能通过评审、也能通过 Verify**
+   （Verify 查的正是占位符）。此时唯一拦住它的是守门 2。所以守门读原始字段，
+   不能改成读解析结果。
+
+### 实测（真实语料 13 条占位符 denial）
+
+6 条可解析，7 条不可解析（3 条数字 `get`、2 条数字 + `hdf_devmgr_class`、1 条候选未声明、
+1 条 `default_service` 配 `hdf_devmgr_class` 类不匹配）。解析后，**6 个簇**由「人工」
+变成「噪声」——解析成具体类型后查询 `allowed=True`，策略其实早就允许：
+
+| 簇 | `allowed`（解析后） | 类别变化 |
+|---|---|---|
+| `intell_voice_service -> default_hdf_service:hdf_devmgr_class get` | True | 人工 → **噪声** |
+| `intell_voice_service -> default_service:samgr_class add` | True | 人工 → **噪声** |
+| `audio_host -> default_hdf_service:hdf_devmgr_class add` | True | 人工 → **噪声** |
+| `intell_voice_host -> default_hdf_service:hdf_devmgr_class add` | True | 人工 → **噪声** |
+| `wifi_host -> default_hdf_service:hdf_devmgr_class add` | True | 人工 → **噪声** |
+| `selection_service -> default_service:samgr_class add` | True | 人工 → **噪声** |
+
+> **订正（2026-09-17）。** 本节原先写的是「4 个簇变噪声」，并称另 2 条
+> 「在具体类型上仍然命中 neverallow → 依旧转人工，**这是正确行为**」。那个说法
+> **是错的**，错因是当时 neverallow 按三元组盲匹配（见下节）：那 2 条
+> （`intell_voice_service -> default_service:samgr_class add`、
+> `selection_service -> default_service:samgr_class add`）解析成 `sa_*` 后撞上的
+> 红线，命名的权限根本不是这次请求的权限，是**假红线**；修掉权限盲之后两条都露出
+> `allowed=True`，本该是噪声。所以真实收益是 **6 个假告警**被消掉，不是 4 个；
+> 当时"另 2 条依旧转人工是正确的"这句话，恰好把 bug 的症状当成了预期的行为记了下来。
+
+### 「权限盲」：neverallow 曾按三元组匹配（2026-09-17 修复）
+
+`neverallow` 是**编译期的、逐权限的**断言：`neverallow A B:file execmod` 只禁止
+`execmod`，对同一三元组上的 `read` 没有任何约束。但 `neverallow_rules()` 原先只按
+`(src, tgt, cls)` 取规则，于是**同一条红线被报给了该三元组上的每一个请求**。
+
+在真实语料上量出的偏差（规则索引 21790）：
+
+| 口径 | 命中数 |
+|---|---|
+| 权限盲（修复前） | 2700 |
+| 权限感知（修复后） | **54** |
+
+即 **98% 的"红线"是假的**，其中 2657 条的真实情况是「策略本来就允许这个访问」。
+更糟的是快路判定：`_quick` 一见到 neverallow 命中就立刻升级为
+`POTENTIAL_ESCALATION` 转人工，**完整闭环根本不跑**，于是这些案例被挡在修复路径之外，
+且给人工的理由是错的。跨 B/C/A 三批共 **1705** 个案例因此被错误挡下。
+
+修复按权限取交集（空权限集仍是 `*` 通配，与 `has_access` 同一约定），并在两侧同时
+落地：宿主 `policy/index.py::neverallow_rules` 与设备
+`pl_index.cpp::NeverallowRules`，五道差分门禁全绿（见 `eval-L4.md`）。
+
+修复的**净收益**（B 批，4911 唯一案例）：自动补丁 40 → **70**，需人工 3315 → **1580**，
+噪声 1556 → **3261**。三个桶的变化量精确闭合：`1705` 个案例从人工移到噪声、
+`30` 个从人工移到自动（`3315 - 1705 - 30 = 1580`）。
+
+修复也**放出了一批之前被假红线掩盖的问题**，这是修完必须接着看的：
+
+- 一条**编译不过的补丁**：`allow bgtaskmgr_service data_service_el1_file:file { 0x5413 };`
+  ——`0x5413` 不是权限名（日志转写笔误）。已由新守门 5 兜住。
+- **7 个应用域自动放权**（`normal_hap -> sys_file:file {read}` / `{open}`、
+  `normal_hap -> dev_file:dir {mounton}`、`system_core_hap -> download_server:binder {get}` 等）。
+  其中 `dev_file:dir mounton` 与 `distributed_isolate_hap` 自有 `hmcap supervsable`
+  在修复前**就已经**是自动项（0 条权限盲命中），即**预先存在**，不是本次修复引入；
+  另几条是修复后新露出的。
+
+> 值得记下的一处**预测偏差**：动手前我预期这 4 条是"假缺规则"、另 2 条会升级成
+> neverallow 告警。实测方向相反——4 条**本来就是假的 neverallow 告警**（占位符上恰好
+> 撞了红线），解析后红线消失、策略其实早已允许；而 2 条真红线**本来就已转人工**，
+> 类别没变。也就是说 M3 在这份语料上的收益是**消灭 4 个假的安全告警**（安全工具
+> 里最不该有的那类噪声），不是多产出自动补丁。结论反而更好，但和事前的说法不同，
+> 记在这里以免后人照着旧说法复述。
+
+## 跨层视图：同一条 denial，也问一次应用层
+
+`sehap_contexts`（`policy/sehap.py`）是 APL 等级 ↔ SELinux 域的桥：一个应用的域是从
+它签名 profile 的 APL 推出来的。桥的两端引擎里都已经有了——域是系统层的说法，APL 是
+应用层的说法——`policy/cross_layer.py` 是唯一把一条 denial 同时摆到两层面前的地方，
+因为两层该改的东西不是一回事：
+
+```
+scontext=u:r:normal_hap  →  APL=normal  →  全部 normal 应用共用这个域
+```
+
+**让答案不显然的那个事实**：`*_hap` 域是**共享**的。`normal_hap` 不是"被拒的那个
+应用"，它是设备上每一个 normal APL 应用。所以 `allow normal_hap sys_file:file read`
+不是给一个应用开的小口子，是平台级放权。该不该放，`.te` 树本身答不了；跨层视图就是
+去算这个：
+
+- **别的应用域已经有了，就它没有** → 平台在两者之间画了一条线。语料上那 2 个
+  `normal_hap → sys_file:file` 案例，这条线就是 APL 分级本身（`sys_file` 对
+  `system_basic`/`system_core` 应用可读，对 `normal` 从不可读）。改 `.te` 等于抹掉
+  一条有意的权限边界 → `fix_layer=app`：去应用层解决（提 APL，或走系统服务）。
+- **没有任何应用域有** → 这条缺口没有在防谁，就是漏配 → `fix_layer=system`，并附
+  **影响面**：规则落在共享域上，受益者是该等级的全部应用。
+
+判不出来时它**拒绝**下结论，而不是给一个自信的错答案：域同时服务多个 APL 等级（归因
+不到某一级）、APL 不在已建模的阶梯上（"更高"无从比较）、sehap 里声明了但本语料没有
+这个 type（查不了，不能被读成"被拒"）—— 三种都写进 evidence 并退回系统层。
+
+它**不改变**任何判定。`classification`/`patch`/review/verify 与没有 sehap 表时逐字节
+相同（`TestCrossLayerDoesNotChangeVerdicts` 拿同一份语料跑两遍做差钉住）。原因是硬
+约束：这些字段要与设备端 `Converge()` 逐字节对齐，而设备端没有 `@hap` 表可复算跨层
+结论——把它升格成"第七道守门"是一次设备侧改动，按此记录。同理 `--json` 是设备契约，
+跨层键**默认不出现**，要 `--cross-layer` 显式打开（`--md` 隐含打开）；人读输出则总是给。
+
+### 实测（真实语料 5161 条 / 4911 唯一）
+
+| 量 | 值 |
+|---|---|
+| 唯一案例的 scontext 是应用域 | 350（normal 250 / system_basic 57 / system_core 43） |
+| `fix_layer=none`（策略已允许，跨层无需处理） | 337 |
+| `fix_layer=system`（跨等级一致的缺口，按最小权限补） | 11 |
+| **`fix_layer=app`（APL 分级边界，不该在系统层放开）** | **2** |
+| 自动补丁落在共享域上（影响面须明说） | 7（其中 2 条 `fix_layer=app`） |
+
+那 2 条 = `normal_hap → sys_file:file { read }` / `{ open }`，此前在 converge 里是
+**auto_repairable**，也就是会被当成"通过守门的最小补丁"交出去。跨层视图是唯一说得出
+"这两条不是漏配"的地方——这是这个模块存在的理由，不是它的副产品。其余 5 条
+（`distributed_isolate_hap:hmcap`、`input_isolate{,_debug}_hap → render_service:
+unix_stream_socket`、`normal_hap → dev_file:dir mounton`、`system_core_hap →
+download_server:binder`）是共享域上的真缺口，报告现在会把影响面一起说出来。
+
+另一个本来能当头条、实测却哑火的信号：调试/发布域对照（`normal_hap`/`debug_hap`、
+`input_isolate_hap`/`input_isolate_debug_hap`，以及 `distributed_isolate_hap` 同域
+声明两种 build）。它直接解释"调试能跑、打包就挂"，但在这份语料上**触发 0 次**，
+所以留在 evidence 里，不当结论讲。匹配时要求除 debuggable 外全等（APL 集合、`extra`、
+`name`、`extension` 都要一样），否则 `input_isolate_debug_hap` 会被当成 `normal_hap`
+的调试版——那正是本模块要避免的那类自信的错答案。
+
+### 复现
+
+```bash
+python3 -m policy_loop.converge --log data/corpus/real_denials.txt \
+  --policy data/raw/oh-selinux/sepolicy --md converge.md   # --md 自带跨层一节
+python3 -m policy_loop.explain --policy data/raw/oh-selinux/sepolicy \
+  --line '<一条 avc: denied>'                              # 人读输出总带跨层
+python3 -m policy_loop.explain ... --json                  # 设备契约：不含跨层键
+python3 -m policy_loop.explain ... --json --cross-layer     # 显式打开
+python3 -m unittest tests.test_cross_layer -v               # 27 项
+```
 
 ## 实测（2026-09，真实上游语料，规则索引 21790）
 
 | 批 | 输入 | 唯一 | 可自动修复 | 需人工 | 噪声/已允许 | 说明 |
 |---|---|---|---|---|---|---|
 | A 真实缺口 | 144 条 replay-uncovered | 134 | 38 | 96 | 0 | 真缺失案例；38 个最小补丁全部通过守门 |
-| B golden 全量 | 5161 条 | 4911 | 40 | 3319 | 1552 | 覆盖/已修复不误报成自动补丁 |
+| B golden 全量 | 5161 条 | 4911 | 40 | 3315 | 1556 | 覆盖/已修复不误报成自动补丁（B 列为 M3 之后） |
 | C permissive-only | 3557 条 | 3402 | 34 | 1807 | 1561 | 最贴近「permissive 设备 dump」的输入形态 |
+| **B′ golden 全量** | 5161 条 | 4911 | **70** | **1580** | **3261** | **neverallow 权限感知修复之后**；当前代码的实测值 |
+
+> **口径**：A/B/C 三行量于 neverallow 权限感知修复**之前**（也即 M3 之后），
+> B′ 是同一份输入在**当前代码**下的实测。两行的差别就是上节那笔账：
+> `40 → 70` / `3315 → 1580` / `1556 → 3261`，闭合于 `1705` 条从人工移到噪声 +
+> `30` 条从人工移到自动。下表几条 bullet 里的 neverallow 命中数（2645 / 1771）同样
+> 是修复前的口径。**引用时按需选行**：讲"当前能力"用 B′，讲"修复收益"用 B 对 B′。
+> B 批 M3 之前为 3319 / 1552；差值即上节那 4 个"假 neverallow 告警"被消掉，
+> `auto_repairable` 前后都是 40。
 
 - 去重比：B ≈ 1.05（上游日志本身每访问一次），A/C 相似；对真实重复刷屏的设备日志
   去重效果会更显著。
@@ -71,8 +256,9 @@ python -m policy_loop.converge \
 - **ioctl-only 缺口**：当唯一缺失权限是 `ioctl` 且策略既无 `allow ioctl` 也无
   allowxperm 白名单可指时，修复路径可能给出空权限补丁 → 守门 5 兜住转人工。
   真正的 allowxperm 最小补丁生成是后续工作（Review/Verify 语义本轮不动）。
-- **service 二次映射**：`default_service`/数字 `sa_<id>_service` 目标需 `service=`
-  字段映射到具体已声明类型（M3）。
+- **service 映射的剩余缺口**：数字 `service=` + `get`（客户端访问远端 SA）解析不了，
+  需要外部 samgr id→name 注册表，当前一律转人工。占位符解析只用于查询，
+  **不进补丁也不进守门**（理由见 M3 节）。
 - **快路 vs 闭环等价性**：快路判定与 `SecurityAgent.classify` 对 `(neverallow,
   ioctl, all_allowed, permissive)` 的决策一致；两种情况下已允许类 denial 不会进
   Repair/Review 的补丁路径。
@@ -86,7 +272,18 @@ python -m policy_loop.converge \
 python3 -c "…from replay-report uncover…"      # 见 git 提交历史 / CI 说明
 python -m policy_loop.converge --log <批> --policy data/raw/oh-selinux/sepolicy \
   --json data/reports/converge-<批>.json
-python -m unittest tests.test_converge -v        # 18 项
+python -m unittest tests.test_converge -v        # 26 项
+python -m pytest tests/ -q                       # 全套 124 项
 ```
+
+M3 的两侧等价性不靠单测，靠设备端五项门禁（见 `eval-L4.md`）：解析逻辑在
+`pl_converge.cpp::ResolveLogicalTarget` 独立重写了一遍，`--selftest` 新增 8 组固定向量
+逐分支比对，报告差分在真机上逐字节相同。
+
+其中"候选是否已声明"这一步，Python 用 `cand in type_attrs or cand in attributes`，
+C++ 用 `PlIndex::IsDeclaredTypeOrAttr`（`typeNames_ ∪ attrNames_`）——**两个判定集合
+在真实索引上实测完全相同**：`type_attrs` 键 1267 = PLI 的 `@type` 1267，
+`attributes` 49 = PLI 的 `@attr` 49，并集 1316 = 1316。所以这一步不是"恰好通过测试"，
+而是集合相等。
 
 > 语料 `data/raw/oh-selinux` 不入库；无语料时 converge 走 no-index 去重路径。

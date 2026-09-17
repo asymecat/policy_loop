@@ -19,8 +19,8 @@ PolicyLoop 把这条日志链自动化：**读懂 → 定位根因 → 生成最
 
 | 端 | 内容 |
 |---|---|
-| 主机端（重） | `policy_loop/`：denial 解析 + `.te` 策略索引 + 6-Agent 诊断闭环 + 批量收敛 + 评测；`webui/` 单页演示 |
-| 设备端（轻） | L4 真机采集/回归（当前未开始；队长侧 DAYU200 + 串口） |
+| 主机端（重） | `policy_loop/`：denial 解析 + `.te` 策略索引 + 6-Agent 诊断闭环 + 批量收敛 + 评测 |
+| 设备端（轻） | `denial_check`：固定 API 执行层。策略语义在设备上（PLI 索引 + 判定 + 守门），agent 编排在主机上，两者由 JSON/TSV 契约连接 |
 
 ### 确定性核心
 
@@ -71,5 +71,6 @@ PolicyLoop 把这条日志链自动化：**读懂 → 定位根因 → 生成最
 | L1 | Parser + Policy Index（数据仿真） | ✅ |
 | L2 | 真实语料评测基线（coverage 97.2%） | ✅ |
 | L3 | Multi-Agent 闭环 + 最小权限 patch + Verify（规则版，LLM 增强可接） | ✅ |
-| L3+ | 批量收敛工作流 + golden 可信度质检 | 🚧 本轮 |
-| L4 | DAYU200 真机验证（补丁构建 + enforcing 回归） | 未开始 |
+| L3+ | 批量收敛工作流 + golden 可信度质检 | ✅ |
+| L4 | DAYU200 真机验证（补丁构建 + enforcing 回归） | ✅ |
+| L4 | 设备端固定 API 执行层：`--case` 逐条判定，守门随判定一并返回 | ✅ 本轮 |

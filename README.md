@@ -134,4 +134,5 @@ OPENAI_MODEL=deepseek-chat
 | L3+ | 批量收敛工作流（converge + 补丁守门） | ✅ |
 | L3+ | 评测可信度质检（trust + trusted 子集指标） | ✅ |
 | L3+ | service 占位逻辑解析（resolve_logical_target） | ✅ |
-| L4 | DAYU200 真机验证 | 未开始 |
+| L4 | 设备端 C++ 组件 `denial_check`（DAYU200/RK3568 真机） | ✅ |
+| L4 | 设备端固定 API 执行层（`--case` 逐条判定 + 五道守门） | ✅ |

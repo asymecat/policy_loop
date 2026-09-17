@@ -1,0 +1,917 @@
+<title>比 audit2allow 强在哪</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+  :root {
+    --ground: #F2F4F7;
+    --surface: #FFFFFF;
+    --surface-2: #E8ECF1;
+    --ink: #14181F;
+    --ink-2: #4A5364;
+    --ink-3: #78818F;
+    --rule: #D3D8E0;
+    --rule-2: #BFC6D1;
+    --accent: #2A4A7F;
+    --accent-soft: #E3E9F4;
+    --deny: #9E3B32;
+    --deny-soft: #F6E6E3;
+    --ok: #1F6F6B;
+    --ok-soft: #E0EFEC;
+
+    --f-display: 'Archivo', system-ui, -apple-system, sans-serif;
+    --f-body: 'IBM Plex Sans', system-ui, -apple-system, 'PingFang SC', 'Microsoft YaHei', 'Noto Sans CJK SC', 'Source Han Sans SC', sans-serif;
+    --f-mono: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+
+    --measure: 50rem;
+    --gutter: 20px;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground: #0F1216;
+      --surface: #161A20;
+      --surface-2: #1E242C;
+      --ink: #E9ECF0;
+      --ink-2: #A6AFBC;
+      --ink-3: #79838F;
+      --rule: #2B323C;
+      --rule-2: #3A434F;
+      --accent: #82A6DE;
+      --accent-soft: #1B2432;
+      --deny: #DA8C82;
+      --deny-soft: #2E1E1D;
+      --ok: #6FBCB3;
+      --ok-soft: #16292A;
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --ground: #0F1216;
+    --surface: #161A20;
+    --surface-2: #1E242C;
+    --ink: #E9ECF0;
+    --ink-2: #A6AFBC;
+    --ink-3: #79838F;
+    --rule: #2B323C;
+    --rule-2: #3A434F;
+    --accent: #82A6DE;
+    --accent-soft: #1B2432;
+    --deny: #DA8C82;
+    --deny-soft: #2E1E1D;
+    --ok: #6FBCB3;
+    --ok-soft: #16292A;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--ground);
+    color: var(--ink);
+    font-family: var(--f-body);
+    font-size: 16px;
+    line-height: 1.72;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .wrap {
+    max-width: var(--measure);
+    margin: 0 auto;
+    padding-block: 0 5rem;
+    padding-inline: var(--gutter);
+  }
+
+  /* ---------- masthead ---------- */
+
+  .masthead {
+    border-bottom: 2px solid var(--ink);
+    padding-block: 3.5rem 1.25rem;
+    margin-bottom: 2.5rem;
+  }
+
+  .eyebrow {
+    font-family: var(--f-mono);
+    font-size: 0.7rem;
+    font-weight: 500;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin: 0 0 1.1rem;
+  }
+
+  h1 {
+    font-family: var(--f-display);
+    font-weight: 700;
+    font-size: clamp(2.1rem, 7vw, 3.2rem);
+    line-height: 1.1;
+    letter-spacing: -0.02em;
+    text-wrap: balance;
+    margin: 0 0 1.1rem;
+  }
+
+  .standfirst {
+    font-size: 1.1rem;
+    line-height: 1.6;
+    color: var(--ink-2);
+    max-width: 40rem;
+    margin: 0;
+  }
+
+  .masthead-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem 1.5rem;
+    margin-top: 1.6rem;
+    font-family: var(--f-mono);
+    font-size: 0.76rem;
+    color: var(--ink-3);
+  }
+
+  /* ---------- structure ---------- */
+
+  section { margin-block: 4rem; }
+
+  h2 {
+    font-family: var(--f-display);
+    font-weight: 600;
+    font-size: clamp(1.35rem, 4vw, 1.7rem);
+    line-height: 1.25;
+    letter-spacing: -0.01em;
+    text-wrap: balance;
+    margin: 0 0 1.2rem;
+    padding-bottom: 0.6rem;
+    border-bottom: 1px solid var(--rule);
+  }
+
+  h3 {
+    font-family: var(--f-display);
+    font-weight: 600;
+    font-size: 1.02rem;
+    letter-spacing: 0;
+    margin: 2.2rem 0 0.7rem;
+  }
+
+  p { margin: 0 0 1.1rem; }
+
+  strong { font-weight: 600; }
+
+  a { color: var(--accent); text-decoration-thickness: 1px; text-underline-offset: 2px; }
+  a:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 2px; }
+
+  code {
+    font-family: var(--f-mono);
+    font-size: 0.86em;
+    background: var(--surface-2);
+    padding: 0.12em 0.36em;
+    border-radius: 3px;
+    word-break: break-word;
+  }
+
+  /* ---------- headline figures ---------- */
+
+  .figures {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 13rem), 1fr));
+    gap: 1px;
+    background: var(--rule);
+    border: 1px solid var(--rule);
+    margin: 0 0 1.4rem;
+  }
+
+  .fig {
+    background: var(--surface);
+    padding: 1.3rem 1.2rem 1.1rem;
+  }
+
+  .fig-n {
+    font-family: var(--f-display);
+    font-weight: 700;
+    font-size: clamp(2.1rem, 8vw, 2.9rem);
+    line-height: 1;
+    letter-spacing: -0.03em;
+    font-variant-numeric: tabular-nums;
+    display: block;
+    margin-bottom: 0.5rem;
+  }
+
+  .fig-n.is-deny { color: var(--deny); }
+  .fig-n.is-ok { color: var(--ok); }
+  .fig-n .unit {
+    font-size: 0.42em;
+    font-weight: 500;
+    letter-spacing: 0;
+    color: var(--ink-2);
+    margin-left: 0.35em;
+  }
+
+  .fig-label {
+    font-size: 0.82rem;
+    line-height: 1.45;
+    color: var(--ink-2);
+    display: block;
+  }
+
+  .fig-src {
+    display: block;
+    font-family: var(--f-mono);
+    font-size: 0.68rem;
+    color: var(--ink-3);
+    margin-top: 0.45rem;
+  }
+
+  /* ---------- mark grid ---------- */
+
+  .chart {
+    background: var(--surface);
+    border: 1px solid var(--rule);
+    padding: 1.4rem 1.4rem 1.1rem;
+    margin: 0 0 1.4rem;
+  }
+
+  .chart-head {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 0.5rem;
+    margin-bottom: 1.1rem;
+  }
+
+  .chart-title {
+    font-family: var(--f-display);
+    font-weight: 600;
+    font-size: 0.95rem;
+    margin: 0;
+  }
+
+  .chart-sub {
+    font-family: var(--f-mono);
+    font-size: 0.72rem;
+    color: var(--ink-3);
+  }
+
+  .grid svg { display: block; width: 100%; height: auto; }
+
+  .m-noop { fill: var(--rule-2); }
+  .m-act { fill: var(--ok); }
+  .m-never { fill: var(--deny); }
+  .m-badcls { fill: none; stroke: var(--deny); stroke-width: 1.4; }
+
+  .legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.45rem 1.4rem;
+    margin-top: 1.1rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--rule);
+    font-family: var(--f-mono);
+    font-size: 0.74rem;
+    color: var(--ink-2);
+  }
+
+  .legend-item { display: flex; align-items: center; gap: 0.45rem; }
+  .swatch { width: 10px; height: 10px; flex: none; }
+  .swatch.m-noop { background: var(--rule-2); }
+  .swatch.m-act { background: var(--ok); }
+  .swatch.m-never { background: var(--deny); }
+  .swatch.m-badcls { border: 1.5px solid var(--deny); }
+  .legend-n { color: var(--ink); font-weight: 600; font-variant-numeric: tabular-nums; }
+
+  .caption {
+    font-size: 0.86rem;
+    line-height: 1.6;
+    color: var(--ink-2);
+    margin: 0;
+  }
+
+  /* ---------- tables ---------- */
+
+  .scroller { overflow-x: auto; margin: 0 0 1.4rem; border: 1px solid var(--rule); background: var(--surface); }
+
+  table {
+    border-collapse: collapse;
+    width: 100%;
+    font-size: 0.88rem;
+    line-height: 1.5;
+  }
+
+  th, td {
+    text-align: left;
+    padding: 0.62rem 0.85rem;
+    border-bottom: 1px solid var(--rule);
+    vertical-align: top;
+  }
+
+  thead th {
+    font-family: var(--f-mono);
+    font-size: 0.7rem;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--ink-3);
+    background: var(--surface-2);
+    white-space: nowrap;
+    border-bottom: 1px solid var(--rule-2);
+  }
+
+  tbody tr:last-child td { border-bottom: none; }
+
+  td.num, th.num {
+    font-family: var(--f-mono);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+
+  td.num { font-weight: 500; }
+  .v-deny { color: var(--deny); font-weight: 600; }
+  .v-ok { color: var(--ok); font-weight: 600; }
+
+  .t-mono { font-family: var(--f-mono); font-size: 0.82em; }
+
+  /* ---------- difference lists ---------- */
+
+  .grp {
+    border-top: 2px solid var(--ink);
+    padding-top: 1rem;
+    margin-top: 2.4rem;
+  }
+
+  .grp-label {
+    font-family: var(--f-mono);
+    font-size: 0.72rem;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--accent);
+    display: block;
+    margin-bottom: 0.4rem;
+  }
+
+  .grp-title {
+    font-family: var(--f-display);
+    font-size: 1.12rem;
+    font-weight: 600;
+    margin: 0 0 0.5rem;
+  }
+
+  .grp-note { color: var(--ink-2); font-size: 0.94rem; margin: 0 0 1.2rem; }
+
+  ol.items { list-style: none; counter-reset: it; margin: 0; padding: 0; }
+
+  ol.items > li {
+    counter-increment: it;
+    position: relative;
+    padding-left: 2.1rem;
+    margin-bottom: 1.05rem;
+  }
+
+  ol.items > li::before {
+    content: counter(it);
+    position: absolute;
+    left: 0;
+    top: 0.28rem;
+    font-family: var(--f-mono);
+    font-size: 0.76rem;
+    font-weight: 600;
+    color: var(--accent);
+    background: var(--accent-soft);
+    width: 1.4rem;
+    height: 1.4rem;
+    display: grid;
+    place-items: center;
+    border-radius: 50%;
+    font-variant-numeric: tabular-nums;
+  }
+
+  ul.plain { margin: 0 0 1.1rem; padding-left: 1.15rem; }
+  ul.plain li { margin-bottom: 0.55rem; }
+
+  .callout {
+    border-left: 3px solid var(--accent);
+    background: var(--surface);
+    padding: 1rem 1.2rem;
+    margin: 1.4rem 0;
+    font-size: 0.94rem;
+  }
+
+  .callout.is-warn { border-left-color: var(--deny); }
+  .callout p:last-child { margin-bottom: 0; }
+
+  pre {
+    font-family: var(--f-mono);
+    font-size: 0.79rem;
+    line-height: 1.65;
+    background: var(--surface);
+    border: 1px solid var(--rule);
+    padding: 1rem 1.1rem;
+    overflow-x: auto;
+    margin: 0 0 1.2rem;
+    color: var(--ink);
+  }
+
+  pre code { background: none; padding: 0; font-size: 1em; }
+
+  hr.sep { border: none; border-top: 1px solid var(--rule); margin: 3rem 0; }
+
+  footer {
+    border-top: 2px solid var(--ink);
+    margin-top: 4rem;
+    padding-top: 1.2rem;
+    font-size: 0.82rem;
+    color: var(--ink-3);
+  }
+
+  footer p { margin: 0 0 0.5rem; }
+
+  @media (max-width: 480px) {
+    :root { --gutter: 16px; }
+    .masthead { padding-block: 2.5rem 1rem; }
+    section { margin-block: 3rem; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    * { animation: none !important; transition: none !important; }
+  }
+</style>
+
+<div class="wrap">
+
+  <header class="masthead">
+    <p class="eyebrow">政策工具对照 · PolicyLoop 调研</p>
+    <h1>比 audit2allow 强在哪</h1>
+    <p class="standfirst">
+      把「强在哪」拆成三份分开回答：哪些是<strong>目标不同、不该比</strong>，哪些是它<strong>真的弱</strong>，
+      以及——它<strong>真的比我们强</strong>的地方。所有数字都在本机跑出来，命令见文末。
+    </p>
+    <div class="masthead-meta">
+      <span>语料 golden 5161 条 / 4911 唯一</span>
+      <span>策略 rk3568 policy.31</span>
+      <span>工具 audit2allow 3.8.1-2</span>
+    </div>
+  </header>
+
+  <section>
+    <h2>一句话结论</h2>
+    <p>
+      audit2allow 是<strong>把拒绝记录转成能编译的 <code>allow</code> 规则</strong>的工具；
+      PolicyLoop 先回答<strong>这条拒绝该不该放行</strong>，只对该放行的那些生成最小补丁。
+      同一份语料上，两者产出 <strong>2833 条规则 vs 69 条补丁</strong>——差 41 倍，
+      而其中 <strong>2687 条（94.8%）是当前策略本来就允许的</strong>。
+    </p>
+
+    <div class="figures">
+      <div class="fig">
+        <span class="fig-n is-deny">2833<span class="unit">条规则</span></span>
+        <span class="fig-label">audit2allow 的输出</span>
+        <span class="fig-src">其中 2687 条是 no-op</span>
+      </div>
+      <div class="fig">
+        <span class="fig-n is-ok">69<span class="unit">条补丁</span></span>
+        <span class="fig-label">PolicyLoop 的输出</span>
+        <span class="fig-src">另有 1580 转人工 / 3261 无需修复</span>
+      </div>
+      <div class="fig">
+        <span class="fig-n is-deny">94.8<span class="unit">%</span></span>
+        <span class="fig-label">audit2allow 的产出中「写了等于没写」的比例</span>
+        <span class="fig-src">2687 / 2833，用策略逐条核过</span>
+      </div>
+    </div>
+
+    <div class="chart">
+      <div class="chart-head">
+        <h3 class="chart-title">一个方块 = 一条规则</h3>
+        <span class="chart-sub">2833 条，按类别着色</span>
+      </div>
+      <div class="grid" id="grid"></div>
+      <div class="legend" id="legend"></div>
+      <p class="caption" style="margin-top:1.1rem">
+        深色那一小簇才是真正新增的规则。剩下的位置全是「策略已经允许」——
+        audit2allow 自己算出了这件事（它给 2434 条规则标注了
+        <span class="t-mono">!!!! This avc is allowed in the current policy</span>），
+        却<strong>照样把它们输出为生效规则</strong>。对「permissive 设备 dump 该收紧什么」这个场景，
+        噪声比信息多。
+      </p>
+    </div>
+  </section>
+
+  <section>
+    <h2>它是什么、怎么工作</h2>
+    <p>
+      口径：SELinux userspace，本机取的是 Ubuntu 的 <code>policycoreutils-python-utils 3.8.1-2</code>
+      （含 <code>python3-sepolgen</code>、<code>python3-selinux</code>）。主程序
+      <code>/usr/bin/audit2allow</code> 共 399 行，真正的逻辑在 <code>sepolgen/</code> 包里。
+    </p>
+
+    <div class="scroller">
+      <table>
+        <thead>
+          <tr><th>机制</th><th>位置</th><th>含义</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>按三元组合并</td>
+            <td class="t-mono">access.py:285 add_av()</td>
+            <td>键是 <span class="t-mono">(src_type, tgt_type, (obj_class, type))</span>，<span class="t-mono">merge()</span> 把权限<strong>取并集</strong> → 一个三元组一条规则</td>
+          </tr>
+          <tr>
+            <td><span class="t-mono">-R/--reference</span> <strong>默认开启</strong></td>
+            <td class="t-mono">audit2allow:76<br>policygen.py:91</td>
+            <td>用 refpolicy 的接口定义（<span class="t-mono">/var/lib/sepolgen/interface_info</span>）把裸 allow 换成接口调用</td>
+          </tr>
+          <tr>
+            <td><span class="t-mono">-M</span> 打包</td>
+            <td class="t-mono">audit2allow:219</td>
+            <td>生成 <span class="t-mono">.te</span> 并调 <span class="t-mono">ModuleCompiler</span> 出 <span class="t-mono">.pp</span>，可直接 <span class="t-mono">semodule -i</span></td>
+          </tr>
+          <tr>
+            <td><span class="t-mono">-D</span> / <span class="t-mono">-x</span></td>
+            <td class="t-mono">:73 / :90</td>
+            <td>出 <span class="t-mono">dontaudit</span> / 出 xperm 扩展权限规则</td>
+          </tr>
+          <tr>
+            <td><span class="t-mono">-w/--why</span>（= audit2why）</td>
+            <td class="t-mono">:253</td>
+            <td>用 libselinux 对<strong>已加载策略</strong>分类：ALLOW / DONTAUDIT / BOOLEAN / TERULE / CONSTRAINT / RBAC / BOUNDS</td>
+          </tr>
+          <tr>
+            <td><span class="t-mono">NEVERALLOW</span></td>
+            <td class="t-mono">refpolicy.py:575</td>
+            <td>只是个<strong>规则类型</strong>，用于解析 refpolicy 接口定义；audit2allow 从不生成、也从不检查 neverallow</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <h2>同一份语料，两个工具</h2>
+    <p>
+      给 audit2allow 的输入是 golden 语料<strong>去掉行首 <code>#</code></strong> 后的 5161 行
+      （这份文件每行都以 <code>#</code> 开头）；策略给它 rk3568 的真实构建产物
+      <code>policy.31</code>（536 KB）。这是能给它的最好条件。
+    </p>
+
+    <div class="scroller">
+      <table>
+        <thead>
+          <tr><th>量</th><th>audit2allow</th><th>PolicyLoop</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>前置要求</td>
+            <td><strong>必须</strong>有编译好的二进制策略，否则直接 exit 1</td>
+            <td>只要 <span class="t-mono">.te</span> 源码树</td>
+          </tr>
+          <tr>
+            <td>语料解析</td>
+            <td class="num">5085 / 5161（98.5%）</td>
+            <td class="num">5161 / 5161</td>
+          </tr>
+          <tr>
+            <td>产出</td>
+            <td class="num v-deny">2833 条 allow 规则</td>
+            <td class="num v-ok">69 条最小补丁 + 1580 转人工 + 3261 无需修复</td>
+          </tr>
+          <tr>
+            <td>其中「当前策略已允许」</td>
+            <td class="num v-deny">2687 条（94.8%）——写了等于没写</td>
+            <td>归入噪声，不产出规则</td>
+          </tr>
+          <tr>
+            <td>自己已注明 allowed 却仍输出为<strong>生效规则</strong></td>
+            <td class="num v-deny">2434 条</td>
+            <td>—</td>
+          </tr>
+          <tr>
+            <td>撞 neverallow 编译期红线</td>
+            <td class="num v-deny">34 条</td>
+            <td class="num v-ok">0（一律转人工）</td>
+          </tr>
+          <tr>
+            <td>含<strong>不存在的类</strong>名（编译不过）</td>
+            <td class="num v-deny">4 条</td>
+            <td class="num v-ok">0（按未知类转人工）</td>
+          </tr>
+          <tr>
+            <td>APL 分级边界</td>
+            <td>照给 <span class="t-mono">allow normal_hap sys_file:file { read open };</span>，无任何提示</td>
+            <td>标 <span class="t-mono">fix_layer=app</span>，附共享域影响面与「提 APL 或走系统服务」</td>
+          </tr>
+          <tr>
+            <td>共享域影响面</td>
+            <td>无此概念</td>
+            <td>每条共享域补丁都附影响面</td>
+          </tr>
+          <tr>
+            <td><span class="t-mono">-R</span> refpolicy 接口匹配</td>
+            <td class="num v-deny">命中 0 次，输出与 <span class="t-mono">-N</span> 逐字节相同</td>
+            <td>不适用（OH 不是 refpolicy 系）</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p>
+      两边都给的三元组有 42 个；<strong>只有 PolicyLoop 给的有 9 个</strong>。其中
+      <code>bgtaskmgr_service</code> 是因为该类型不在 <code>policy.31</code> 里（audit2allow 的 sid
+      解析失败 → 不产出），其余几个是 M3 占位符解析（日志里的 <code>default_service</code> 被解析成
+      具体 <code>sa_*</code>/<code>hdf_*</code>）与 xperm 类补丁——<strong>audit2allow 只照着日志抄，
+      不做这层解析</strong>。
+    </p>
+
+    <div class="callout">
+      <p>
+        <strong>口径提醒：</strong>audit2allow 那 2833 条里，扣掉「已允许」2687 条、撞红线 34 条、
+        引用不存在符号 4 条，剩下 <strong>108 条</strong>是符号存在且策略未允许的新增规则。
+        PolicyLoop 在同样口径下给 69 条最小补丁。两者算法不同（去重、最小化、占位符解析都不一样），
+        <strong>108 vs 69 只作量级参考，不作精确对比</strong>。
+      </p>
+    </div>
+  </section>
+
+  <section>
+    <h2>那 4 条编译不过的规则</h2>
+    <p>
+      全部来自 OpenHarmony <strong>上游 <code>.te</code> 注释里的转写笔误</strong>，逐条可核对：
+    </p>
+    <div class="scroller">
+      <table>
+        <thead>
+          <tr><th>audit2allow 的输出</th><th>笔误</th><th>上游出处</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="t-mono">allow powermgr sa_device_standby:samger_class get;</td>
+            <td class="t-mono">samger_class → samgr_class</td>
+            <td class="t-mono">powermgr/display_manager/system/powermgr.te:20</td>
+          </tr>
+          <tr>
+            <td class="t-mono">allow edm_sa sa_net_policy_manager:samar_class get;</td>
+            <td class="t-mono">samar_class → samgr_class</td>
+            <td class="t-mono">…/enterprise_device_management/system/edm_sa.te:147</td>
+          </tr>
+          <tr>
+            <td class="t-mono">allow edm_sa sa_pulseaudio_audio_service:samar_class get;</td>
+            <td class="t-mono">同上</td>
+            <td class="t-mono">同文件 :208</td>
+          </tr>
+          <tr>
+            <td class="t-mono">allow nwebspawn data_service_el1_file:dit mounton;</td>
+            <td class="t-mono">dit → dir</td>
+            <td class="t-mono">web/webview/system/nwebspawn.te:166</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <p>
+      PolicyLoop 对这几条的实际处理是<strong>转人工</strong>、不产出补丁，理由原文：
+    </p>
+    <pre><code>对象类「samar_class」不在策略任何规则中出现（疑为日志笔误），
+补丁无法落点验证，转人工</code></pre>
+  </section>
+
+  <section>
+    <h2>逐条差异</h2>
+
+    <div class="grp">
+      <span class="grp-label">A 组</span>
+      <h3 class="grp-title">目标不同，不该拿来比强弱</h3>
+      <p class="grp-note">先把这部分摘出去，剩下的对比才站得住。</p>
+      <ul class="plain">
+        <li>
+          <strong>audit2allow 不问「该不该放行」</strong>，也不声称自己在问。它的模型是「拒绝 = 缺规则」，
+          输入输出都是记录级的。所以 2833 vs 69 的差距不是它做得差，而是
+          <strong>它不回答我们回答的那个问题</strong>。只贴这个倍数属于偷换，答辩会被问穿。
+        </li>
+        <li>
+          <strong>它的安全网在编译/装载期。</strong><code>neverallow</code> 是编译期断言，撞上它的
+          allow 会在编模块（<code>checkpolicy</code>）或装模块（<code>semodule -i</code>）时被拒。
+          这层保护是真的，但它发生在（a）构建期、（b）全有全无——整个模块编译失败，不告诉你哪条该换成什么。
+          PolicyLoop 是在生成期逐条判、并把原因写给人工。
+        </li>
+      </ul>
+    </div>
+
+    <div class="grp">
+      <span class="grp-label">B 组</span>
+      <h3 class="grp-title">它真的弱的地方</h3>
+      <p class="grp-note">七条，全部有实测支撑。</p>
+      <ol class="items">
+        <li>
+          <strong>对「已允许」不作过滤，只加注释。</strong>它用 libselinux 判出了 2434 条
+          <span class="t-mono">allowed in the current policy</span>，把这句写进注释，然后照样输出为生效
+          allow 规则。结果是一份 2833 条的清单里 94.8% 是 no-op。
+        </li>
+        <li>
+          <strong>没有 neverallow 概念。</strong>34 条输出会撞红线（见上表
+          <span class="t-mono">refpolicy.py:575</span>：它只是个规则类型，从不被检查）。
+        </li>
+        <li>
+          <strong>没有「共享域」概念。</strong><span class="t-mono">allow normal_hap sys_file:file read</span>
+          一句，受益者是设备上<strong>每一个</strong> normal APL 应用——它的输出形态里没有任何位置能表达这件事。
+        </li>
+        <li>
+          <strong>不校验符号是否存在。</strong>4 条规则引用了不存在的类名，它照抄。
+        </li>
+        <li>
+          <strong>必须给编译好的策略，否则完全跑不了。</strong><span class="t-mono">main()</span> 无条件调
+          <span class="t-mono">audit2why.init()</span>（<span class="t-mono">audit2allow:383</span>），
+          无策略时报 <span class="t-mono">ValueError: You must specify the -p option</span> → exit 1。
+          在没有 SELinux 的开发机上，<strong>它连生成规则这一步都进不去</strong>。
+        </li>
+        <li>
+          <strong>输入契约是 auditd 的记录格式</strong>（<span class="t-mono">-a</span>/<span class="t-mono">-b</span>
+          走 <span class="t-mono">ausearch</span>，<span class="t-mono">-d</span> 走 dmesg）。
+          OpenHarmony 的 denial 在 hilog 里，没有 auditd；我们因此得自己做 LogSource。
+        </li>
+        <li>
+          <strong><span class="t-mono">-R</span> 在 OpenHarmony 上完全空转。</strong>默认开启的 refpolicy
+          接口匹配命中 0 次，输出与 <span class="t-mono">-N</span> 逐字节相同。这个功能是给
+          Fedora/RHEL 系（refpolicy 血统）用的。
+        </li>
+      </ol>
+    </div>
+
+    <div class="grp">
+      <span class="grp-label">C 组</span>
+      <h3 class="grp-title">它比我们强的地方</h3>
+      <p class="grp-note">这一节要主动讲。只讲 B 组会显得没读透。</p>
+      <ol class="items">
+        <li>
+          <strong><span class="t-mono">audit2why</span> 的诊断维度我们一个都没有。</strong>它能把一条拒绝归到：
+          <ul class="plain" style="margin-top:0.5rem">
+            <li><span class="t-mono">BOOLEAN</span> → 给出 <span class="t-mono">setsebool -P &lt;bool&gt; 1</span>（策略里早有规则，只是布尔开关没开）</li>
+            <li><span class="t-mono">CONSTRAINT</span> / <span class="t-mono">RBAC</span> / <span class="t-mono">BOUNDS</span> → 约束、角色、typebounds 问题</li>
+            <li><span class="t-mono">DONTAUDIT</span> → 本来就该静音的</li>
+          </ul>
+          PolicyLoop 只有「缺规则 / 已允许 / neverallow / 域标签」这几种，
+          <strong>布尔与约束两类是真空</strong>。这是最该抄的一处。
+        </li>
+        <li>
+          <strong><span class="t-mono">-M</span> 打通了「生成 → 装载」</strong>：直接产出可
+          <span class="t-mono">semodule -i</span> 的模块包。我们的交付物止于规则文本。
+        </li>
+        <li>
+          <strong><span class="t-mono">--dontaudit</span> 是合法需求</strong>——有些拒绝就该静音，不是该放权，
+          我们没有对应产物。
+        </li>
+        <li>
+          <strong><span class="t-mono">-x</span> 支持 xperm</strong>，我们对 ioctl 的最小补丁生成还是
+          「可能给出空权限补丁 → 转人工」。
+        </li>
+        <li>
+          <strong>成熟度。</strong>20 年、AOSP 与各发行版的事实标准、有 man page、输入格式有 auditd 生态支撑。
+          我们在这份语料上能压过它，很大一部分原因是<strong>我们为 OpenHarmony 这个特定场景做了适配</strong>
+          （hilog 输入、占位符解析、APL 桥），不是通用能力上的全面超越。
+        </li>
+      </ol>
+    </div>
+  </section>
+
+  <section>
+    <h2>对 PolicyLoop 的启示</h2>
+    <ul class="plain">
+      <li>
+        <strong>补 boolean / constraint / bounds 三类诊断。</strong>它们同样能落进「改哪一层」的判据里
+        （布尔 → 改系统层开关；约束 → 改标签/属性，属架构决策），而且成本低：libselinux 已经算好了，
+        我们在 C++ 侧本来就有 <code>PlIndex</code>。
+      </li>
+      <li>
+        <strong>输出形态可以借鉴 <code>-M</code>。</strong>一份可直接装载的产物，比一堆规则文本更接近「能用」。
+      </li>
+      <li>
+        <strong>答辩口径：</strong>先讲目标差异（我们回答「该不该放行」），再讲 B 组的实测差距，
+        最后主动讲 C 组。主动讲 C 组才证明是调研过，而不是搜过。
+      </li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>边界：这份调研没有证明的</h2>
+    <ul class="plain">
+      <li>
+        口径是「本机 Ubuntu + rk3568 的 <code>policy.31</code> + golden 语料」，<strong>不是 rk3568 真机现场</strong>。
+      </li>
+      <li>
+        audit2allow 判 <span class="t-mono">allowed in the current policy</span> 用的是
+        <code>policy.31</code>，与语料当时的策略版本可能有偏差（stderr 里有若干
+        <span class="t-mono">type X is not defined</span>）。这不影响 B 组结论的方向，
+        但 <strong>2687 这个精确数字</strong>应按「用 policy.31 判定的结果」理解。
+      </li>
+      <li>
+        <strong>没有评估它在 refpolicy 系发行版上的表现</strong>——那里
+        <span class="t-mono">-R</span> 的接口匹配是真有用的，A 组之外的一部分差距会被抹平。
+        要下「全面优于」的结论必须先补这一块。
+      </li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>复现</h2>
+    <pre><code># 1) 取工具（不安装系统包，解包到临时目录即可）
+mkdir -p /tmp/a2a &amp;&amp; cd /tmp/a2a
+apt-get download policycoreutils-python-utils python3-sepolgen python3-selinux
+for d in *.deb; do dpkg -x "$d" root; done
+export PYTHONPATH=/tmp/a2a/root/usr/lib/python3/dist-packages
+A2A="python3 /tmp/a2a/root/usr/bin/audit2allow"
+
+# 2) 语料去注释（golden 文件每行都以 '#' 开头）
+python3 -c "
+import re,pathlib
+src=pathlib.Path('data/corpus/real_denials.txt').read_text(errors='surrogateescape').splitlines()
+pathlib.Path('/tmp/a2a/strip.txt').write_text('\n'.join(re.sub(r'^#\s*','',l).strip() for l in src)+'\n')"
+
+# 3) 跑（-N：OH 不是 refpolicy；实测加不加 -N 输出逐字节相同）
+P=~/ohos_src/out/rk3568/src/obj/base/security/selinux_adapter/policy.31
+$A2A -p $P -N -i /tmp/a2a/strip.txt &gt; /tmp/a2a/out_N.txt
+
+# 4) 核对本页的数字（规则数 / no-op 数 / neverallow 命中 / 未知类）
+python3 - &lt;&lt;'EOF'
+import re
+from policy_loop.policy import load_dir
+idx = load_dir("data/raw/oh-selinux/sepolicy")
+RX=[re.compile(r"^allow\s+(\S+)\s+(\S+):(\S+)\s*\{([^}]*)\}\s*;"),
+    re.compile(r"^allow\s+(\S+)\s+(\S+):(\S+)\s+(\S+)\s*;")]
+rules=[]
+for l in open("/tmp/a2a/out_N.txt",encoding="utf-8",errors="surrogateescape"):
+    for rx in RX:
+        m=rx.match(l)
+        if m: rules.append((m.group(1),m.group(2),m.group(3),tuple(m.group(4).split()))); break
+classes={r.cls for r in idx.rules}
+print("规则数", len(rules))
+print("no-op（策略已允许）", sum(1 for s,t,c,p in rules if idx.has_access(s,t,c,frozenset(p))[0]))
+print("撞 neverallow", sum(1 for s,t,c,p in rules if idx.neverallow_rules(s,t,c,frozenset(p))))
+print("未知类", [(s,t,c) for s,t,c,_ in rules if c not in classes])
+EOF</code></pre>
+  </section>
+
+  <footer>
+    <p>完整版（含 A/B/C 三组的完整论证与更多细节）在仓库里：<span class="t-mono">docs/related-work-audit2allow.md</span>。</p>
+    <p>语料：<span class="t-mono">data/corpus/real_denials.txt</span> · 策略：rk3568 <span class="t-mono">policy.31</span> · 工具：audit2allow 3.8.1-2</p>
+  </footer>
+
+</div>
+
+<script>
+(function () {
+  var g = document.getElementById('grid');
+  var l = document.getElementById('legend');
+  if (!g || !l) return;
+
+  // Counts measured against the real corpus (see docs/related-work-audit2allow.md):
+  // 2833 rules emitted; 2687 already allowed; 34 hit a neverallow; 4 name a class
+  // that does not exist; the remaining 108 are genuinely new, well-formed rules.
+  var P = [
+    { cls: 'm-never',  n: 34,   label: '撞 neverallow 红线' },
+    { cls: 'm-badcls', n: 4,    label: '引用不存在的类' },
+    { cls: 'm-act',    n: 108,  label: '其余（符号存在、策略未允许）' },
+    { cls: 'm-noop',   n: 2687, label: '策略已允许 —— 写了等于没写' }
+  ];
+
+  var total = P.reduce(function (a, p) { return a + p.n; }, 0);
+  var cols = 80;
+  var pitch = 10, mark = 7;
+  var rows = Math.ceil(total / cols);
+  var W = cols * pitch, H = rows * pitch;
+  var NS = 'http://www.w3.org/2000/svg';
+  var svg = document.createElementNS(NS, 'svg');
+  svg.setAttribute('viewBox', '0 0 ' + W + ' ' + H);
+  svg.setAttribute('role', 'img');
+  svg.setAttribute('aria-label',
+    '2833 条规则的分布：2687 条策略已允许，34 条撞 neverallow 红线，4 条引用不存在的类，' +
+    '其余 108 条是有效新增。');
+
+  var i = 0;
+  P.forEach(function (p) {
+    for (var k = 0; k < p.n; k++, i++) {
+      var r = document.createElementNS(NS, 'rect');
+      var col = i % cols, row = Math.floor(i / cols);
+      var inset = p.cls === 'm-badcls' ? 0 : (pitch - mark) / 2;
+      r.setAttribute('x', String(col * pitch + inset));
+      r.setAttribute('y', String(row * pitch + inset));
+      r.setAttribute('width', String(p.cls === 'm-badcls' ? pitch - 3 : mark));
+      r.setAttribute('height', String(p.cls === 'm-badcls' ? pitch - 3 : mark));
+      r.setAttribute('class', p.cls);
+      svg.appendChild(r);
+    }
+  });
+  g.appendChild(svg);
+
+  P.forEach(function (p) {
+    var item = document.createElement('span');
+    item.className = 'legend-item';
+    var sw = document.createElement('span');
+    sw.className = 'swatch ' + p.cls;
+    var tx = document.createElement('span');
+    var num = document.createElement('span');
+    num.className = 'legend-n';
+    num.textContent = String(p.n);
+    tx.appendChild(num);
+    tx.appendChild(document.createTextNode(' ' + p.label));
+    item.appendChild(sw);
+    item.appendChild(tx);
+    l.appendChild(item);
+  });
+})();
+</script>
