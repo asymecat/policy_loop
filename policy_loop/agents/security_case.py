@@ -31,6 +31,11 @@ class SecurityCase:
     explanation: str = ""
     candidates: list = field(default_factory=list)
     recommended: Optional[dict] = None
+    # --- filled by CrossLayerAgent ---------------------------------------
+    # The application-layer view of the same denial (APL, shared-domain scope,
+    # which layer owns the fix). Advisory: it never feeds classification or the
+    # patch, so the verdict the device also computes stays identical.
+    cross_layer: dict = field(default_factory=dict)
     # --- filled by RepairAgent -------------------------------------------
     patch: str = ""
     patch_target_note: str = ""

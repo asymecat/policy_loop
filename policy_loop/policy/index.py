@@ -25,9 +25,28 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import FrozenSet, List, Optional, Set
 
-__all__ = ["Rule", "PolicyIndex", "load_text", "load_dir"]
+from .sehap import SehapTable, load_sehap
+
+__all__ = ["Rule", "PolicyIndex", "load_text", "load_dir",
+           "PLACEHOLDER_TARGETS", "is_service_placeholder"]
 
 _ID_RE = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
+
+# The tcontexts samgr and devmgr log in place of a concrete service type. A
+# denial carries one of these when the caller reached the service *through the
+# manager*, which is the normal path: the concrete `sa_*`/`hdf_*` type never
+# appears in the log at all.
+#
+# They live here, next to the resolver that undoes them, because both sides of
+# the engine need to agree on what counts as a placeholder: the batch pipeline
+# (_quick_verdict) and the per-case policy query (PolicyAgent) must resolve the
+# same set, or the same denial gets two different verdicts depending on which
+# path it took.
+PLACEHOLDER_TARGETS = frozenset({"default_service", "default_hdf_service"})
+
+
+def is_service_placeholder(token: Optional[str]) -> bool:
+    return bool(token) and token in PLACEHOLDER_TARGETS
 
 # allow / neverallow  (single-line; optional trailing ';')
 #   allow SRC TGT:CLASS { perms };   allow SRC TGT:CLASS perm;
@@ -91,6 +110,12 @@ class PolicyIndex:
     attributes: Set[str] = field(default_factory=set)
     skipped_count: int = 0
     _sources: List[str] = field(default_factory=list)
+    # The APL <-> domain bridge, loaded alongside the .te tree (see sehap.py).
+    # compare=False: an index built from the same rule text stays equal whether
+    # or not sehap files happened to sit next to it, so tests that compare
+    # indices are not silently weakened by this addition.
+    sehap: SehapTable = field(default_factory=SehapTable, compare=False,
+                              repr=False)
 
     # ---- loading ----------------------------------------------------------
     # block keywords whose inner lines still carry real policy rules
@@ -355,12 +380,17 @@ class PolicyIndex:
         name a *remote* SA (client ``get``) are not resolvable without the
         external samgr id->name registry -> caller keeps the placeholder.
         """
-        if tgt not in ("default_service", "default_hdf_service") or not service:
+        if not is_service_placeholder(tgt) or not service:
             return None
         if cls not in ("samgr_class", "hdf_devmgr_class"):
             return None
         if not service.isdigit():
             cand = ("hdf_" if cls == "hdf_devmgr_class" else "sa_") + service
+        elif not src:
+            # self-registration names the SA type after the *subject*: a record
+            # whose scontext was malformed has no name to build one from.
+            # Concatenating None here would raise, taking the whole run down.
+            return None
         elif cls == "samgr_class" and perms and perms <= {"add"}:
             cand = "sa_" + src          # SA registers its own samgr entry
         else:
@@ -369,8 +399,34 @@ class PolicyIndex:
             return cand
         return None
 
-    def neverallow_rules(self, src: str, tgt: str, cls: str) -> List[Rule]:
-        return self._rule_hits("neverallow", src, tgt, cls)
+    def neverallow_rules(self, src: str, tgt: str, cls: str,
+                         perms) -> List[Rule]:
+        """neverallow rules that *granting* ``perms`` would violate.
+
+        ``neverallow`` is an assertion about **permissions**, not about a
+        (subject, target, class) triple: ``neverallow A B:file execmod`` forbids
+        only ``execmod``, and a denial of ``getattr`` on that same pair violates
+        nothing. Matching the triple alone therefore fires on nearly every
+        attribute-mediated pair -- measured on the upstream corpus, 2,646 of
+        2,700 such "hits" name a permission the request never asked for. Because
+        the batch path treats a hit as "stop, escalate to human", that noise did
+        not merely mislabel cases: it suppressed the repair path for 1,705 cases
+        that the very same query says are already allowed.
+
+        A rule whose permission set is empty is the ``*`` wildcard and matches
+        any request -- the same convention as :meth:`has_access`, and the reason
+        ``neverallow domain default_service:samgr_class *;`` still fires.
+
+        *perms* is required rather than optional so that every caller states
+        what it is asking about; a default would silently restore the bug.
+        """
+        out = []
+        for r in self._rule_hits("neverallow", src, tgt, cls):
+            if not r.perms:                 # `*` -- covers every permission
+                out.append(r)
+            elif perms and set(perms) & r.perms:
+                out.append(r)
+        return out
 
     def ioctl_whitelist(self, src: str, tgt: str, cls: str) -> tuple:
         """Return (xperm_allowed_cmds, invert_rules) for allowxperm on ioctl."""
@@ -435,7 +491,13 @@ def load_text(text: str, source: str = "<text>") -> PolicyIndex:
 
 
 def load_dir(path: str | Path) -> PolicyIndex:
-    """Recursively index all ``*.te`` files under *path* (OpenHarmony layout)."""
+    """Recursively index all ``*.te`` files under *path* (OpenHarmony layout).
+
+    Also indexes every ``sehap_contexts`` file found in the same tree: the APL
+    bridge is not derivable from the rules, and a caller that loaded the whole
+    sepolicy tree clearly wants it (see ``sehap.py``). A tree without those
+    files yields an empty table, so single-component trees keep working.
+    """
     root = Path(path)
     if not root.exists():
         raise FileNotFoundError(f"policy directory not found: {root}")
@@ -443,4 +505,5 @@ def load_dir(path: str | Path) -> PolicyIndex:
     for te in sorted(root.rglob("*.te")):
         idx.load_text(te.read_text(encoding="utf-8", errors="replace"),
                       source=str(te))
+    idx.sehap = load_sehap(root)
     return idx
