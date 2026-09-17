@@ -52,7 +52,8 @@ class VerifyAgent(BaseAgent):
         requested = frozenset(v["requested_perms"])
 
         # neverallow regression check
-        nev = self.index.neverallow_rules(src, tgt, cls) if self.index else []
+        nev = (self.index.neverallow_rules(src, tgt, cls, requested)
+               if self.index else [])
         if nev:
             case.verify = {"status": "SECURITY_REGRESSION",
                            "reason": f"命中 neverallow：{nev[0].raw[:120]}"}

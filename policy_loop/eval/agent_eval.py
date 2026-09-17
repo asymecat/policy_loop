@@ -122,7 +122,7 @@ def scan_informative(idx: PolicyIndex, golden: list) -> dict:
         if all_ok:
             stats["covered_elsewhere"] += 1
             continue
-        nev = idx_wo.neverallow_rules(src, tgt, cls)
+        nev = idx_wo.neverallow_rules(src, tgt, cls, perms)
         stats["informative"] += 1
         entry = {"golden": g, "denial": d,
                  "missing": sorted(set(perms) - set(granted)),

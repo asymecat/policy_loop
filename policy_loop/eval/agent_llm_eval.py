@@ -53,7 +53,7 @@ def build_verdict(idx, d: dict) -> dict:
     src, tgt, cls = d["source_domain"], d["target_type"], d["tclass"]
     perms = frozenset(d["permissions"] or ())
     allowed, granted, _ = idx.has_access(src, tgt, cls, perms)
-    nev = idx.neverallow_rules(src, tgt, cls)
+    nev = idx.neverallow_rules(src, tgt, cls, perms)
     ioctl = None
     if "ioctl" in perms and d.get("ioctl_cmd"):
         io_ok, reason, _ = idx.ioctl_allowed(src, tgt, cls, d["ioctl_cmd"])

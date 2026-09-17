@@ -60,9 +60,36 @@ class TestIndex(unittest.TestCase):
         self.assertFalse(ok)
 
     def test_neverallow_detection(self):
-        nev = self.idx.neverallow_rules("normal_hap", "dev_bbox", "chr_file")
+        nev = self.idx.neverallow_rules("normal_hap", "dev_bbox", "chr_file",
+                                        frozenset({"read"}))
         self.assertEqual(len(nev), 1)
         self.assertEqual(nev[0].kind, "neverallow")
+
+    def test_neverallow_is_permission_scoped(self):
+        """`neverallow A B:c { read }` constrains read, not the triple.
+
+        A permission-blind match reports the same red line for every request on
+        this (src, tgt, cls), which is what made the batch path escalate 1,705
+        cases that were already allowed. Both halves matter: the negative is
+        what a `len(nev) == 1` assertion alone cannot see.
+        """
+        self.assertTrue(self.idx.neverallow_rules(
+            "normal_hap", "dev_bbox", "chr_file", frozenset({"read"})))
+        for other in ({"ioctl"}, {"write"}, {"execute"}, set()):
+            self.assertEqual(
+                self.idx.neverallow_rules("normal_hap", "dev_bbox", "chr_file",
+                                          frozenset(other)), [],
+                msg=f"unexpected red line for {other or 'an empty perm set'}")
+
+    def test_neverallow_wildcard_still_matches_any_request(self):
+        """An empty permission set on the *rule* is `*` (has_access uses the
+        same convention), so `neverallow D t:c *` must fire for every request --
+        the permission-scoping fix must not turn the wildcard into a no-op."""
+        idx = load_text("type d;\ntype t;\nneverallow d t:file *;\n")
+        for perms in ({"read"}, {"ioctl"}, set()):
+            self.assertEqual(
+                len(idx.neverallow_rules("d", "t", "file", frozenset(perms))), 1,
+                msg=f"wildcard neverallow missed a {{ {','.join(perms)} }} request")
 
     def test_allowxperm_whitelist_hit(self):
         ok, reason, _ = self.idx.ioctl_allowed(

@@ -29,7 +29,7 @@ def _verdict_label(idx, rec) -> str:
     )
 
     # neverallow red line first
-    nev = idx.neverallow_rules(rec.source_domain, rec.target_type, cls)
+    nev = idx.neverallow_rules(rec.source_domain, rec.target_type, cls, perms)
     if nev:
         return "POTENTIAL_ESCALATION (matches neverallow)"
 

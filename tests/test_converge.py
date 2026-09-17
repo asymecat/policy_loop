@@ -2,8 +2,9 @@
 
 Covers: fingerprint clustering/dedup, no-index behaviour, the degenerate-patch
 guards (MLS-as-type target, default_* service placeholder, unknown subject,
-vacuous patch, unknown class), and the fast-path verdicts (already-allowed ->
-noise / DOMAIN; neverallow -> escalation without a patch).
+vacuous patch, unknown class), the fast-path verdicts (already-allowed ->
+noise / DOMAIN; neverallow -> escalation without a patch), and the M3 service
+mapping that resolves a placeholder target for the policy query.
 """
 
 import unittest
@@ -120,6 +121,22 @@ class TestDegeneratePatchGuards(unittest.TestCase):
         self.assertEqual(c["category"], CAT_HUMAN)
         self.assertIn("samar_class", c["why"])
 
+    def test_non_permission_in_the_perm_slot_is_human(self):
+        """The real corpus line, verbatim: `denied { 0x5413 }` with `ioctl`
+        outside the braces. Reading it as a request for a permission named
+        `0x5413` yields `allow A B:file { 0x5413 };`, which the policy compiler
+        rejects outright -- the human must be told the *log* is corrupt."""
+        raw = ("#avc: denied { 0x5413 } for pid=1067, "
+               "scontext=u:r:bgtaskmgr_service:s0 "
+               "tcontext=u:object_r:data_service_el1_file:s0 "
+               "tclass=file ioctl permissive=1")
+        te = ("type bgtaskmgr_service;\ntype data_service_el1_file;\n"
+              "type other;\ntype other_t;\nallow other other_t:file { read };\n")
+        c = self._converge_one(te, raw)
+        self.assertEqual(c["category"], CAT_HUMAN)
+        self.assertIn("0x5413", c["why"])
+        self.assertIn("非权限名", c["why"])
+
     def test_no_bogus_line_lands_in_auto_patches(self):
         te = ("type app;\ntype dev_file;\ntype other;\ntype other_t;\n"
               "allow other other_t:file { read };\n")
@@ -209,13 +226,112 @@ class TestHelpers(unittest.TestCase):
         self.assertFalse(_patch_is_vacuous(""))       # unparseable -> don't block
 
     def test_known_tokens_and_classes(self):
-        te = ("type app;\ntype dev_file;\nallow app dev_file:file { read };\n")
+        te = ("type app;\ntype dev_file;\n"
+              "allow app dev_file:file { read };\n"
+              "allowxperm app dev_file:file ioctl { 0x641f };\n")
         idx = load_text(te)
-        tokens, classes = _known_tokens(idx)
+        tokens, classes, perms = _known_tokens(idx)
         self.assertIn("app", tokens)
         self.assertIn("dev_file", tokens)
         self.assertIn("file", classes)
         self.assertNotIn("nope", tokens)
+        self.assertIn("read", perms)
+        # An xperm whitelist names ioctl *commands*, not permissions: letting
+        # those into the set would make `0x641f` look like a valid permission.
+        self.assertNotIn("0x641f", perms)
+        self.assertNotIn("ioctl", perms)
+
+
+class TestServicePlaceholderResolution(unittest.TestCase):
+    """M3: the placeholder target is resolved for the *query* only.
+
+    A service-manager denial logs `default_service` / `default_hdf_service`, so
+    querying the logged target verbatim asks whether the policy allows access to
+    a placeholder -- it never does, and that reads as a real gap. Resolving it to
+    the concrete type `service=` names is what separates "already allowed" from
+    "genuinely missing".
+
+    The resolution deliberately does NOT reach the patch text or the five guards;
+    the last test here is the one that pins that down.
+    """
+
+    TE = """\
+type media_service;
+type audio_svc;
+type default_service;
+type sa_audio_svc;
+type hdf_sensor_dev;
+type sa_evil_svc;
+type sa_gap_svc;
+
+allow media_service sa_audio_svc:samgr_class { get };
+allow audio_svc sa_audio_svc:samgr_class { add };
+allow media_service hdf_sensor_dev:hdf_devmgr_class { get };
+neverallow media_service sa_evil_svc:samgr_class { get };
+"""
+
+    def _one(self, raw, te=None):
+        return converge(raw, index=load_text(te or self.TE)).clusters[0]
+
+    def test_named_samgr_resolves_and_is_already_allowed(self):
+        # -> sa_audio_svc, which IS allowed -> the escalation was false
+        c = self._one(denial("media_service", "default_service", "samgr_class",
+                             "get", extra="service=audio_svc"))
+        self.assertEqual(c["category"], CAT_NOISE)
+        self.assertEqual(c["classification"], "NOISE_OR_ALREADY_FIXED")
+
+    def test_named_hdf_uses_the_hdf_prefix(self):
+        c = self._one(denial("media_service", "default_hdf_service",
+                             "hdf_devmgr_class", "get",
+                             extra="service=sensor_dev"))
+        self.assertEqual(c["category"], CAT_NOISE)
+
+    def test_numeric_self_registration_names_the_subject(self):
+        # an SA registers *itself* with samgr under its own id
+        c = self._one(denial("audio_svc", "default_service", "samgr_class",
+                             "add", extra="service=312"))
+        self.assertEqual(c["category"], CAT_NOISE)
+
+    def test_numeric_remote_get_stays_unresolved(self):
+        # a client `get` on a numeric id needs the external samgr id->name
+        # registry -> keep the placeholder and escalate
+        c = self._one(denial("media_service", "default_service", "samgr_class",
+                             "get", extra="service=999"))
+        self.assertEqual(c["category"], CAT_HUMAN)
+        self.assertIn("default_*", c["why"])
+
+    def test_named_service_naming_no_real_type_stays_unresolved(self):
+        c = self._one(denial("media_service", "default_service", "samgr_class",
+                             "get", extra="service=no_such_svc"))
+        self.assertEqual(c["category"], CAT_HUMAN)
+        self.assertIn("default_*", c["why"])
+
+    def test_non_service_class_stays_unresolved(self):
+        c = self._one(denial("media_service", "default_service", "chr_file",
+                             "get", extra="service=audio_svc"))
+        self.assertEqual(c["category"], CAT_HUMAN)
+        self.assertIn("default_*", c["why"])
+
+    def test_resolution_can_reach_a_neverallow(self):
+        # the resolved target is a real escalation, not noise
+        c = self._one(denial("media_service", "default_service", "samgr_class",
+                             "get", extra="service=evil_svc"))
+        self.assertEqual(c["category"], CAT_HUMAN)
+        self.assertEqual(c["classification"], "POTENTIAL_ESCALATION")
+
+    def test_resolved_but_denied_still_escalates(self):
+        # The safety backstop. `sa_gap_svc` resolves, but nothing allows it, so
+        # the repair path writes a patch against the *placeholder* ('sa_gap_svc'
+        # is not what the log said). That patch passes review and verifies
+        # SUCCESS against the placeholder -- so the placeholder guard is the only
+        # thing standing between it and an automatic, unrunnable rule.
+        c = self._one(denial("audio_svc", "default_service", "samgr_class",
+                             "get", extra="service=gap_svc"))
+        self.assertEqual(c["review_status"], "APPROVE")
+        self.assertEqual(c["verify_status"], "SUCCESS")
+        self.assertEqual(c["category"], CAT_HUMAN)
+        self.assertIn("default_*", c["why"])
+        self.assertIn("default_service", c["patch"])
 
 
 if __name__ == "__main__":

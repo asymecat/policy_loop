@@ -75,6 +75,15 @@ class TestResolveLogicalTarget(unittest.TestCase):
             "a", "samgr_class", "default_service", None, frozenset({"get"}))
         self.assertIsNone(got)
 
+    def test_missing_subject_is_refused_not_raised(self):
+        # The self-registration branch builds the candidate from the *subject*
+        # name. A record whose scontext was malformed has no name to build one
+        # from -- that must stay unresolved rather than take the run down with a
+        # TypeError from concatenating None.
+        got = self.idx.resolve_logical_target(
+            None, "samgr_class", "default_service", "312", frozenset({"add"}))
+        self.assertIsNone(got)
+
 
 class TestReplayResolvePath(unittest.TestCase):
     def _golden(self, tmp: Path, denial: dict) -> Path:

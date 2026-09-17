@@ -66,7 +66,8 @@ class ReviewerAgent(BaseAgent):
 
         # 3) neverallow conflict ---------------------------------------------
         if self.index is not None:
-            nev = self.index.neverallow_rules(v["src"], v["tgt"], v["cls"])
+            nev = self.index.neverallow_rules(v["src"], v["tgt"], v["cls"],
+                                              requested)
             if nev:
                 reasons.append("与 neverallow 冲突：" + nev[0].raw[:120])
 
