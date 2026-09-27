@@ -58,6 +58,41 @@ public:
     // the observed count as a lower bound. A regular file is complete; a kmsg or
     // hilog stream is subject to the kernel's printk rate limit.
     virtual bool IsSampled() const = 0;
+
+    // --- follow mode ---------------------------------------------------
+    // ReadAll is a snapshot: it opens, drains, closes. Following needs the
+    // opposite shape -- one handle kept open across calls, so the first read
+    // yields the backlog and every later read yields only what has arrived
+    // since. A source that cannot do that (a file, a pipe) says so here and
+    // the caller falls back to the snapshot path instead of silently
+    // re-reporting the same records forever.
+    virtual bool CanFollow() const { return false; }
+
+    // Reads only what is new since the previous ReadNew on this object.
+    // Returns true with *out possibly empty when nothing has arrived yet.
+    virtual bool ReadNew(std::string *out, std::string *err, const ReadBudget &budget)
+    {
+        (void)out;
+        (void)budget;
+        *err = "source is not streamable";
+        return false;
+    }
+
+    // True once the stream has ended of its own accord -- a followed command
+    // exited. A follower must stop on this: an ended stream and an idle one
+    // both read as "nothing new", so without it the loop would wait forever on
+    // a producer that is already gone. /dev/kmsg never ends.
+    virtual bool Eof() const { return false; }
+
+    // How many times the source told us it had overwritten records we had not
+    // read yet. /dev/kmsg does this by returning EPIPE (printk.c: "our last
+    // seen message is gone, return error and reset"): it is not a failure but
+    // a resync, since the kernel has already moved the read cursor to the
+    // oldest record that survived. The records in between are simply lost, and
+    // an unknown number of them, so this is a count of events and not of
+    // records -- enough to say "this run did not see everything", which is all
+    // a lower-bound claim needs.
+    virtual long long Overruns() const { return 0; }
 };
 
 // path "-" or "" reads stdin.

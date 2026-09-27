@@ -42,6 +42,7 @@ struct DeviceFacts {
     long long observedDenials = 0;          // report.total_denials, for the banner
     long long suppressedEstimate = 0;       // see CountSuppressed
     bool sampled = false;                   // source may have dropped records
+    long long overruns = 0;                 // times the source reported overwritten records
     double loadMs = 0.0;
     double queryMs = 0.0;
     std::vector<std::string> warnings;

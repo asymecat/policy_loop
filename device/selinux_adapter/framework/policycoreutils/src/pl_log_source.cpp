@@ -118,8 +118,20 @@ bool ReadToEof(int fd, std::string *out, std::string *err)
  * A read that returns 0 for a non-blocking descriptor is not EOF -- it means
  * nothing was buffered -- so it is retried until the deadline rather than
  * treated as the end of the stream.
+ *
+ * `overruns` is what makes /dev/kmsg survivable. That device answers a read
+ * whose record has already been overwritten with EPIPE, having first moved the
+ * read cursor to the oldest record that survived -- a resync, not a failure,
+ * and one the kernel performs before we can be told about it. A caller that
+ * passes `overruns` gets the read continued and the event counted; a caller
+ * that passes nullptr keeps the old behaviour of treating EPIPE as an error.
+ * This matters more than it sounds: `devkmsg_open` starts the cursor at the
+ * oldest *surviving* record, so on a busy ring the very first read can race a
+ * wrap and lose -- which used to abort the tool at attach, before it had
+ * produced a single line.
  */
-bool ReadPolled(int fd, std::string *out, std::string *err, const ReadBudget &budget, bool block)
+bool ReadPolled(int fd, std::string *out, std::string *err, const ReadBudget &budget, bool block,
+                long long *overruns = nullptr)
 {
     double deadline = DeadlineFor(budget);
     char buf[kChunk];
@@ -148,6 +160,14 @@ bool ReadPolled(int fd, std::string *out, std::string *err, const ReadBudget &bu
                 if (!block && DeadlinePassed(deadline)) {
                     return true;
                 }
+                continue;
+            }
+            if (errno == EPIPE && overruns != nullptr) {
+                // Records were overwritten before we reached them. The kernel
+                // has already resynced the cursor, so the next read returns the
+                // oldest survivor -- keep going and record that this run saw an
+                // incomplete stream.
+                ++*overruns;
                 continue;
             }
             *err = Errno("read");
@@ -237,21 +257,86 @@ class CommandSource : public LogSource {
 public:
     explicit CommandSource(const std::string &cmd) : cmd_(cmd) {}
 
+    ~CommandSource() override
+    {
+        if (fd_ >= 0) {
+            close(fd_);
+        }
+        if (pid_ > 0) {
+            int ignored = 0;
+            Terminate(pid_, &ignored);
+        }
+    }
+
     bool ReadAll(std::string *out, std::string *err, const ReadBudget &budget) override
+    {
+        pid_t pid = -1;
+        int fd = Spawn(&pid, err);
+        if (fd < 0) {
+            return false;
+        }
+        bool ok = ReadPolled(fd, out, err, budget, /* block= */ true);
+        close(fd);
+        if (!ok) {
+            int ignored = 0;
+            Terminate(pid, &ignored);
+            return false;
+        }
+        return Reap(pid, err);
+    }
+
+    bool CanFollow() const override { return true; }
+
+    bool ReadNew(std::string *out, std::string *err, const ReadBudget &budget) override
+    {
+        if (fd_ < 0) {
+            // A producer that failed is reported only once its output has been
+            // handed over -- the pipe can still hold the lines it managed to
+            // write, and dropping them would lose the very evidence of what it
+            // was doing when it died.
+            if (!exitError_.empty()) {
+                *err = exitError_;
+                return false;
+            }
+            if (ended_) {
+                return true;        // clean end of stream; Eof() says so
+            }
+            fd_ = Spawn(&pid_, err);
+            if (fd_ < 0) {
+                return false;
+            }
+        }
+        // block=false, so an idle producer costs one slice and *out stays empty.
+        if (!ReadPolled(fd_, out, err, budget, /* block= */ false)) {
+            return false;
+        }
+        NoteIfExited();
+        return true;
+    }
+
+    bool Eof() const override { return ended_; }
+
+    std::string Tag() const override { return "cmd"; }
+    std::string Describe() const override { return "cmd:" + cmd_; }
+    bool IsSampled() const override { return true; }
+
+private:
+    // Starts the command with its stdout on a pipe. Returns the read end, or -1.
+    int Spawn(pid_t *pid, std::string *err)
     {
         int fds[2];
         if (pipe(fds) != 0) {
             *err = Errno("pipe");
-            return false;
+            return -1;
         }
-        pid_t pid = fork();
-        if (pid < 0) {
+        pid_t child = fork();
+        if (child < 0) {
             close(fds[0]);
             close(fds[1]);
             *err = Errno("fork");
-            return false;
+            return -1;
         }
-        if (pid == 0) {
+        if (child == 0) {
             // Child. /bin/sh rather than a direct exec: the useful commands here
             // are written with arguments and pipes ("hilog -x -t kmsg"), and
             // re-implementing word splitting would be its own source of bugs.
@@ -263,16 +348,17 @@ public:
             execl("/bin/sh", "sh", "-c", cmd_.c_str(), static_cast<char *>(nullptr));
             _exit(127);
         }
-
         close(fds[1]);
-        bool ok = ReadPolled(fds[0], out, err, budget, /* block= */ true);
-        close(fds[0]);
-        if (!ok) {
-            int ignored = 0;
-            Terminate(pid, &ignored);
-            return false;
-        }
+        *pid = child;
+        return fds[0];
+    }
 
+    // Decides whether a command that has exited is an error. It is: a command
+    // that failed outright produced no output, and presenting that as an empty
+    // log would be a silent lie. A clean exit is a legitimate end of stream,
+    // which the follower learns from Eof().
+    bool Reap(pid_t pid, std::string *err)
+    {
         int status = 0;
         if (waitpid(pid, &status, WNOHANG) == 0) {
             // Still running, so the budget ended the read rather than the
@@ -282,9 +368,11 @@ public:
             Terminate(pid, &status);
             return true;
         }
-        // It exited on its own, so its status is meaningful: a command that
-        // failed outright produced no output, and presenting that as an empty
-        // log would be a silent lie.
+        return DescribeExit(status, err);
+    }
+
+    bool DescribeExit(int status, std::string *err)
+    {
         if (!WIFEXITED(status)) {
             *err = "command killed by signal " + std::to_string(WTERMSIG(status)) + ": " + cmd_;
             return false;
@@ -296,16 +384,44 @@ public:
         return true;
     }
 
-    std::string Tag() const override { return "cmd"; }
-    std::string Describe() const override { return "cmd:" + cmd_; }
-    bool IsSampled() const override { return true; }
+    // Reaps the producer the moment it is gone, so the next Eof() is true.
+    void NoteIfExited()
+    {
+        if (pid_ <= 0) {
+            return;
+        }
+        int status = 0;
+        if (waitpid(pid_, &status, WNOHANG) != pid_) {
+            return;
+        }
+        pid_ = -1;
+        ended_ = true;
+        if (fd_ >= 0) {
+            close(fd_);
+            fd_ = -1;
+        }
+        std::string msg;
+        if (!DescribeExit(status, &msg)) {
+            exitError_ = msg;
+        }
+    }
 
-private:
     std::string cmd_;
+    int fd_ = -1;
+    pid_t pid_ = -1;
+    bool ended_ = false;
+    std::string exitError_;
 };
 
 class KmsgSource : public LogSource {
 public:
+    ~KmsgSource() override
+    {
+        if (fd_ >= 0) {
+            close(fd_);
+        }
+    }
+
     bool ReadAll(std::string *out, std::string *err, const ReadBudget &budget) override
     {
         int fd = open("/dev/kmsg", O_RDONLY | O_NONBLOCK);
@@ -313,14 +429,40 @@ public:
             *err = std::string("/dev/kmsg: ") + std::strerror(errno);
             return false;
         }
-        bool ok = ReadPolled(fd, out, err, budget, /* block= */ false);
+        bool ok = ReadPolled(fd, out, err, budget, /* block= */ false, &overruns_);
         close(fd);
         return ok;
+    }
+
+    // The whole point of following is that the handle survives between reads:
+    // the kernel's ring buffer has a read cursor per open file description, so
+    // opening once and re-reading gives the backlog first and then only what
+    // arrived since. Opening per call -- what ReadAll does -- would replay the
+    // entire buffer every time and every record would look brand new.
+    bool CanFollow() const override { return true; }
+
+    bool ReadNew(std::string *out, std::string *err, const ReadBudget &budget) override
+    {
+        if (fd_ < 0) {
+            fd_ = open("/dev/kmsg", O_RDONLY | O_NONBLOCK);
+            if (fd_ < 0) {
+                *err = std::string("/dev/kmsg: ") + std::strerror(errno);
+                return false;
+            }
+        }
+        // block=false: return as soon as the budget expires with nothing new,
+        // which is the normal case between denials -- an empty *out is success.
+        return ReadPolled(fd_, out, err, budget, /* block= */ false, &overruns_);
     }
 
     std::string Tag() const override { return "kmsg"; }
     std::string Describe() const override { return "/dev/kmsg"; }
     bool IsSampled() const override { return true; }
+    long long Overruns() const override { return overruns_; }
+
+private:
+    int fd_ = -1;
+    long long overruns_ = 0;
 };
 
 } // namespace

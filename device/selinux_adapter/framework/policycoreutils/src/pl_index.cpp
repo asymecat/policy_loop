@@ -28,7 +28,7 @@ const std::vector<SymId> PlIndex::kEmptyAttrs;
 
 namespace {
 
-const long long kPliVersion = 1;
+const long long kPliVersion = 2;
 
 std::vector<std::string> SplitWhitespace(const std::string &s)
 {
@@ -256,6 +256,7 @@ std::unique_ptr<PlIndex> PlIndex::LoadFromText(const std::string &text, std::str
     std::unordered_map<std::string, long long> metaFields;
     long long expectedRules = -1;
     size_t bodyStart = lines.size();
+    std::vector<std::string> unknownSections;
 
     for (size_t i = 1; i < lines.size(); ++i) {
         const std::string &line = lines[i];
@@ -314,6 +315,9 @@ std::unique_ptr<PlIndex> PlIndex::LoadFromText(const std::string &text, std::str
             index->known_.insert(index->Intern(line.substr(7)));
         } else if (StartsWith(line, "@perm ")) {
             index->declaredPerms_.insert(index->Intern(line.substr(6)));
+        } else if (StartsWith(line, "@rev ")) {
+            // Validated before the loop; listed so the catch-all below, which
+            // must stay last, does not report it as an unknown section.
         } else if (StartsWith(line, "@rules ")) {
             if (!ParseLongLong(line.substr(7), &expectedRules)) {
                 *err = "malformed @rules header: " + line;
@@ -321,12 +325,35 @@ std::unique_ptr<PlIndex> PlIndex::LoadFromText(const std::string &text, std::str
             }
             bodyStart = i + 1;
             break;
+        } else if (StartsWith(line, "@")) {
+            // A section this reader does not know. Skipping it is the only
+            // forward-compatible thing to do, but skipping it *silently* means
+            // an index built by a newer exporter loads fine and then answers
+            // wrong, which is worse than refusing it. Collect the names and say
+            // so after the header is parsed.
+            const std::string name = line.substr(1, line.find(' ') - 1);
+            if (std::find(unknownSections.begin(), unknownSections.end(), name) ==
+                unknownSections.end()) {
+                unknownSections.push_back(name);
+            }
         }
     }
 
     if (expectedRules < 0) {
         *err = "missing @rules header";
         return nullptr;
+    }
+
+    if (!unknownSections.empty()) {
+        std::string names;
+        for (size_t i = 0; i < unknownSections.size(); ++i) {
+            names += (i == 0 ? "" : ", ") + unknownSections[i];
+        }
+        fprintf(stderr,
+                "denial_check: warning: index carries section(s) this reader "
+                "does not understand: %s -- they were ignored, so any answer "
+                "that depends on them (HAP/APL mapping) is wrong.\n",
+                names.c_str());
     }
 
     for (size_t i = bodyStart; i < lines.size(); ++i) {

@@ -125,6 +125,7 @@ std::string WithDeviceBlock(const std::string &reportJson, const DeviceFacts &fa
     out += ", \"suppressed_estimate\": " + std::to_string(facts.suppressedEstimate);
     out += ", \"sampled\": ";
     out += facts.sampled ? "true" : "false";
+    out += ", \"overruns\": " + std::to_string(facts.overruns);
     char buf[64];
     std::snprintf(buf, sizeof(buf), "%.1f", facts.loadMs);
     out += ", \"load_ms\": " + std::string(buf);
@@ -163,6 +164,15 @@ std::string HeaderLine(const DeviceFacts &facts)
         // more precise than it is.
         out += "\nactual denials may be " + std::to_string(facts.observedDenials) + " + " +
                std::to_string(facts.suppressedEstimate);
+    }
+    if (facts.overruns > 0) {
+        // Distinct from the rate-limiter estimate above: those records were
+        // never written, these were written and then overwritten in the ring
+        // before the reader got to them. Same consequence (the count is a lower
+        // bound) but a different cause, and only one of the two is fixable by
+        // reading faster.
+        out += "\n" + std::to_string(facts.overruns) +
+               " ring overrun(s): records were overwritten before they could be read";
     }
     return out;
 }

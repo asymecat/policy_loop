@@ -36,7 +36,9 @@
 #include <getopt.h>
 #include <memory>
 #include <string>
+#include <sys/stat.h>
 #include <unistd.h>
+#include <unordered_set>
 #include <vector>
 
 #include "pl_avc_parser.h"
@@ -108,6 +110,29 @@ void PrintUsage()
         "                        to stdout (JSONL, sorted keys). Used by the\n"
         "                        host/device differential harness: both sides emit\n"
         "                        the same shape, so `diff` is the comparison.\n"
+        "      --follow          keep the source open and write each record the\n"
+        "                        moment it lands, flushed, in --dump-denials' shape.\n"
+        "                        This is the live mode: a reader polling the stream\n"
+        "                        sees a denial while it is still the newest line.\n"
+        "                        With --timeout-ms 0 it runs until killed.\n"
+        "      --from-now        with --follow: drop the backlog the first read\n"
+        "                        returns. Attaching to /dev/kmsg replays the whole\n"
+        "                        ring buffer, so without this a watch that started a\n"
+        "                        second ago reports hours of history.\n"
+        "      --dedupe          with --follow: emit each fingerprint once. One\n"
+        "                        daemon denied every 5s is one case, not 700. The\n"
+        "                        count is reported on stderr.\n"
+        "      --out <file>      with --follow: append the record stream to <file>\n"
+        "                        instead of stdout. Needed when the process is a\n"
+        "                        service, because init has no stdio redirection.\n"
+        "      --guard           run as a service and follow the feature switch:\n"
+        "                        while <dir>/guard.on holds '1', append to\n"
+        "                        <dir>/live.jsonl; when it stops holding '1', end\n"
+        "                        the session but keep running. Creates both files\n"
+        "                        (0666) if the app has not, waits for <dir> to\n"
+        "                        appear, and always starts a session on an empty\n"
+        "                        file. Implies --from-now per session.\n"
+        "      --dir <dir>       the app's files directory, for --guard\n"
         "  -s, --selftest        run the built-in fixed-vector self test and exit\n"
         "                        (requires no index and no log; use it to tell\n"
         "                        \"does not run\" apart from \"computes wrong\")\n"
@@ -199,9 +224,9 @@ int SelfTestSha1()
  * on, so they are exactly the cases a self test should pin.
  */
 const char *const kSelfTestPli = R"PLI(PLI1
-@rev 1
+@rev 2
 @src selftest.embedded gen=2026-09-10T00:00:00Z exporter=policy_loop/export/pli.py
-@meta rules=9 allow=6 neverallow=2 allowxperm=1 neverallowxperm=0 types=13 attrs=2 classes=3 perms=6 known=13 skipped=0
+@meta rules=9 allow=6 neverallow=2 allowxperm=1 neverallowxperm=0 types=13 attrs=2 classes=3 perms=6 known=13 skipped=0 hap_entries=0 hap_domains=0 hap_names=0 hap_apls=0 hap_debuggable=0 hap_skipped=0
 @class chr_file 5
 @class hdf_devmgr_class 1
 @class samgr_class 3
@@ -561,6 +586,306 @@ double NowMs()
     return static_cast<double>(ts.tv_sec) * 1000.0 + static_cast<double>(ts.tv_nsec) / 1e6;
 }
 
+// --------------------------------------------------------------------------
+// --follow
+// --------------------------------------------------------------------------
+
+/*
+ * Longest a single read waits before handing back what it has.
+ *
+ * --kmsg never signals EOF, so a read only ends on its budget. Snapshot mode
+ * spends the whole --timeout-ms in one call and is happy to; following cannot,
+ * because the point is to surface a record while it is still news. Half a
+ * second is short enough to feel immediate in a UI polling at 1 Hz and long
+ * enough that an idle stream is not a spin loop.
+ */
+constexpr long long kFollowSliceMs = 500;
+
+/*
+ * Splits `*pending` on newlines, handing each complete line to `emit`.
+ *
+ * The tail after the last newline is an incomplete record -- /dev/kmsg writes
+ * in chunks and a read can land mid-line -- so it stays in `pending` for the
+ * next read to finish. Nothing is emitted for it: a half line parses into a
+ * half record with fields that look absent rather than truncated, which is
+ * exactly the wrong answer to hand a reader that is about to advise a fix.
+ */
+template <typename Emit>
+void DrainLines(std::string *pending, Emit emit)
+{
+    size_t pos = 0;
+    for (;;) {
+        size_t nl = pending->find('\n', pos);
+        if (nl == std::string::npos) {
+            break;
+        }
+        emit(pending->substr(pos, nl - pos));
+        pos = nl + 1;
+    }
+    pending->erase(0, pos);
+}
+
+/*
+ * Reads the feature switch. Anything but a leading '1' is off, including a
+ * missing file: a collector that ran because a file it could not read might
+ * have said "on" would be reading the audit log without being asked to.
+ */
+bool SwitchIsOn(const std::string &path)
+{
+    FILE *f = std::fopen(path.c_str(), "r");
+    if (f == nullptr) {
+        return false;
+    }
+    char buf[8] = {0};
+    size_t n = std::fread(buf, 1, sizeof(buf) - 1, f);
+    std::fclose(f);
+    return n > 0 && buf[0] == '1';
+}
+
+/*
+ * Creates the two files the app and this process share, if they are missing,
+ * and makes them world-writable.
+ *
+ * Both steps are forced by the same policy fact, which is worth stating because
+ * it is the opposite of what a sandbox usually implies: the app's own domain
+ * holds `debug_hap_data_file:file { read write open }` and **no permission at
+ * all on the dir class**. So the app can rewrite a file that exists and can
+ * never create one, and it cannot chmod what root created. A freshly installed
+ * app has an empty sandbox, so if this process does not lay the files down
+ * first, the switch fails with "cannot write" and the feature looks broken for
+ * a reason that has nothing to do with the feature.
+ */
+void EnsureSwitchFiles(const std::string &sw, const std::string &live)
+{
+    if (::access(sw.c_str(), F_OK) != 0) {
+        FILE *f = std::fopen(sw.c_str(), "w");
+        if (f != nullptr) {
+            std::fputs("0\n", f);
+            std::fclose(f);
+        }
+    }
+    if (::access(live.c_str(), F_OK) != 0) {
+        FILE *f = std::fopen(live.c_str(), "w");
+        if (f != nullptr) {
+            std::fclose(f);
+        }
+    }
+    ::chmod(sw.c_str(), 0666);
+    ::chmod(live.c_str(), 0666);
+}
+
+/*
+ * Streams a live source, writing one JSON object per record as it arrives.
+ *
+ * The shape of each line is DumpDenials' exactly, so a follower can hand the
+ * stream to the same reader that consumes --dump-denials and a `diff` of the
+ * two still means something. What differs is timing: every batch is flushed,
+ * because a downstream reader that polls a file (or a pipe) must see a record
+ * while it is still the newest thing in the log. The C stdio buffer would
+ * otherwise hold hundreds of records and release them together at exit, which
+ * is precisely the behaviour that made this mode necessary.
+ *
+ * Two filters exist because "every record" and "what a human needs to be told"
+ * are not the same set, and a popup driver wants the second:
+ *
+ *   --from-now   drop the backlog the first read returns. Attaching to kmsg
+ *                replays the whole ring buffer, so without this a watch that
+ *                started a second ago immediately reports hours of history.
+ *   --dedupe     emit a fingerprint once. A broken daemon denied every 5s is
+ *                one problem, not 700; the count is kept and reported on
+ *                stderr so the suppression is visible rather than silent.
+ *
+ * Both default off: the unfiltered stream is the honest one, and a caller that
+ * wants a digest of it should ask.
+ */
+int FollowMode(const std::unique_ptr<policy_loop::LogSource> &source, long long timeoutMs,
+               bool dedupe, bool fromNow, const std::string &outPath = std::string(),
+               const std::string &switchPath = std::string())
+{
+    if (!source->CanFollow()) {
+        std::fprintf(stderr,
+                     "%s: --follow needs a streaming source; %s is a snapshot. "
+                     "Use --kmsg, or --log-cmd with a command that tails.\n",
+                     kProgram, source->Describe().c_str());
+        return 2;
+    }
+
+    // A service started by init has no shell to redirect its stdout, and OHOS
+    // init's cfg has no stdio redirection to ask for, so the stream has to
+    // reach its file by this process's own hand. Everything below still writes
+    // to stdout; this only points stdout at the file first.
+    if (!outPath.empty()) {
+        if (std::freopen(outPath.c_str(), "a", stdout) == nullptr) {
+            std::fprintf(stderr, "%s: cannot open %s for append\n", kProgram, outPath.c_str());
+            return 1;
+        }
+    }
+
+    double deadline = (timeoutMs > 0) ? NowMs() + static_cast<double>(timeoutMs) : 0.0;
+    std::string pending;
+    std::unordered_set<std::string> seen;
+    long long emitted = 0;
+    long long suppressed = 0;
+    long long dropped = 0;
+    bool draining = fromNow;
+
+    // The banner goes to stderr so stdout stays a pure record stream.
+    std::fprintf(stderr, "%s: following %s (slice %lldms%s%s)\n", kProgram, source->Describe().c_str(),
+                 kFollowSliceMs, dedupe ? ", dedupe" : "", fromNow ? ", from-now" : "");
+
+    for (;;) {
+        // A session ends when the operator turns the feature off. Checked once
+        // per slice instead of through a signal or a second thread: the read
+        // budget is already half a second, which is the same latency the UI
+        // polling this file has, so a heavier mechanism would buy nothing.
+        if (!switchPath.empty() && !SwitchIsOn(switchPath)) {
+            std::fprintf(stderr, "%s: switch went off\n", kProgram);
+            break;
+        }
+
+        long long slice = kFollowSliceMs;
+        if (deadline > 0) {
+            long long left = static_cast<long long>(deadline - NowMs());
+            if (left <= 0) {
+                break;
+            }
+            if (left < slice) {
+                slice = left;
+            }
+        }
+
+        policy_loop::ReadBudget budget;
+        budget.maxMs = slice;
+
+        std::string chunk;
+        std::string err;
+        if (!source->ReadNew(&chunk, &err, budget)) {
+            std::fprintf(stderr, "%s: %s\n", kProgram, err.c_str());
+            std::fflush(stdout);
+            return 1;
+        }
+        pending += chunk;
+        bool ended = source->Eof();
+
+        DrainLines(&pending, [&](const std::string &line) {
+            std::vector<policy_loop::DenialRecord> recs = policy_loop::ParseDenials(line);
+            if (recs.empty()) {
+                return;         // not an avc line: the ring buffer carries everything
+            }
+            if (draining) {
+                dropped += static_cast<long long>(recs.size());
+                return;
+            }
+            std::vector<policy_loop::DenialRecord> fresh;
+            for (const policy_loop::DenialRecord &rec : recs) {
+                if (dedupe && !seen.insert(policy_loop::Fingerprint(rec)).second) {
+                    ++suppressed;
+                    continue;
+                }
+                fresh.push_back(rec);
+            }
+            if (!fresh.empty()) {
+                DumpDenials(fresh);
+                emitted += static_cast<long long>(fresh.size());
+            }
+        });
+
+        if (draining) {
+            // The first read is the only one that replays; everything it held is
+            // history, so the switch flips once it is done.
+            draining = false;
+        }
+        std::fflush(stdout);
+
+        if (ended) {
+            // The producer is gone. Waiting out the rest of the budget would
+            // mean sitting on a stream that cannot produce another record.
+            // Any partial line here is truncated by the producer's death, so
+            // it is reported rather than parsed.
+            if (!pending.empty()) {
+                std::fprintf(stderr, "%s: %zu trailing bytes after the stream ended: not a record\n",
+                             kProgram, pending.size());
+            }
+            break;
+        }
+        if (deadline > 0 && NowMs() >= deadline) {
+            break;
+        }
+    }
+
+    // A trailing partial line is not a record and is deliberately not emitted;
+    // saying so beats a stream that ends on a line no reader can parse.
+    std::fprintf(stderr, "%s: followed %s for %lldms: %lld emitted, %lld suppressed, %lld backlog dropped\n",
+                 kProgram, source->Describe().c_str(), timeoutMs, emitted, suppressed, dropped);
+    if (source->Overruns() > 0) {
+        // A follower that silently lost records would report a quiet system at
+        // exactly the moment the log was too busy to keep up with.
+        std::fprintf(stderr,
+                     "%s: %lld ring overrun(s): records were overwritten before they could be read\n",
+                     kProgram, source->Overruns());
+    }
+    std::fflush(stdout);
+    return 0;
+}
+
+/*
+ * Runs the collector the way a service runs: one long-lived process that opens
+ * a fresh session every time the operator turns the feature on.
+ *
+ * Why this is in the binary and not a shell wrapper around it. OHOS init can
+ * start a process, but the domain a service lands in comes from the `secon`
+ * field of its cfg, and `sh /system/bin/pl_guard.sh` would ask for `secon` on
+ * the *shell* -- putting a script that runs `ls`, `date` and `chmod` into the
+ * same domain as a collector whose whole job needs two permissions, and handing
+ * the collector the shell's entire permission set to get them. So the switch
+ * polling, the file creation and the output redirection are the binary's job,
+ * and the domain stays small enough to read in one sitting.
+ *
+ * This replaces device/board/pl_guard.sh for the service form. The script is
+ * kept for the demo form, where everything runs under `su`.
+ */
+int GuardMode(const std::string &logPath, const std::string &logCmd, bool kmsg,
+              bool dedupe, const std::string &dir)
+{
+    const std::string sw = dir + "/guard.on";
+    const std::string live = dir + "/live.jsonl";
+
+    std::fprintf(stderr, "%s: guard watching %s\n", kProgram, dir.c_str());
+
+    for (;;) {
+        struct stat st;
+        if (::stat(dir.c_str(), &st) != 0 || !S_ISDIR(st.st_mode)) {
+            // The app may not be installed yet, and at boot this service may
+            // well start first. A service that exited here would need a reboot
+            // to come back; waiting costs one stat a second.
+            sleep(1);
+            continue;
+        }
+        EnsureSwitchFiles(sw, live);
+
+        if (!SwitchIsOn(sw)) {
+            sleep(1);
+            continue;
+        }
+
+        // A session opens on an empty file. The operator asked for "what
+        // happens from now on", and a list that opens with the previous
+        // session's denials is the one thing that would make the popup
+        // untrustworthy -- the reader could not tell new from remembered.
+        FILE *f = std::fopen(live.c_str(), "w");
+        if (f != nullptr) {
+            std::fclose(f);
+        }
+        ::chmod(live.c_str(), 0666);
+        std::fprintf(stderr, "%s: session start -> %s\n", kProgram, live.c_str());
+
+        // timeoutMs 0: the switch ends the session, not a clock.
+        // fromNow true: attaching to /dev/kmsg replays the whole ring buffer,
+        // and that backlog is not what "since I turned this on" means.
+        FollowMode(MakeSource(logPath, logCmd, kmsg), 0, dedupe, true, live, sw);
+    }
+}
+
 int IndexInfo(const std::string &indexPath)
 {
     double start = NowMs();
@@ -733,6 +1058,7 @@ int ConvergeReportMode(policy_loop::PlIndex *index, const std::string &text,
     facts.observedDenials = report.totalDenials;
     facts.suppressedEstimate = policy_loop::CountSuppressed(text);
     facts.sampled = source.IsSampled();
+    facts.overruns = source.Overruns();
     facts.loadMs = loadMs;
     facts.queryMs = queryMs;
     policy_loop::WarnIncompleteIndex(&facts);
@@ -932,6 +1258,12 @@ enum LongOnly {
     kOptJson,
     kOptCase,
     kOptFull,
+    kOptFollow,
+    kOptDedupe,
+    kOptFromNow,
+    kOptOut,
+    kOptGuard,
+    kOptDir,
 };
 
 } // namespace
@@ -955,6 +1287,12 @@ int main(int argc, char *argv[])
         {"json", no_argument, nullptr, kOptJson},
         {"case", required_argument, nullptr, kOptCase},
         {"full", no_argument, nullptr, kOptFull},
+        {"follow", no_argument, nullptr, kOptFollow},
+        {"dedupe", no_argument, nullptr, kOptDedupe},
+        {"from-now", no_argument, nullptr, kOptFromNow},
+        {"out", required_argument, nullptr, kOptOut},
+        {"guard", no_argument, nullptr, kOptGuard},
+        {"dir", required_argument, nullptr, kOptDir},
         {nullptr, no_argument, nullptr, 0},
     };
 
@@ -977,6 +1315,12 @@ int main(int argc, char *argv[])
     bool explain = false;
     bool asJson = false;
     bool full = false;
+    bool follow = false;
+    bool dedupe = false;
+    bool fromNow = false;
+    std::string outPath;
+    std::string guardDir;
+    bool guard = false;
 
     int para = 0;
     while ((para = getopt_long(argc, argv, "hvsl:di:", kOptions, nullptr)) != -1) {
@@ -1033,6 +1377,24 @@ int main(int argc, char *argv[])
             case kOptFull:
                 full = true;
                 break;
+            case kOptFollow:
+                follow = true;
+                break;
+            case kOptDedupe:
+                dedupe = true;
+                break;
+            case kOptFromNow:
+                fromNow = true;
+                break;
+            case kOptOut:
+                outPath = optarg;
+                break;
+            case kOptGuard:
+                guard = true;
+                break;
+            case kOptDir:
+                guardDir = optarg;
+                break;
             default:
                 std::fprintf(stderr, "Try '%s -h' for more information.\n", kProgram);
                 return 2;
@@ -1045,6 +1407,37 @@ int main(int argc, char *argv[])
     }
     if (full && casePath.empty()) {
         std::fprintf(stderr, "%s: --full only applies to --case\n", kProgram);
+        return 2;
+    }
+    // --guard runs a --follow session internally, so a caller writing the
+    // production command line naturally reaches for --dedupe -- and GuardMode
+    // does honour it. Rejecting it here is what actually shipped: the init cfg
+    // said "--guard --dedupe --kmsg", validation exited 2, and because init
+    // sends a service's stderr to /dev/null the service died on every boot
+    // without leaving a trace. The mistake only surfaced when the production
+    // command line was finally run as a whole, in the pre-reboot rehearsal.
+    //
+    // --from-now is allowed through too rather than special-cased: GuardMode
+    // hardcodes from-now (a session means "from the moment you switched this
+    // on"), so the flag is redundant there, not contradictory.
+    if ((dedupe || fromNow) && !follow && !guard) {
+        std::fprintf(stderr, "%s: --dedupe and --from-now only apply to --follow or --guard\n", kProgram);
+        return 2;
+    }
+    if (follow && dumpDenials) {
+        // Both write the record stream to stdout; taking both would emit it twice.
+        std::fprintf(stderr, "%s: --follow and --dump-denials are mutually exclusive\n", kProgram);
+        return 2;
+    }
+    if (guard && guardDir.empty()) {
+        std::fprintf(stderr, "%s: --guard needs --dir <the app's files directory>\n", kProgram);
+        return 2;
+    }
+    if (guard && !outPath.empty()) {
+        // --guard owns both files inside --dir; a second output path would be a
+        // second stream to keep in step with the switch for no reason.
+        std::fprintf(stderr, "%s: --guard writes live.jsonl inside --dir; --out is for plain --follow\n",
+                     kProgram);
         return 2;
     }
     if (indexInfo || !queryPath.empty() || converge || explain || !casePath.empty()) {
@@ -1096,6 +1489,20 @@ int main(int argc, char *argv[])
     if (sources > 1) {
         std::fprintf(stderr, "%s: --log-cmd and --kmsg are mutually exclusive\n", kProgram);
         return 2;
+    }
+    if (follow && converge) {
+        // One streams records as they land, the other reports a settled
+        // cluster of them; a stream has no settled point to report.
+        std::fprintf(stderr, "%s: --follow and --converge are mutually exclusive\n", kProgram);
+        return 2;
+    }
+
+    if (guard) {
+        return GuardMode(logPath, logCmd, kmsg, dedupe, guardDir);
+    }
+
+    if (follow) {
+        return FollowMode(MakeSource(logPath, logCmd, kmsg), timeoutMs, dedupe, fromNow, outPath);
     }
 
     if (converge) {
