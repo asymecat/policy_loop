@@ -29,3 +29,10 @@ docs/reproduce-l1.md
 
 # 误拉整个 OHOS 源码树的保险（项目里绝不跟踪它）
 ohos_src/
+
+# HAP 构建缓存（DevEco/hvigor 生成）
+.hvigor/
+
+# 板端策略的编译产物：由 device/selinux_policy/build_pl_collector.sh 从 .cil 重生成，
+# 不入库（400KB 二进制、且带 secilc 版本指纹）。
+device/selinux_policy/out/

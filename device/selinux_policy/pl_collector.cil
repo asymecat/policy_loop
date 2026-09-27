@@ -1,0 +1,174 @@
+;; =====================================================================
+;; PolicyLoop 采集服务域 pl_collector
+;;
+;; 这是"生产形态"。演示形态那版守护跑在 su 域里，而 su 在 eng 版是
+;; (typepermissive su)——它能写进应用沙箱纯属侥幸。这个域不是：
+;; 它是一条一条被显式授予的普通域，**不依赖任何 permissive**。
+;;
+;; 进域机制：**不靠文件标签，靠 init 的 secon。**
+;;   init 在 exec 服务前调用 setexeccon("u:r:pl_collector:s0")。
+;;   内核 selinux_setprocattr() 对 "exec" 的检查是
+;;       avc_has_perm(mysid, mysid, SECCLASS_PROCESS, PROCESS__SETEXEC)
+;;   —— 目标类型是 **mysid 自己**，不是要切的标签（hooks.c:6398）。
+;;   板子策略里 (allow init self (process (... setexec ...))) 早就给了。
+;;
+;;   这免掉的是**打标签那一整套**：不需要给二进制写 security.selinux，
+;;   不需要 restorecon，不需要 type_transition（setfattr 板子上有，用不着）。
+;;   上一轮的整个死胡同（附录 A1/A2）就是卡在打标签上。
+;;
+;; ★★ 但 secon **不免 execve 的常规检查** —— 这一条我第一版漏了，实测打脸：
+;;   内核在 exec_sid 那条路上**照旧**走 else 分支（hooks.c:2360-2372）：
+;;       avc_has_perm(old=init, new=pl_collector, PROCESS, TRANSITION)
+;;       avc_has_perm(new=pl_collector, file=二进制, FILE, ENTRYPOINT)
+;;   报错长这样（在 su 里预演时抓到的）：
+;;       denied { entrypoint } scontext=u:r:pl_collector:s0 \
+;;              tcontext=u:object_r:system_bin_file:s0 permissive=0
+;;   板子自己的 (allow init hilogd (process (transition siginh rlimitinh)))
+;;   就是这条规矩的现成反例 —— 当时我只 grep 了 setexec，没 grep transition，
+;;   于是得出了"什么转换都不要"的错误结论。教训：**grep 一个关键词不足以
+;;   否定一条规则，要 grep 规则本身。**
+;;
+;; 授权来源：hdcd（板子上唯一现成的"root 守护读 kmsg"范例）逐条对照，
+;; 再把"写回应用沙箱"换成我们的数据出口。凡是 hdcd 没有的都不加。
+;; =====================================================================
+
+(type pl_collector)
+(roletype r pl_collector)                 ;; u:r:pl_collector:s0 要成立必须有这条
+(typeattributeset domain (pl_collector))
+
+;; 进域的两条硬门（缺一不可，见上面 ★★）
+(allow init pl_collector (process (transition siginh rlimitinh)))
+
+;; ---------------------------------------------------------------------
+;; 1. 自己：进程基本盘 + setuid(0) 之后绕过 DAC 的那两个能力
+;;
+;;    dac_override 这条是**必需的**，不是顺手加的：
+;;    /data/app/el2/100/base/<bundle> 是 0700、属主是应用 uid，
+;;    我们的服务以 root 跑，要穿进去就必须真的能覆盖 DAC。
+;;    SELinux 对 capability 类的检查是独立的——uid 0 不自动豁免。
+;; ---------------------------------------------------------------------
+(allow pl_collector self (process (fork sigchld sigkill sigstop signull signal getsched setsched getsession getpgid setpgid getcap setcap getattr setrlimit)))
+(allow pl_collector self (fd (use)))
+(allow pl_collector self (dir (ioctl read getattr lock open watch watch_reads search)))
+(allow pl_collector self (file (ioctl read write getattr lock append map open watch watch_reads)))
+(allow pl_collector self (lnk_file (ioctl read getattr lock map open watch watch_reads)))
+(allow pl_collector self (fifo_file (ioctl read write getattr lock append map open watch watch_reads)))
+(allow pl_collector self (capability (dac_override dac_read_search)))
+(allow pl_collector self (capability2 (syslog)))
+(allow pl_collector self (lockdown (confidentiality)))
+
+;; ---------------------------------------------------------------------
+;; 1b. hilog 客户端 —— **不是为了打日志，是为了别崩**
+;;
+;;    ★ 这一条是实测逼出来的，不是照抄。板子上跑起来报：
+;;        HiLogAdapter_init: Can't create socket! Errno: 13
+;;    Errno 13 = EACCES，来自 libc 启动时的一个构造函数（每个 OHOS 动态
+;;    链接程序都有，连 toybox 都有——dmesg 里 comm="toybox" 也在建
+;;    unix_dgram_socket）。没有它，日志走 /dev/console 兜底，而兜底那条路
+;;    也被拒之后进程直接 SIGSEGV —— 表现是 `--version` 都跑不起来，
+;;    看起来像二进制坏了，其实是策略没给够。
+;;
+;;    给法是照抄板子上任何一个域的通行写法（a2dp_host、aa、accessibility…
+;;    全都一模一样）。hdcd 那三条就是标准的一套：
+;;      (allow hdcd self (unix_dgram_socket (write create connect)))
+;;      (allow hdcd hilogd (unix_dgram_socket (sendto)))
+;;      (allow hdcd hilog_input_socket (sock_file (write)))
+;;
+;;    ★★ 第三条是**在一句 AVC 都没有的情况下**找出来的，这条经验必须记住：
+;;     `create` 补上之后，报错从 "Can't create socket" 变成
+;;     "Can't connect to server. Errno: 13"，但 dmesg 里**干干净净，
+;;     一条 pl_collector 的 denial 都没有**。
+;;     ⇒ **EACCES + 零 AVC ≠ 权限够了。** 板子策略里有 dontaudit，把一部分
+;;       拒绝的审计关掉了。所以判据只能是"功能对不对"（报错在不在），
+;;       绝不能是"dmesg 里有没有 deny"。
+;;     connect 到路径套接字走的是 unix_find_other → inode_permission(MAY_WRITE)，
+;;     对应的是 **sock_file:write**，不是 unix_dgram_socket:sendto ——
+;;     这也是为什么第二条给了还是连不上。
+;;     （实际 socket 是 /dev/unix/socket/hilogInput，s-w--w--w- root:log，
+;;       other 本来就有写权限，所以不可能是 DAC 挡的。）
+;; ---------------------------------------------------------------------
+(allow pl_collector self (unix_dgram_socket (write create connect)))
+(allow pl_collector hilogd (unix_dgram_socket (sendto)))
+(allow pl_collector hilog_input_socket (sock_file (write)))
+
+;; ---------------------------------------------------------------------
+;; 2. 审计流 —— 这个域存在的唯一理由
+;;
+;;    两条缺一不可，而且它们管的是两件不同的事：
+;;      kernel:system syslog_read 是 SELinux 这道门；
+;;      dev_kmsg_file 是读那个字符设备本身。
+;;    另外 dmesg_restrict=1，所以还必须真的持有 CAP_SYSLOG——
+;;    那是 init.cfg 里 "caps": ["SYSLOG"] 的事，策略这边配 capability2。
+;; ---------------------------------------------------------------------
+(allow pl_collector kernel (system (syslog_read)))
+(allow pl_collector kernel (fd (use)))
+(allow pl_collector dev_kmsg_file (chr_file (read open)))
+
+;; ---------------------------------------------------------------------
+;; 3. 把自己跑起来：二进制 + musl 加载器
+;;
+;;    二进制落在 /system/bin，天然标签就是 system_bin_file，不用改。
+;;    路径解析要穿过 /(rootfs) → /system(system_file) → /system/bin，
+;;    所以三层 dir search 都要给。
+;;    本二进制是动态链接的（interpreter /lib/ld-musl-arm.so.1），
+;;    /lib 是指向 /system/lib 的符号链接，标签 system_lib_file。
+;;
+;;    entrypoint 是**必需**的：进域后内核要检查新域对这个文件有没有
+;;    entrypoint（hooks.c:2366）。板子自己的 hilogd 也是这么给的：
+;;      (allow hilogd hilogd_exec (file (read getattr map execute open entrypoint)))
+;;    区别是我们没有给二进制单独造 pl_collector_exec 类型，沿用了天然的
+;;    system_bin_file。这在实践上是安全的（要真的切进本域，还得先有
+;;    allow <源> pl_collector:process transition，而那只有 init 有），
+;;    但确实比给一个专属 exec 类型要宽 —— 生产上应换成专属类型。
+;; ---------------------------------------------------------------------
+(allow pl_collector rootfs (dir (search)))
+(allow pl_collector system_file (dir (search getattr open read)))
+(allow pl_collector system_bin_file (dir (search getattr open read)))
+(allow pl_collector system_bin_file (file (read getattr open map execute entrypoint)))
+(allow pl_collector system_lib_file (dir (search getattr open read)))
+(allow pl_collector system_lib_file (file (read getattr open map execute)))
+(allow pl_collector lib_file (lnk_file (read getattr)))
+
+;; ---------------------------------------------------------------------
+;; 4. 数据出口：应用自己的沙箱，唯一一条通道
+;;
+;;    不新开系统侧目录，是因为应用侧读不了 /data/local/tmp（策略里
+;;    data_local_tmp 的 allow 主体全集一个 hap 都没有）。而写进应用沙箱
+;;    的文件按父目录继承 debug_hap_data_file，应用读自己的文件本来就允许
+;;    —— 于是**不需要给应用加任何一条策略**。
+;;    这是刻意把权限加在自己身上而不是加在应用身上。
+;; ---------------------------------------------------------------------
+(allow pl_collector data_file (dir (search)))
+(allow pl_collector data_app_file (dir (read getattr open search)))
+(allow pl_collector data_app_el2_file (dir (read getattr open search)))
+(allow pl_collector debug_hap_data_file (dir (read write create getattr setattr open add_name remove_name search)))
+(allow pl_collector debug_hap_data_file (file (ioctl read write create getattr setattr lock append map unlink open)))
+
+;; ---------------------------------------------------------------------
+;; 5. 让板子自己的服务能看见我们
+;;
+;;    这一条不是给我们用的，是给别人用的 —— 但缺了它会没完没了地产生
+;;    **由我们自己引起的** denial，而且会被我们自己的采集器收进去：
+;;        denied { search } for pid=280 comm="OS_FFRT_2_716" name="26673"
+;;               scontext=u:r:hiview:s0 tcontext=u:r:pl_collector:s0 tclass=dir
+;;    每 10 秒两条。（实测：除了 hiview，没有任何别的域被拒访问本域。）
+;;
+;;    板子的写法是**逐个域两条，成对出现**，没有通用规则：
+;;        (allow hiview appspawn (dir (search)))
+;;        (allow hiview appspawn (file (read getattr open)))
+;;        (allow hiview aa (dir (search)))
+;;        (allow hiview aa (file (read getattr open)))
+;;    …所以新造一个类型，就得自己补上自己这一对。hiview 是故障/统计收集器，
+;;    要遍历各进程的 /proc/<pid>，板子上每个服务域都有这一对。
+;;
+;;    ★★ 只给 dir 那半是不够的 —— 实测漏了 file 那半，后果是每 10 秒仍然两条：
+;;        denied { read } ... name="cmdline" tcontext=u:r:pl_collector:s0 tclass=file
+;;        denied { read } ... name="stat"    tcontext=u:r:pl_collector:s0 tclass=file
+;;      也就是说 dir search 让它**进得去** /proc/<pid>/，而读 cmdline/stat
+;;      这两个 proc 文件的 read 是 file 类，得另给。板子两条一对不是冗余。
+;;
+;;    ★ 这条对演示也有意义：不补的话，弹窗里会夹着"我们自己的进程被拒"
+;;      这种自噬型的条目，看起来像是我们的改动把板子弄脏了。
+;; ---------------------------------------------------------------------
+(allow hiview pl_collector (dir (search)))
+(allow hiview pl_collector (file (read getattr open)))

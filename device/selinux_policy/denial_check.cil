@@ -1,0 +1,156 @@
+;; =====================================================================
+;; PolicyLoop 板端采集域 —— 追加到板子已编译策略的 CIL 之后
+;;
+;; 目的:让应用能通过 exec 一个二进制拿到内核审计流。
+;;   应用(normal_hap)自己读不了 /dev/kmsg(三档 neverallow),
+;;   也读不了 hilog 数据流(读方向的 neverallow 不豁免 hilog socket),
+;;   exec 后又不换域(execute_no_trans)。
+;;   这里补上域切换,并在新域里只开"读 kmsg + 读索引"这两件事。
+;;
+;; 第一轮带 (typepermissive),用来把"运行还需要哪些权限"跑出来;
+;; 拿到 denial 清单后用 PolicyLoop 自己算最小补齐,再去掉 permissive。
+;;
+;; =====================================================================
+;; ★ 上轮失败的根因(2026-09-22 查实,三条,都是"规则写了但没接线")
+;;
+;;  (1) 只写 (typetransition ... process ...) 是不够的。
+;;      内核在 security_compute_sid() 里会先做 avc_has_perm(源域 → 新域, process,
+;;      transition),不过就返回 EACCES(exec 直接失败)。板子自己的可用切换都配了这条:
+;;          (typetransition init hilogd_exec process hilogd)
+;;          (allow init hilogd (process (transition getattr siginh rlimitinh)))
+;;      而我们上一版一条 transition 授权都没有。su 是 permissive 才侥幸没炸,
+;;      **应用域不是 permissive,会硬失败** —— 这条必须补齐。
+;;
+;;  (2) 上一版装进内核的策略里**根本没有 su/sh 的 data_local_tmp 转换规则**,
+;;      只有 round-1 的 (typetransition su denial_check_exec process denial_check);
+;;      而二进制落在 /data/local/tmp 里,类型是 data_local_tmp(打标签没成功),
+;;      两条规则一条都对不上 ⇒ exec 后仍停在 su 域。
+;;      铁证:板上 dmesg 直方图里 0 条 scontext=u:r:denial_check:s0。
+;;
+;;  (3) (3) 打标签的两条路都走不通(见文末附录),所以本轮**不再尝试打标签**,
+;;      直接用二进制在 /data/local/tmp 里天然的 data_local_tmp 类型做切换键。
+;;      代价:hap_domain 会拿到 data_local_tmp 的 read+execute(整个 /data/local/tmp
+;;      对应用可读可执行)。这是本轮有意的降级,理由见附录"为什么可以接受"。
+;; =====================================================================
+
+(type denial_check)
+(type denial_check_exec)
+(roletype r denial_check)
+(roletype object_r denial_check_exec)
+(typeattributeset domain (denial_check))
+(typepermissive denial_check)
+
+;; --- ★ 域切换(本轮的正路):源域 exec /data/local/tmp 下的文件即进本域 ---
+;;     每个源域都要"规则 + 授权"成对出现,缺一不可(见文末根因 (1))。
+(typetransition normal_hap       data_local_tmp process denial_check)
+(typetransition system_basic_hap data_local_tmp process denial_check)
+(typetransition system_core_hap  data_local_tmp process denial_check)
+;; 调试通路:hdc / 串口自己 exec 也能切域,否则板上没法手工验证整条链
+(typetransition su data_local_tmp process denial_check)
+(typetransition sh data_local_tmp process denial_check)
+
+(allow normal_hap       denial_check (process (transition)))
+(allow system_basic_hap denial_check (process (transition)))
+(allow system_core_hap  denial_check (process (transition)))
+(allow su                denial_check (process (transition)))
+(allow sh                denial_check (process (transition)))
+;; 应用/调试域得先能"读+执行"那个文件(权限集照抄板子自己的 init→hilogd 模式)
+(allow hap_domain data_local_tmp (file (read getattr map open execute)))
+(allow hap_domain data_local_tmp (dir  (read getattr open search)))
+(allow su data_local_tmp (file (ioctl read getattr lock map open execute watch watch_reads)))
+(allow su data_local_tmp (dir  (ioctl read getattr lock open search watch watch_reads)))
+(allow sh data_local_tmp (file (ioctl read getattr lock map open execute watch watch_reads)))
+(allow sh data_local_tmp (dir  (ioctl read getattr lock open search watch watch_reads)))
+
+;; --- round-1 遗留的窄路径:万一哪天文件真被打上 denial_check_exec 标签 ---
+;;     留着无害(标签打不上时它永不触发),等窄路径回补时就是现成的。
+(allow hap_domain denial_check_exec (file (read getattr map open execute)))
+(typetransition normal_hap       denial_check_exec process denial_check)
+(typetransition system_basic_hap denial_check_exec process denial_check)
+(typetransition system_core_hap  denial_check_exec process denial_check)
+(typetransition su   denial_check_exec process denial_check)
+(typetransition sh   denial_check_exec process denial_check)
+(typetransition hdcd denial_check_exec process denial_check)
+(allow su   denial_check (process (transition)))
+(allow sh   denial_check (process (transition)))
+(allow hdcd denial_check (process (transition)))
+
+;; --- ★ 采集能力:本域存在的理由 ---
+(allow denial_check dev_kmsg_file (chr_file (getattr read open ioctl)))
+(allow denial_check kernel (system (syslog_read)))
+
+;; --- 索引:也放在 /data/local/tmp(类型同为 data_local_tmp),采集域要能读 ---
+(allow denial_check data_local_tmp (file (ioctl read getattr lock map open watch watch_reads)))
+(allow denial_check data_local_tmp (dir  (ioctl read getattr lock open search watch watch_reads)))
+
+;; --- 运行基础(第一轮故意给薄,靠 permissive 把差额跑出来) ---
+(allow denial_check denial_check_exec (file (ioctl read getattr lock map execute open entrypoint watch watch_reads)))
+(allow denial_check self (process (fork transition sigchld sigkill signull signal getpgid getattr share setrlimit rlimitinh siginh noatsecure setcurrent setexec setfscreate getcap setcap getsched setsched getrlimit setkeycreate setsockcreate)))
+(allow denial_check self (fd (use)))
+(allow denial_check self (file (ioctl read write getattr lock append map open watch watch_reads)))
+(allow denial_check self (dir (ioctl read getattr lock open watch watch_reads search)))
+(allow denial_check self (chr_file (ioctl read write getattr lock open watch watch_reads)))
+(allow denial_check self (sock_file (ioctl read write getattr lock open watch watch_reads)))
+(allow denial_check self (fifo_file (ioctl read write lock append map open watch watch_reads)))
+(allow denial_check self (unix_stream_socket (ioctl read write create getattr lock append map bind connect listen accept getopt setopt shutdown connectto)))
+;; capability / netlink_audit_socket 暂不开:permissive 域会把真正需要的
+;; 权限以 denial 形式暴露出来,第二轮按实际清单精确补,不凭猜。
+(allow denial_check dev_null_file (chr_file (ioctl read write getattr lock open watch watch_reads)))
+(allow denial_check dev_zero_file (chr_file (ioctl read write getattr lock open watch watch_reads)))
+(allow denial_check dev_random_file (chr_file (ioctl read write getattr lock open watch watch_reads)))
+(allow denial_check system_file (file (ioctl read getattr lock map open watch watch_reads)))
+(allow denial_check system_lib_file (file (ioctl read getattr lock map open execute watch watch_reads)))
+(allow denial_check system_etc_file (file (ioctl read getattr lock open watch watch_reads)))
+
+;; =====================================================================
+;; 附录 A:走过的死路(都实测过,别再回头试)
+;;
+;;  A1. /system/bin 放不下二进制,三条路全失败:
+;;        restorecon → EACCES(setxattr) / su 的 cp → EACCES / hdc file send → permission denied
+;;      hdcd 那条是**策略层**判死的:它对该目录类型只有 (dir (getattr))+(file (open)),
+;;      没有 add_name/write,且 hdcd 不是 permissive。
+;;      反证:同一 hdcd 域对 data_local_tmp 有完整 add_name/create,往那儿发就成功。
+;;      (上个会话能推进去,是因为当时手动 remount rw 过 —— 那条命令正是被分类器拦下的那条。)
+;;
+;;  A2. ★ 无名的内核"创建转换"(type_transition)会让**创建本身失败**,不能用来打标签。
+;;      实测定格:同一台机、同一 su 域、同一父目录 /data/local/tmp,
+;;        · 旧策略(无转换) mkdir -p /data/local/tmp/plstage  → 成功
+;;        · 新策略(有转换) mkdir    /data/local/tmp/policyloop → EACCES
+;;      唯一变量就是那条 (typetransition su data_local_tmp dir denial_check_tmp)。
+;;      ⇒ 这**同时解释了 /system/bin 那次 su cp 失败**——当时内核里正跑着
+;;        (typetransition su system_bin_file file denial_check_exec)。两个现象一个根因。
+;;
+;;  A3. restorecon 在板子上**处处**失败,不是路径问题。
+;;      /data/local/tmp 与 /system/bin 都报 "Could not set context … Permission denied"。
+;;      策略侧查遍:su 零 relabel 权限、无 restorecon 专用域、全策略 **0 条 constrain、
+;;      0 条 validatetrans**、f2fs 也正确声明为 (fsuse xattr f2fs)。
+;;      ⇒ 不是策略能解释的,放弃这条路。
+;;      ⚠️ 附带教训:往 file_contexts 追加引用"只在内存策略里存在的类型"是危险的 ——
+;;         内存策略一重启就没了,那一刻任何 restorecon 都会读到指向未知类型的条目。
+;;
+;; 为什么"应用可读可执行整个 /data/local/tmp"这个降级可以接受:
+;;   应用**没有** data_local_tmp 的 add_name/write(只有我们这里给的 read/execute),
+;;   所以它没法往那儿放自己的二进制 —— 想利用这个切换,前提是已经拿到 hdc/shell 级
+;;   写入能力,而那时攻击者早就有别的办法了。真正的产品化正解是做成 SA + 权限控制,
+;;   这一层的权衡如实写进文档。
+;;
+;; =====================================================================
+;; 附录 B:窄路径(暂缓)的语法 —— 已经查实,别再从零推
+;;
+;;   带文件名的创建转换是**位置参数**,第 4 个才是文件名、第 5 个是结果类型:
+;;       (typetransition su data_local_tmp file "denial_check" denial_check_exec)
+;;   依据(源码,不是文档):
+;;     libsepol/cil/src/cil_build_ast.c : cil_gen_typetransition()
+;;       有第 5 个 token 时 → name_str = s4, result_str = s5
+;;       只有 4 个 token 时 → 无名 type_rule, result_str = s4
+;;     反编译端 libsepol/src/kernel_to_cil.c 也是按
+;;       "(typetransition %s %s %s \"%s\" %s)", src, tgt, class, filename, new
+;;     输出的 —— 两端自洽。
+;;   ⚠️ 上轮我写成 (… file denial_check_exec "denial_check"),内核里存的其实是
+;;      「建一个叫 denial_check_exec 的文件 → 类型 denial_check」,正好写反。
+;;      (反编译验证里能看出来:(typetransition su data_local_tmp file "denial_check_exec" denial_check))
+;;
+;;   为什么暂缓:见 A2 —— 创建转换会不会让创建本身 EACCES,带文件名的还没在板上
+;;   验证过。一旦验证成立,就能把 hap_domain 对 data_local_tmp 的 read+execute
+;;   收窄成"只认 denial_check 这一个文件名",那才是最终形态。
+;; =====================================================================
