@@ -10,6 +10,10 @@ type system_basic_hap, hap_domain;
 
 allow media_service dev_camera_file:chr_file { open read };
 allowxperm media_service dev_camera_file:chr_file ioctl { 0x641f };
-allow media_service sys_prod_file:file { ioctl };
+# `write` has to be granted somewhere, or the "no rule in this policy ever
+# grants it" guard reads the clean-gap row's perm as a transcoding typo and
+# sends the case to a human instead of auto_repairable. This fixture is small
+# enough that its permission vocabulary is just what its rules happen to use.
+allow media_service sys_prod_file:file { ioctl write };
 neverallow normal_hap dev_bbox:chr_file { read };
 allow hap_domain sys_prod_file:file { read };

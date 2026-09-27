@@ -125,6 +125,38 @@ class PolicyIndex:
     )
     _BLOCK_CLOSE = ("')", "'", ")")
 
+    def clone(self) -> "PolicyIndex":
+        """An independent index that can take further ``load_text`` calls.
+
+        The consumer is the repair loop: to decide whether a patch actually
+        closes a gap it has to apply the patch and re-query, which means an
+        index the patch is allowed to touch (:mod:`policy_loop.agents`).
+
+        ``copy.deepcopy`` is the obvious way to get one and was what this
+        replaced, but on the rk3568 sepolicy tree -- 21,790 rules -- it is both
+        ruinously slow (once per case, thousands of cases) and intermittently
+        fatal: deepcopy recurses through ``_reconstruct`` per object, and the
+        ~50% of runs that segfaulted did so inside it, at 8MB stack and at
+        64MB alike. A copy that is *correct* but dies half the time is worse
+        than one that is merely expensive, so the copy is done by hand.
+
+        Sharing the ``Rule`` objects is what makes this cheap, and it is sound
+        because a Rule is never mutated once built: every field is a str, a
+        bool or a frozenset, and the parser only ever appends new ones. The
+        containers that *are* mutated -- the ``rules`` list, the ``attributes``
+        set, the ``type_attrs`` sets of attributes -- each get a fresh copy, so
+        a rule added to the clone cannot appear in the original. ``sehap`` is
+        shared for the same reason as Rule: ``load_text`` does not touch it.
+        """
+        c = PolicyIndex()
+        c.rules = list(self.rules)
+        c.type_attrs = {name: set(attrs) for name, attrs in self.type_attrs.items()}
+        c.attributes = set(self.attributes)
+        c.skipped_count = self.skipped_count
+        c._sources = list(self._sources)
+        c.sehap = self.sehap
+        return c
+
     def load_text(self, text: str, source: str = "<text>") -> "PolicyIndex":
         self._feed_lines(text, source)
         self._sources.append(source)

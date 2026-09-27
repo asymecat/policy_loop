@@ -13,7 +13,6 @@ Verdicts: SUCCESS / FAILED / SECURITY_REGRESSION (matches the proposal).
 
 from __future__ import annotations
 
-import copy
 
 from policy_loop.agents.base import AgentResult, BaseAgent
 
@@ -68,7 +67,7 @@ class VerifyAgent(BaseAgent):
         patch_inner = set(m.group(1).split()) if m else set()
 
         if self.index is not None:
-            idx2 = copy.deepcopy(self.index)
+            idx2 = self.index.clone()
             idx2.load_text(patch)
             if "allowxperm" in patch:          # xperm whitelist gap
                 cmd = (v.get("ioctl") or {}).get("cmd", "")

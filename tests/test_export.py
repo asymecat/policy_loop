@@ -35,7 +35,7 @@ CORPUS = ROOT / "data" / "raw" / "oh-selinux" / "sepolicy"
 GOLDEN = """PLI1
 @rev 2
 @src fixtures/sample_policy.te gen=<fixed> exporter=policy_loop/export/pli.py
-@meta rules=5 allow=3 neverallow=1 allowxperm=1 neverallowxperm=0 types=6 attrs=1 classes=2 perms=3 known=7 skipped=0 hap_entries=0 hap_domains=0 hap_names=0 hap_apls=0 hap_debuggable=0 hap_skipped=0
+@meta rules=5 allow=3 neverallow=1 allowxperm=1 neverallowxperm=0 types=6 attrs=1 classes=2 perms=4 known=7 skipped=0 hap_entries=0 hap_domains=0 hap_names=0 hap_apls=0 hap_debuggable=0 hap_skipped=0
 @class chr_file 3
 @class file 2
 @type dev_bbox
@@ -55,10 +55,11 @@ GOLDEN = """PLI1
 @perm ioctl
 @perm open
 @perm read
+@perm write
 @rules 5
 a chr_file media_service dev_camera_file open,read
 x chr_file media_service dev_camera_file ioctl:0x641f
-a file media_service sys_prod_file ioctl
+a file media_service sys_prod_file ioctl,write
 n chr_file normal_hap dev_bbox read
 a file hap_domain sys_prod_file read
 """
