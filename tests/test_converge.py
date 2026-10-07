@@ -7,6 +7,9 @@ noise / DOMAIN; neverallow -> escalation without a patch), and the M3 service
 mapping that resolves a placeholder target for the policy query.
 """
 
+import contextlib
+import io
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -20,6 +23,7 @@ from policy_loop.converge import (
     _known_tokens,
     _patch_is_vacuous,
     converge,
+    main,
 )
 from policy_loop.policy import load_text
 
@@ -332,6 +336,37 @@ neverallow media_service sa_evil_svc:samgr_class { get };
         self.assertEqual(c["category"], CAT_HUMAN)
         self.assertIn("default_*", c["why"])
         self.assertIn("default_service", c["patch"])
+
+
+class TestSkippedStatementWarning(unittest.TestCase):
+    """`skipped_statements` was carried in `summary()`, the JSON report and the
+    device's `@meta`, but a plain run never printed it -- so nothing said how
+    much of the indexed tree was left out (see docs/known-limitations.md)."""
+
+    def _stdout(self, te: str) -> str:
+        with tempfile.TemporaryDirectory() as d:
+            policy = Path(d) / "policy.te"
+            policy.write_text(te, encoding="utf-8")
+            buf = io.StringIO()
+            with contextlib.redirect_stdout(buf):
+                main(["--text", denial("app", "dev_file", "file", "read"),
+                      "--policy", str(policy)])
+            return buf.getvalue()
+
+    def test_warns_with_the_count_when_statements_were_skipped(self):
+        out = self._stdout("type app;\ntype dev_file;\n"
+                           "allow app dev_file:file { read };\n"
+                           "dontaudit app dev_file:file { read };\n"
+                           "permissive app;\n")
+        self.assertIn("policy rules indexed = 1", out)
+        self.assertIn("WARNING: 2 statement(s) were not modelled", out)
+        self.assertIn("docs/known-limitations.md", out)
+
+    def test_silent_when_everything_was_modelled(self):
+        out = self._stdout("type app;\ntype dev_file;\n"
+                           "allow app dev_file:file { read };\n")
+        self.assertIn("policy rules indexed = 1", out)
+        self.assertNotIn("WARNING", out)
 
 
 if __name__ == "__main__":

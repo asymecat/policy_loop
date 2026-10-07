@@ -4,6 +4,7 @@
 
 > 完整方案与设计见 [`docs/design.md`](docs/design.md)（含"先仿真、后真机"执行策略）。
 > 三件突破的验收文档：批量收敛 [`docs/eval-converge.md`](docs/eval-converge.md)、评测可信度质检 [`docs/eval-trust.md`](docs/eval-trust.md)。
+> 已知边界与未建模路径（含逐条 file:line 出处与量化）：[`docs/known-limitations.md`](docs/known-limitations.md)。
 
 ## 现状（2026-09-09）
 
@@ -87,7 +88,7 @@ data/
   reports/            # corpus/replay/trust/agent-eval/converge 评测报告（已入库）
   raw/                # 上游语料（稀疏克隆，不入库，需自行拉取）
 docs/                 # 方案与路线文档
-tests/                # 单测（212 个，其中 4 个需先交叉编译 device 二进制）
+tests/                # 单测（214 个，其中 4 个需先交叉编译 device 二进制）
 ```
 
 ## L2/L3 评测命令

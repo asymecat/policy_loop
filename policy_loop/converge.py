@@ -620,8 +620,16 @@ def main(argv: Optional[list] = None) -> int:
 
     index = _load_index(args.policy) if args.policy else None
     if index is not None:
-        print(f"[PolicyLoop converge] policy rules indexed = "
-              f"{index.summary()['rules']}")
+        summary = index.summary()
+        print(f"[PolicyLoop converge] policy rules indexed = {summary['rules']}")
+        if summary["skipped_statements"]:
+            # The count has always been carried in `summary()`, the JSON/PLI
+            # metadata and the device's `@meta`, but a plain run never showed
+            # it, so nothing said how much of the tree the index left out.
+            print(f"[PolicyLoop converge] WARNING: {summary['skipped_statements']} "
+                  f"statement(s) were not modelled -- verdicts on the types and "
+                  f"classes they touch can be wrong; "
+                  f"see docs/known-limitations.md")
     report = converge(text, index=index,
                       cross_layer=bool(args.cross_layer or args.md))
 
