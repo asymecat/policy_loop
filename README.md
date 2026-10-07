@@ -81,7 +81,7 @@ data/
   reports/            # corpus/replay/trust/agent-eval/converge 评测报告（已入库）
   raw/                # 上游语料（稀疏克隆，不入库，需自行拉取）
 docs/                 # 方案与路线文档
-tests/                # 单测（97 个）
+tests/                # 单测（196 个，其中 4 个需先交叉编译 device 二进制）
 ```
 
 ## L2/L3 评测命令
