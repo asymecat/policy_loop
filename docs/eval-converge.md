@@ -268,13 +268,27 @@ python3 -m unittest tests.test_cross_layer -v               # 27 项
 ## 复现
 
 ```bash
-# 生成两条验证批（来自提交的 golden 与 replay 落盘）
-python3 -c "…from replay-report uncover…"      # 见 git 提交历史 / CI 说明
-python -m policy_loop.converge --log <批> --policy data/raw/oh-selinux/sepolicy \
-  --json data/reports/converge-<批>.json
-python -m unittest tests.test_converge -v        # 26 项
-python -m pytest tests/ -q                       # 全套 124 项
+# B′：当前代码的全量收敛 —— 仓库内 data/reports/converge-full.json 就是这条命令的产物
+python -m policy_loop.converge \
+  --log data/corpus/real_denials.txt \
+  --policy data/raw/oh-selinux/sepolicy \
+  --json data/reports/converge-full.json
+#   期望：denials=5161 unique=4911
+#         by_category={'needs_human': 1580, 'noise_or_already_allowed': 3261,
+#                      'auto_repairable': 70}          （≈4.1 s，规则索引 21790）
+#   确定性：连跑 3 次输出逐字节相同（sha256 8f91d5b7cf2bc1fa…），退出码 0。
+
+python -m unittest tests.test_converge -v        # 27 项
+python -m pytest tests/ -q                       # 全套 196 项（192 passed + 4 skipped）
 ```
+
+> ⚠️ **`data/reports/converge-permissive.json` 与 `converge-uncovered.json` 是修复前的历史批次**
+> （对应上表 A / C 两行），**不要重新生成** —— 它们的数字刻意停在 neverallow 权限感知修复之前，
+> 与本节的 B′ 不是同一口径。仓库内**只有 `converge-full.json` 代表当前代码**。
+>
+> ⚠️ **报数时的单位**：`auto_repairable` = **70 是案例数**；`auto_patch_lines` = **69 是补丁行数**
+> （其中一条补丁覆盖了 2 个案例）。`related-work-audit2allow.md` 里「2833 vs 69 条补丁」用的是**行数**，
+> 与本表不矛盾，引用时点明单位即可。
 
 M3 的两侧等价性不靠单测，靠设备端五项门禁（见 `eval-L4.md`）：解析逻辑在
 `pl_converge.cpp::ResolveLogicalTarget` 独立重写了一遍，`--selftest` 新增 8 组固定向量
