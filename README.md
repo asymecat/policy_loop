@@ -53,6 +53,10 @@ python -m policy_loop.agents.demo --denial "<avc: denied ...>"
 python -m policy_loop.converge --log <denial日志> --policy data/raw/oh-selinux/sepolicy \
                                --json data/reports/converge.json --md converge.md
 
+# 落地桥：收敛报告 → 按板子实际策略过六道门 → CIL → secilc → policy.31（+ 编译回验）
+python tools/apply_converge.py --report data/reports/converge-full.json
+python tools/apply_converge.py --report data/reports/converge-full.json --no-build  # 只判定
+
 # golden 质检：给 3,367 对 denial→修复 逐对打可信标签，产出干净子集
 python -m policy_loop.eval.trust
 ```
@@ -73,6 +77,8 @@ policy_loop/
   eval/               # L2/L3 评测：corpus / extract / replay / trust(质检) / agent_eval(留一)
   converge.py         # 批量收敛：整份日志 → 去重收敛报告（含补丁守门）
   selfcheck.py        # 自检入口
+tools/
+  apply_converge.py   # 落地桥：收敛报告 → 板子策略过门 → CIL → secilc 编译 → 回验
 webui/                # Web UI：stdlib HTTP server + /api/analyze + Agent Trace 前端
 data/
   fixtures/           # 测试/演示样例（含上游真实格式 denial）
@@ -81,7 +87,7 @@ data/
   reports/            # corpus/replay/trust/agent-eval/converge 评测报告（已入库）
   raw/                # 上游语料（稀疏克隆，不入库，需自行拉取）
 docs/                 # 方案与路线文档
-tests/                # 单测（196 个，其中 4 个需先交叉编译 device 二进制）
+tests/                # 单测（212 个，其中 4 个需先交叉编译 device 二进制）
 ```
 
 ## L2/L3 评测命令
@@ -136,3 +142,4 @@ OPENAI_MODEL=deepseek-chat
 | L3+ | service 占位逻辑解析（resolve_logical_target） | ✅ |
 | L4 | 设备端 C++ 组件 `denial_check`（DAYU200/RK3568 真机） | ✅ |
 | L4 | 设备端固定 API 执行层（`--case` 逐条判定 + 五道守门） | ✅ |
+| L4 | 落地桥 `tools/apply_converge.py`（收敛报告 → 板子策略过六道门 → secilc → policy.31，含编译回验） | ✅ |

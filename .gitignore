@@ -36,3 +36,5 @@ ohos_src/
 # 板端策略的编译产物：由 device/selinux_policy/build_pl_collector.sh 从 .cil 重生成，
 # 不入库（400KB 二进制、且带 secilc 版本指纹）。
 device/selinux_policy/out/
+# 同上：tools/apply_converge.py 的编译产物（patched.cil / verify.cil / policy.31）
+device/selinux_policy/out-converge/

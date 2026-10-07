@@ -251,8 +251,75 @@ python3 -m unittest tests.test_cross_layer -v               # 27 项
 - **守门降级**：约四成"看似可修"的案例因主体/目标/类不在语料而被降级人工 ——
   这是**保守而非漏修**：converge 只对能在当前语料证明落点的补丁打"可自动"。
 
+## 落地桥：从收敛报告到 policy.31（`tools/apply_converge.py`）
+
+上面这些补丁此前是**纯数据**：`converge` 吐出 69 行最小补丁就结束，而"把补丁编进
+板子策略"那一半在 `device/selinux_policy/` 里、喂的是**手写死**的 `denial_check.cil`。
+两端都跑通了，中间却是断的 —— 而项目名里的"从 permissive 收紧到 enforcing"要的正是这一段。
+
+`tools/apply_converge.py` 就是这段：读收敛报告 → 按**板子实际策略**过六道门 →
+渲染 CIL → `secilc` 编译 → `checkpolicy` 反编译回验。
+
+六道门（判别对象是板子策略，不是上游语料）：
+
+| 门 | 判什么 |
+|---|---|
+| 1 解析 | `.te` 语句能解析成 `allow[xperm] src tgt:cls { perms }` |
+| 2 符号 | `src`/`tgt`/类的符号存在于板子策略（含 `typeattribute` 闭包） |
+| 2b 权限 | 每个权限真属于该类的权限集 |
+| 3 幂等 | 板上已允许的直接跳过 —— 可重复跑，不堆重复规则 |
+| 4 编译 | `secilc` 编译 |
+| 5 回验 | `checkpolicy` 反编译，逐条确认补丁进了二进制、且**没有内容丢失** |
+
+### 实测（2026-10-07，`converge-full.json` 69 行 × `board-5.0.3-fingerprint`）
+
+```
+69 输入 → 47 注入（45 allow + 2 allowx）/ 14 板上已满足 / 8 拒
+编译产物 policy.31 = 407 546 B，policyvers=31，头部与原版逐字节一致
+语义 diff 新增 37 行 / 移除 199 行（0 条内容丢失）；47 条注入全部回验到
+连跑两次 sha256 相同；退出码 0
+```
+
+三门拦下的 8 行本身就是结论 —— 它们暴露了**语料与板子的版本差**：
+
+- **2 行符号缺失**：`distributed_isolate_hap`、`selection_service` 在 5.0.3 上不存在。
+- **6 行 (类,权限) 不成立**：`data_service_el1_file:file { add_name }`（`add_name` 是
+  `dir` 的权限、类写成了 `file`）、`persist_param:parameter_service { map open read }`
+  （板子的 `parameter_service` 只有 1 个权限，上游后来才加）等。
+- **14 行"板上已满足"**：补丁是对**上游 master** 的索引算的，而板子 5.0.3 早就允许了
+  其中 14 条。这正是"索引必须与板子同源"那条教训的量化 —— 拿错树的索引会给出
+  自信的错答案。
+
+### 三个踩过的坑（都写进了代码注释与单测）
+
+1. **CIL 关键字是 `allowx`，不是 `allowxperm`**。写 `allowxperm` 得到
+   `Error: Unknown keyword allowxperm`。反过来也骗人：拿 `xperm` 去 grep 板子策略得
+   0 条，而实际有 **714 条** —— 全写成 `allowx`。
+2. **括号结构是 `(allowx SRC TGT (ioctl 类 (xperm)))`**，类名在 `ioctl` 之后、
+   **不在** allowx 的第三参数位（`cil_fill_permissionx` 要的是
+   `STRING(kind) STRING(类) LIST(表达式)`）。写成 `(allowx S T 类 (ioctl 类 (x)))`
+   或 `(allowx S T (类 (ioctl (x))))` 都是 `Invalid syntax / Bad allowx rule`。
+3. **类的权限不在 `(class X (...))` 里就完了**。`checkpolicy -C` 把继承自 common 的
+   权限放到 `(common NAME (...))`、再用 `(classcommon 类 common)` 绑定。只读前半截会
+   得出"`file` 类没有 `getattr`"这种离谱结论（实测把 6 条真问题误报成 41 条）。
+
+第 5 门的判据也因此不是"那行字还在不在"，而是**内容有没有被吸收**：反编译会把同一
+`(src,tgt,类)` 的授权归并成一行、把 `A A` 归一成 `A self`、把多个 xperm 值并进一个
+表达式。实测不做任何补丁的纯 CIL→二进制→CIL 往返就已经有 190 处"移除"（全是
+neverallow 残留死属性），按字面串判会全部误报。
+
+⚠️ **第 4 门兜不住 neverallow**：`neverallow` 是编译期断言、不落盘，实测
+`board-policy.cil` 里 `(neverallow` 出现 **0 次**。所以"编译过了"≠"没撞 neverallow"。
+这条防线由 converge 自己的索引提供（neverallow 一律转人工，不进 `auto_patch`）。
+
+装上板子是**另一步**（会改设备状态，本工具不代劳）：
+`bash device/selinux_policy/install_to_board.sh`。
+
 ## 边界与已知局限
 
+- **落地桥的最后一跳仍是人工**：`apply_converge.py` 产出 `policy.31` 并回验，
+  但把它刷进板子（`install_to_board.sh` → `/system/etc/selinux/.../policy.31` +
+  `load_policy`）需要人按一下 —— 这是刻意的，不是缺口。
 - **ioctl-only 缺口**：当唯一缺失权限是 `ioctl` 且策略既无 `allow ioctl` 也无
   allowxperm 白名单可指时，修复路径可能给出空权限补丁 → 守门 5 兜住转人工。
   真正的 allowxperm 最小补丁生成是后续工作（Review/Verify 语义本轮不动）。

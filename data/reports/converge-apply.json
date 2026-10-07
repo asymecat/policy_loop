@@ -1,0 +1,152 @@
+{
+  "source_report": "/home/szf/policy_loop/data/reports/converge-full.json",
+  "board_cil": "/home/szf/board-5.0.3-fingerprint/board-policy.cil",
+  "input_lines": 69,
+  "by_verdict": {
+    "already_satisfied": 14,
+    "rejected": 8,
+    "emit": 47
+  },
+  "emitted": [
+    "allow distributedfiledaemon data_service_el2_file:dir { write };",
+    "allow distributedfiledaemon data_service_el2_file:file { open read write };",
+    "allow hdf_devmgr dev_file:chr_file { ioctl };",
+    "allow hiview dev_file:dir { read };",
+    "allow hiview dev_file:file { read };",
+    "allow init dev_file:file { getattr };",
+    "allow input_user_host dev_file:chr_file { getattr };",
+    "allow media_service data_file:file { write };",
+    "allow media_service data_test_file:file { getattr };",
+    "allow media_service data_test_file:file { read };",
+    "allow normal_hap dev_file:dir { mounton };",
+    "allow normal_hap sys_file:file { open };",
+    "allow normal_hap sys_file:file { read };",
+    "allow powermgr data_init_agent:dir { getattr map open read };",
+    "allow powermgr data_service_el1_file:dir { map read };",
+    "allow render_service sa_foundation_abilityms:samgr_class { get };",
+    "allow sa_device_standby resource_schedule_service:samgr_class { add };",
+    "allow sh data_hdc_pubkeys:dir { getattr };",
+    "allow sh data_log_sanitizer_file:file { getattr };",
+    "allow sh dev_null_file:chr_file { ioctl };",
+    "allow sh hook_param:file { map };",
+    "allow sh hook_param:file { open };",
+    "allow sh init:fd { use };",
+    "allow sh inputmethod_service:process { signal };",
+    "allow sh pasteboard_service:fd { use };",
+    "allow sh startup_init_param:file { map };",
+    "allow sh startup_init_param:file { open };",
+    "allow sh startup_init_param:file { read };",
+    "allow storage_daemon dev_block_file:blk_file { create };",
+    "allow storage_daemon dev_block_file:blk_file { open read };",
+    "allow storage_daemon dev_block_file:blk_file { read };",
+    "allow storage_daemon dev_block_file:dir { add_name };",
+    "allow storage_daemon dev_block_file:dir { write };",
+    "allow storage_daemon distributedfiledaemon:binder { call };",
+    "allow storage_daemon fuse_file:filesystem { unmount };",
+    "allow storage_daemon unlabeled:dir { mounton };",
+    "allow su data_service_el1_file:dir { getattr };",
+    "allow su data_service_el1_file:dir { remove_name search write };",
+    "allow su data_service_el1_file:file { getattr };",
+    "allow su data_service_el1_file:file { unlink };",
+    "allow su inputmethod_service:process { signal };",
+    "allow su pasteboard_service:fd { use };",
+    "allow updater data_updater_file:file { rename };",
+    "allow updater dev_block_file:blk_file { map };",
+    "allow wifi_host wifi_host:capability { dac_override };",
+    "allowxperm foundation dev_at_file:chr_file ioctl { 0x5413 };",
+    "allowxperm netmanager data_service_el1_file:file ioctl { 0xf50c };"
+  ],
+  "rejected": [
+    {
+      "line": "allow bgtaskmgr_service data_service_el1_file:file { add_name };",
+      "gate": "perms",
+      "reason": "权限 ['add_name'] 不属于类 file（该类在板子上有 27 个权限）—— 语料/板子版本差"
+    },
+    {
+      "line": "allow distributed_isolate_hap distributed_isolate_hap:hmcap { supervsable };",
+      "gate": "symbols",
+      "reason": "板子策略无此符号: src=distributed_isolate_hap, tgt=distributed_isolate_hap"
+    },
+    {
+      "line": "allow input_isolate_debug_hap render_service:unix_stream_socket { transfer };",
+      "gate": "perms",
+      "reason": "权限 ['transfer'] 不属于类 unix_stream_socket（该类在板子上有 22 个权限）—— 语料/板子版本差"
+    },
+    {
+      "line": "allow input_isolate_hap render_service:unix_stream_socket { transfer };",
+      "gate": "perms",
+      "reason": "权限 ['transfer'] 不属于类 unix_stream_socket（该类在板子上有 22 个权限）—— 语料/板子版本差"
+    },
+    {
+      "line": "allow powermgr configfs:file { search };",
+      "gate": "perms",
+      "reason": "权限 ['search'] 不属于类 file（该类在板子上有 27 个权限）—— 语料/板子版本差"
+    },
+    {
+      "line": "allow powermgr persist_param:parameter_service { map open read };",
+      "gate": "perms",
+      "reason": "权限 ['map', 'open', 'read'] 不属于类 parameter_service（该类在板子上有 1 个权限）—— 语料/板子版本差"
+    },
+    {
+      "line": "allow selection_service vendor_etc_file:dir { search };",
+      "gate": "symbols",
+      "reason": "板子策略无此符号: src=selection_service"
+    },
+    {
+      "line": "allow system_core_hap download_server:binder { get };",
+      "gate": "perms",
+      "reason": "权限 ['get'] 不属于类 binder（该类在板子上有 4 个权限）—— 语料/板子版本差"
+    }
+  ],
+  "already_satisfied": [
+    "allow appspawn nwebspawn:process { signal };",
+    "allow dcamera sa_device_security_level_manager_service:samgr_class { get };",
+    "allow hdcd dev_asanlog_file:dir { getattr };",
+    "allow hdcd dev_asanlog_file:file { open };",
+    "allow init write_updater_exec:file { execute };",
+    "allow init write_updater_exec:file { map };",
+    "allow init write_updater_exec:file { open read };",
+    "allow storage_daemon data_chipset_el1_file:dir { remove_name };",
+    "allow storage_daemon data_chipset_el2_file:dir { remove_name };",
+    "allow storage_daemon hmdfs:file { getattr };",
+    "allow storage_daemon hmdfs:file { open read write };",
+    "allow storage_daemon hmdfs:file { read write };",
+    "allow storage_daemon hmdfs:file { read };",
+    "allowxperm sensor_host dev_hdf_sensor_mgr:chr_file ioctl { 0x6206 };"
+  ],
+  "board_stats": {
+    "types": 1183,
+    "attrs": 198,
+    "classes": 104,
+    "allow_rules": 20862,
+    "neverallow_rules": 0
+  },
+  "neverallow_note": "板子策略由 policy.31 反编译而来，二进制策略不含 neverallow，因此 secilc 编译通过不等于未撞 neverallow；该防线由 converge 索引提供。",
+  "fragment": "/home/szf/policy_loop/device/selinux_policy/converge-patch.cil",
+  "build": {
+    "ok": true,
+    "patched_lines": 26776,
+    "compiled": true,
+    "policy_bytes": 407546,
+    "policyvers": 31,
+    "added": 37,
+    "removed": 199,
+    "removed_all_absorbed": true,
+    "unexpected_removed": [],
+    "added_sample": [
+      "(allow distributedfiledaemon data_service_el2_file (dir (write search)))",
+      "(allow distributedfiledaemon data_service_el2_file (file (read write open)))",
+      "(allow hdf_devmgr dev_file (chr_file (ioctl)))",
+      "(allow hiview dev_file (dir (read)))",
+      "(allow hiview dev_file (file (read)))",
+      "(allow init dev_file (file (getattr)))",
+      "(allow input_user_host dev_file (chr_file (getattr)))",
+      "(allow media_service data_file (file (read write getattr open)))",
+      "(allow media_service data_test_file (file (read getattr)))",
+      "(allow normal_hap dev_file (dir (mounton)))"
+    ],
+    "unverified": [],
+    "verify_cil": "/home/szf/policy_loop/device/selinux_policy/out-converge/verify.cil",
+    "policy_31": "/home/szf/policy_loop/device/selinux_policy/out-converge/policy.31"
+  }
+}
