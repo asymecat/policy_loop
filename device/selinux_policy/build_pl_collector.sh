@@ -12,13 +12,21 @@
 # =====================================================================
 set -euo pipefail
 
-SELINUX_SRC=/home/szf/ohos_src/third_party/selinux
+# 路径全部可用环境变量覆盖。默认值保持本机原样，换机器时按需覆盖：
+#   OHOS_SRC   OH 源码树（提供 secilc / checkpolicy 两个宿主工具）
+#   BOARD_FP   板子原始策略所在目录（board-policy.cil + policy.31）
+#   PL_REPO    本仓库根目录（默认按脚本自身位置推导，一般不用设）
+OHOS_SRC="${OHOS_SRC:-/home/szf/ohos_src}"
+BOARD_FP="${BOARD_FP:-/home/szf/board-5.0.3-fingerprint}"
+PL_REPO="${PL_REPO:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}"
+
+SELINUX_SRC=$OHOS_SRC/third_party/selinux
 SECILC=$SELINUX_SRC/secilc/secilc
 CHECKPOLICY=$SELINUX_SRC/checkpolicy/checkpolicy
-BASE=/home/szf/board-5.0.3-fingerprint/board-policy.cil
-ORIG_POLICY=/home/szf/board-5.0.3-fingerprint/policy.31
-PATCH=/home/szf/policy_loop/device/selinux_policy/pl_collector.cil
-OUT=/home/szf/policy_loop/device/selinux_policy/out
+BASE=$BOARD_FP/board-policy.cil
+ORIG_POLICY=$BOARD_FP/policy.31
+PATCH=$PL_REPO/device/selinux_policy/pl_collector.cil
+OUT=$PL_REPO/device/selinux_policy/out
 POLICYVERS=31
 
 # 可选：**预演专用**的额外授权。只在"用 su shell 手工复现 init 之外的环境"时用。
@@ -30,7 +38,9 @@ EXTRA="${PL_EXTRA_CIL:-}"
 mkdir -p "$OUT"
 
 for f in "$SECILC" "$CHECKPOLICY" "$BASE" "$ORIG_POLICY" "$PATCH"; do
-    [ -e "$f" ] || { echo "缺少: $f" >&2; exit 1; }
+    [ -e "$f" ] || { echo "缺少: $f" >&2
+                     echo "  提示: OHOS_SRC / BOARD_FP 可覆盖外部路径(见脚本头部)" >&2
+                     exit 1; }
 done
 
 echo "== 1. 合并 CIL =="

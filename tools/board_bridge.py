@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import subprocess
 import threading
@@ -36,7 +37,10 @@ from policy_loop.policy import load
 
 DEFAULT_POLICY = (Path.home() / "board-5.0.3-fingerprint"
                   / "selinux_adapter-5.0.3-0878c56e3" / "sepolicy")
-DEFAULT_HDC = "/home/szf/ohos_sdk_dl/tc_extract/toolchains/hdc"
+# Same convention as tools/boardscreen.py: PL_HDC wins, then a $HOME-relative
+# fallback, so a fresh clone works without a hard-coded /home/<user>.
+DEFAULT_HDC = os.environ.get("PL_HDC") or str(
+    Path.home() / "ohos_sdk_dl" / "tc_extract" / "toolchains" / "hdc")
 
 # Domains whose denials are caused by *our own* tooling -- screen capture, the
 # root shell hdc lands in, the UI driver. They are real denials but they are not

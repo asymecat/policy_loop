@@ -17,8 +17,10 @@ set -euo pipefail
 
 PROJ="${PROJ:-/home/szf/ohos_audit/pl_console}"
 BUNDLE="${BUNDLE:-com.policyloop.console}"
-CMD_TOOLS=/home/szf/ohos_src/prebuilts/tool/command-line-tools/6.x
-DIST=/home/szf/ohos_src/developtools/hapsigner/dist
+# OHOS_SRC 是下面两个默认值的基准；都可单独覆盖。
+OHOS_SRC="${OHOS_SRC:-$HOME/ohos_src}"
+CMD_TOOLS="${CMD_TOOLS:-$OHOS_SRC/prebuilts/tool/command-line-tools/6.x}"
+DIST="${DIST:-$OHOS_SRC/developtools/hapsigner/dist}"
 OUT="${OUT:-/tmp/plc-build}"
 HDC="${HDC:-$HOME/ohos_sdk_dl/tc_extract/toolchains/hdc}"
 PW=123456

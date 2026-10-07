@@ -32,7 +32,12 @@
 # =====================================================================
 set -euo pipefail
 
-export PATH=/home/szf/ohos_sdk_dl/tc_extract/toolchains:$PATH
+# 宿主侧路径可用环境变量覆盖（默认值保持本机原样）：
+#   HDC_DIR    含 hdc 的目录（SDK toolchains）
+#   OHOS_SRC   OH 源码树（取 out/<product>/security/… 下刚编好的二进制）
+HDC_DIR="${HDC_DIR:-$HOME/ohos_sdk_dl/tc_extract/toolchains}"
+OHOS_SRC="${OHOS_SRC:-$HOME/ohos_src}"
+export PATH=$HDC_DIR:$PATH
 HERE="$(cd "$(dirname "$0")" && pwd)"
 STAGE=/data/local/tmp/plstage                 # 备份/暂存区
 DCDIR=/data/local/tmp/policyloop              # 我们的目录
@@ -41,7 +46,7 @@ INDEX=/data/local/tmp/ohos-5.0.3.pli          # 索引留在原地(类型 data_l
 SRCBIN=/system/bin/denial_check               # 板上那份(退回用)
 # 宿主机上刚编好的 device 二进制。★ 注意:重编产物落在 out/rk3568/security/…
 # 而不是 out/rk3568/src/security/…(后者是 9/16 的旧件,推了白推)。
-FRESHBIN=/home/szf/ohos_src/out/rk3568/security/selinux_adapter/denial_check
+FRESHBIN=$OHOS_SRC/out/rk3568/security/selinux_adapter/denial_check
 POLICY=/system/etc/selinux/targeted/policy/policy.31
 FC=/system/etc/selinux/targeted/contexts/file_contexts
 
