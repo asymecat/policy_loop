@@ -47,7 +47,13 @@ DEFAULT_HDC = os.environ.get("PL_HDC") or str(
 # board defects, and the console labels them separately so a demo never counts
 # them as findings against the firmware.
 TOOL_DOMAINS = {"snapshot_display", "su", "uitest", "shell", "sh", "dmesg",
-                "toybox", "hdcd", "hdcd_shell"}
+                "toybox", "hdcd", "hdcd_shell",
+                # PolicyLoop's own collector, same reasoning one step closer to
+                # home: its probe (--debug-log) and the /proc and /dev/console
+                # it reads at startup are our footprint, not defects in the
+                # firmware under test. Without this the probe line is counted
+                # against the board.
+                "pl_collector"}
 
 _AVC = re.compile(r"avc:\s+denied\s+\{([^}]*)\}")
 _FIELD = re.compile(r'(\w+)=("[^"]*"|\S+)')
