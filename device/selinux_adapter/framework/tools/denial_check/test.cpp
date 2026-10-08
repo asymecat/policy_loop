@@ -133,6 +133,10 @@ void PrintUsage()
         "                        appear, and always starts a session on an empty\n"
         "                        file. Implies --from-now per session.\n"
         "      --dir <dir>       the app's files directory, for --guard\n"
+        "      --debug-log <p>   append a line to <p> when a live window opens\n"
+        "                        (once per session). Off unless asked for, and\n"
+        "                        deliberately not opened at startup: see the note\n"
+        "                        above DebugLogWrite for why both of those matter.\n"
         "  -s, --selftest        run the built-in fixed-vector self test and exit\n"
         "                        (requires no index and no log; use it to tell\n"
         "                        \"does not run\" apart from \"computes wrong\")\n"
@@ -522,8 +526,14 @@ bool ReadInput(const std::unique_ptr<policy_loop::LogSource> &source, std::strin
  * `json.dumps(d, sort_keys=True, ensure_ascii=False)` produces a byte-identical
  * line for the same record. The harness then compares with `diff`, which also
  * names the offending record instead of just "the JSON differs".
+ *
+ * The target is a parameter because there are two destinations and they must
+ * never be confused. Following freopens stdout onto live.jsonl, so by the time
+ * a stream is running "stdout" no longer means the console -- a snapshot taken
+ * mid-session has to name its own FILE* or it would splice itself into the very
+ * window it is supposed to be independent of.
  */
-void DumpDenials(const std::vector<policy_loop::DenialRecord> &records)
+void DumpDenialsTo(FILE *out, const std::vector<policy_loop::DenialRecord> &records)
 {
     std::string line;
     for (const policy_loop::DenialRecord &rec : records) {
@@ -571,8 +581,20 @@ void DumpDenials(const std::vector<policy_loop::DenialRecord> &records)
         line += ", \"tgt\": ";
         line += rec.target_type.present ? policy_loop::JsonString(rec.target_type.value) : "null";
         line += "}\n";
-        std::fwrite(line.data(), 1, line.size(), stdout);
+        std::fwrite(line.data(), 1, line.size(), out);
     }
+}
+
+/*
+ * The console destination, which is every caller that is not a snapshot.
+ *
+ * Kept as a name because the record shape is a contract with the Python side
+ * and the tests, and a wrapper is a cheaper way to keep that name meaningful
+ * than threading a FILE* through call sites that never have a second one.
+ */
+void DumpDenials(const std::vector<policy_loop::DenialRecord> &records)
+{
+    DumpDenialsTo(stdout, records);
 }
 
 // --------------------------------------------------------------------------
@@ -600,6 +622,29 @@ double NowMs()
  * enough that an idle stream is not a spin loop.
  */
 constexpr long long kFollowSliceMs = 500;
+
+/*
+ * How long one on-demand snapshot read may hold the collector.
+ *
+ * This is a floor, not a ceiling. /dev/kmsg never signals EOF, so ReadPolled
+ * returns only when its deadline passes -- a small ring does not finish early.
+ * Whatever this is set to is therefore exactly how long the collector is
+ * unavailable, and during a live session that is a pause in the slice loop.
+ * The read itself is cheap (one read(2) per record), so this is generous;
+ * keeping it small is the whole point.
+ */
+constexpr long long kSnapshotReadMs = 400;
+
+/*
+ * Records kept in a snapshot, newest first.
+ *
+ * A burst can leave thousands of denials in the ring, and the app pulls the
+ * whole file in with one synchronous readTextSync, so the file needs a bound.
+ * It is applied after parsing rather than as a read budget on purpose: the read
+ * walks the ring oldest to newest, so stopping it short would keep the *oldest*
+ * records -- the opposite of what "the board's current state" means.
+ */
+constexpr size_t kSnapshotMaxRecords = 3000;
 
 /*
  * Splits `*pending` on newlines, handing each complete line to `emit`.
@@ -643,35 +688,258 @@ bool SwitchIsOn(const std::string &path)
 }
 
 /*
+ * Creates `path` if it is missing, and makes it world-writable either way.
+ *
+ * `seed` is written only on creation, so an existing file's contents are never
+ * disturbed -- these files are a channel, and a collector restart must not
+ * reset what the other side put there.
+ */
+void EnsureWorldWritableFile(const std::string &path, const char *seed)
+{
+    if (::access(path.c_str(), F_OK) != 0) {
+        FILE *f = std::fopen(path.c_str(), "w");
+        if (f != nullptr) {
+            if (seed != nullptr) {
+                std::fputs(seed, f);
+            }
+            std::fclose(f);
+        }
+    }
+    ::chmod(path.c_str(), 0666);
+}
+
+/*
  * Creates the two files the app and this process share, if they are missing,
  * and makes them world-writable.
  *
- * Both steps are forced by the same policy fact, which is worth stating because
- * it is the opposite of what a sandbox usually implies: the app's own domain
- * holds `debug_hap_data_file:file { read write open }` and **no permission at
- * all on the dir class**. So the app can rewrite a file that exists and can
- * never create one, and it cannot chmod what root created. A freshly installed
- * app has an empty sandbox, so if this process does not lay the files down
- * first, the switch fails with "cannot write" and the feature looks broken for
- * a reason that has nothing to do with the feature.
+ * This is not, as an earlier version of this comment claimed, because the app
+ * cannot create files itself. It can: the board's policy grants
+ *
+ *   (allow normal_hap_attr normal_hap_data_file_attr (dir (ioctl read write
+ *      create ... add_name remove_name reparent search rmdir)))
+ *   (allow normal_hap_attr normal_hap_data_file_attr (file (ioctl create ...)))
+ *
+ * and `debug_hap_data_file` is a member of `normal_hap_data_file_attr`. The
+ * earlier reading looked for the subject type `hap_domain` and the target
+ * `data_file` and missed both attributes -- verified on the device by pressing
+ * the button with an older collector installed, which created `snapshot.req`
+ * itself with no AVC at all.
+ *
+ * What is still true, and is the real reason for the chmod: whoever creates a
+ * file here sets its mode, and a root-created file at 0644 would be one the app
+ * cannot write. The chmod rescues exactly the direction that matters, and the
+ * device confirms it is not more than that: this process may chmod a file it
+ * owns, but not one it does not. `chmod` needs CAP_FOWNER for somebody else's
+ * file, and this domain holds SYSLOG and DAC_OVERRIDE, not that. Measured on
+ * the board: an app-created `snapshot.req` set to 0600 stayed 0600 across four
+ * one-second passes, while a root-owned `guard.on` was back to 0666 in the same
+ * window.
+ *
+ * Enough, because the files the app has to write are the ones a root-side reset
+ * created, and those this process owns. An app-created file needs no rescue --
+ * its owner can write it. The failure is silent as well as harmless: no AVC,
+ * because the kernel checks ownership before it reaches the LSM hook. Do not
+ * read the 0666 as a guarantee that the mode is independent of who got there
+ * first, then; read it as "the root-created case is covered".
+ *
+ * Seeding `guard.on` with "0" also matters: a missing switch file reads as
+ * "off" either way, but an explicit one makes the start line unambiguous.
  */
 void EnsureSwitchFiles(const std::string &sw, const std::string &live)
 {
-    if (::access(sw.c_str(), F_OK) != 0) {
-        FILE *f = std::fopen(sw.c_str(), "w");
-        if (f != nullptr) {
-            std::fputs("0\n", f);
-            std::fclose(f);
+    EnsureWorldWritableFile(sw, "0\n");
+    EnsureWorldWritableFile(live, nullptr);
+}
+
+/*
+ * The on-demand snapshot's two files.
+ *
+ * `snapshot.req` carries the app's request and is pre-seeded with "0", so that
+ * "the app has not asked for anything" is a state that exists on disk rather
+ * than being inferred from a missing file -- the app reads it before it writes
+ * anything. `snapshot.jsonl` is that request's answer, created empty so a
+ * reader sees "nothing yet" instead of a missing file: the same state a
+ * collector that never ran would leave.
+ *
+ * The 0666 still matters here for the same reason as above, and specifically
+ * for `install_service.sh demo`, which resets the request as root -- a file
+ * this process owns, so the chmod does land on it (see above for the half of
+ * the story that does not work).
+ */
+void EnsureSnapshotFiles(const std::string &dir)
+{
+    EnsureWorldWritableFile(dir + "/snapshot.req", "0\n");
+    EnsureWorldWritableFile(dir + "/snapshot.jsonl", nullptr);
+}
+
+/*
+ * Reads the snapshot request: a leading '1' means the app is waiting.
+ *
+ * Deliberately a copy of SwitchIsOn rather than a call to it. The two read the
+ * same shape, but the switch decides whether a live session runs at all, and
+ * that path is the one thing in this file that must not be disturbed by a
+ * change made for a convenience feature. Nine duplicated lines are cheaper
+ * than a shared helper on a path that cannot be allowed to regress.
+ */
+bool RequestPending(const std::string &path)
+{
+    FILE *f = std::fopen(path.c_str(), "r");
+    if (f == nullptr) {
+        return false;
+    }
+    char buf[8] = {0};
+    size_t n = std::fread(buf, 1, sizeof(buf) - 1, f);
+    std::fclose(f);
+    return n > 0 && buf[0] == '1';
+}
+
+void SetRequest(const std::string &path, const char *value)
+{
+    FILE *f = std::fopen(path.c_str(), "w");
+    if (f == nullptr) {
+        return;
+    }
+    std::fputs(value, f);
+    std::fclose(f);
+}
+
+/*
+ * Everything a snapshot needs that FollowMode does not otherwise carry.
+ *
+ * FollowMode holds only a LogSource, and a source cannot be asked what to
+ * reopen -- so a request serviced from inside the slice loop would have no way
+ * to build the one-shot reader it needs. Passing the acquisition options along
+ * keeps that possible without teaching FollowMode about argv.
+ */
+struct GuardContext {
+    std::string dir;
+    std::string logPath;
+    std::string logCmd;
+    bool kmsg = false;
+
+    std::string reqPath() const { return dir + "/snapshot.req"; }
+    std::string snapPath() const { return dir + "/snapshot.jsonl"; }
+};
+
+/*
+ * Answers one snapshot request: reads the whole current backlog, writes it to
+ * `snapshot.jsonl`, then releases the requester.
+ *
+ * The order at the end is the protocol, not a detail. The app writes '1' and
+ * then polls for anything that is not '1'; '0' therefore has to mean "written
+ * and closed", so it is set only after fclose. Writing it earlier -- when the
+ * request is picked up, say -- would tell the app to read a file that still
+ * holds the previous request's answer.
+ *
+ * A fresh source, never the session's own: KmsgSource::ReadAll opens a new fd
+ * (the ring's read cursor is per open file description, so this cannot steal
+ * records from the follower) but it accumulates overruns_ on the object it is
+ * called on, and adding to the follower's counter would put phantom "lost
+ * records" in the session's closing report.
+ *
+ * The read walks oldest to newest and ends on the deadline, never early, so
+ * kSnapshotReadMs is time the collector spends here and nowhere else.
+ */
+void ServiceSnapshot(const GuardContext &ctx)
+{
+    policy_loop::ReadBudget budget;
+    budget.maxMs = kSnapshotReadMs;
+
+    std::string text;
+    std::string err;
+    std::unique_ptr<policy_loop::LogSource> src = MakeSource(ctx.logPath, ctx.logCmd, ctx.kmsg);
+    bool ok = src != nullptr && ReadInput(src, &text, &err, budget);
+
+    FILE *out = std::fopen(ctx.snapPath().c_str(), "w");
+    if (out == nullptr) {
+        std::fprintf(stderr, "%s: cannot write %s\n", kProgram, ctx.snapPath().c_str());
+        SetRequest(ctx.reqPath(), "0\n");
+        return;
+    }
+
+    if (!ok) {
+        // Truncated rather than left alone: the app reports an empty snapshot,
+        // which is true, instead of the previous answer, which is not.
+        std::fprintf(stderr, "%s: snapshot read failed: %s\n", kProgram, err.c_str());
+        std::fclose(out);
+        SetRequest(ctx.reqPath(), "0\n");
+        return;
+    }
+
+    std::vector<policy_loop::DenialRecord> recs = policy_loop::ParseDenials(text);
+    size_t total = recs.size();
+    if (total > kSnapshotMaxRecords) {
+        recs.erase(recs.begin(), recs.begin() + static_cast<long>(total - kSnapshotMaxRecords));
+    }
+    DumpDenialsTo(out, recs);
+    std::fflush(out);
+    std::fclose(out);
+
+    std::fprintf(stderr, "%s: snapshot -> %s: %zu denials (%zu kept, newest)\n", kProgram,
+                 ctx.snapPath().c_str(), total, recs.size());
+    SetRequest(ctx.reqPath(), "0\n");       // last: '0' means "written and closed"
+}
+
+/*
+ * Development-time debug log (--debug-log <path>).
+ *
+ * The collector already has one output: the JSONL the console reads. This is a
+ * second, optional one, for whoever is editing this component and wants their
+ * own view of a session -- which window opened, when -- somewhere they can look
+ * at without going through the app. Off unless asked for, so nothing the
+ * shipped binary does depends on it.
+ *
+ * On OHOS the path is an SELinux subject, not just a directory. Point it at
+ * somewhere this domain has not been granted -- /data/local/tmp is the usual
+ * one, and the domain holds nothing there on purpose -- and the attempt itself
+ * produces a real `avc: denied` whose scontext is this collector. That makes it
+ * the cheapest way to exercise the "a system component is denied at runtime"
+ * path end to end without waiting for a defect, which is why the demo build
+ * turns it on. The denial is genuine: a gap in the domain, not a fabricated
+ * log line.
+ *
+ * Opened on first use rather than at startup, and that is not a detail. A
+ * session drops the backlog its first read replays (--from-now), so a denial
+ * raised before the live window opens is thrown away as history before anyone
+ * can read it. Opening lazily is what puts the denial inside the window.
+ *
+ * Attempted once per session, not once per process. What is being noted is a
+ * session, so a session that opens with the sink still unopened tries again --
+ * otherwise the probe would fire on the first switch-on after a service start
+ * and go quiet for every one after it, which is the opposite of what a demo
+ * needs. A sink that cannot be opened is a standing property of the deployment
+ * (this domain does not hold that path), so the price of retrying is one failed
+ * open and one line on stderr per session -- and sessions happen only when an
+ * operator asks for one. That is cheap enough to pay for a repeatable probe.
+ *
+ * Once it does open, the handle is kept, so later sessions append to the file
+ * the first one created.
+ */
+struct DebugSink {
+    std::string path;
+    FILE *file = nullptr;
+};
+
+DebugSink g_debug;
+
+void DebugLogWrite(const std::string &what)
+{
+    if (g_debug.path.empty()) {
+        return;
+    }
+    if (g_debug.file == nullptr) {
+        g_debug.file = std::fopen(g_debug.path.c_str(), "a");
+        if (g_debug.file == nullptr) {
+            // Not fatal: a debug sink that cannot be opened is a debugging
+            // problem, not a reason to stop collecting, and on a board the
+            // errno here is often the answer the operator was looking for.
+            std::fprintf(stderr, "%s: --debug-log %s: %s\n", kProgram,
+                         g_debug.path.c_str(), std::strerror(errno));
+            return;
         }
     }
-    if (::access(live.c_str(), F_OK) != 0) {
-        FILE *f = std::fopen(live.c_str(), "w");
-        if (f != nullptr) {
-            std::fclose(f);
-        }
-    }
-    ::chmod(sw.c_str(), 0666);
-    ::chmod(live.c_str(), 0666);
+    std::fprintf(g_debug.file, "%s\n", what.c_str());
+    std::fflush(g_debug.file);
 }
 
 /*
@@ -700,7 +968,8 @@ void EnsureSwitchFiles(const std::string &sw, const std::string &live)
  */
 int FollowMode(const std::unique_ptr<policy_loop::LogSource> &source, long long timeoutMs,
                bool dedupe, bool fromNow, const std::string &outPath = std::string(),
-               const std::string &switchPath = std::string())
+               const std::string &switchPath = std::string(),
+               const GuardContext *guard = nullptr)
 {
     if (!source->CanFollow()) {
         std::fprintf(stderr,
@@ -741,6 +1010,16 @@ int FollowMode(const std::unique_ptr<policy_loop::LogSource> &source, long long 
         if (!switchPath.empty() && !SwitchIsOn(switchPath)) {
             std::fprintf(stderr, "%s: switch went off\n", kProgram);
             break;
+        }
+
+        // Snapshot requests are answered here, once per slice, for the same
+        // reason the switch is read here: it is the one moment this loop is not
+        // inside a read, and the app polls at about this rate anyway. A session
+        // runs until the operator turns it off, so a request checked only in
+        // GuardMode would go unanswered for the whole session -- exactly when
+        // someone is most likely to ask what else the board has been saying.
+        if (guard != nullptr && RequestPending(guard->reqPath())) {
+            ServiceSnapshot(*guard);
         }
 
         long long slice = kFollowSliceMs;
@@ -794,6 +1073,10 @@ int FollowMode(const std::unique_ptr<policy_loop::LogSource> &source, long long 
             // The first read is the only one that replays; everything it held is
             // history, so the switch flips once it is done.
             draining = false;
+            // After the drain, not before it. This is the first moment at which
+            // a denial raised here is still in the window by the time anyone
+            // reads the window -- see the note on DebugLogWrite.
+            DebugLogWrite("live window open: " + source->Describe());
         }
         std::fflush(stdout);
 
@@ -850,6 +1133,12 @@ int GuardMode(const std::string &logPath, const std::string &logCmd, bool kmsg,
     const std::string sw = dir + "/guard.on";
     const std::string live = dir + "/live.jsonl";
 
+    GuardContext gc;
+    gc.dir = dir;
+    gc.logPath = logPath;
+    gc.logCmd = logCmd;
+    gc.kmsg = kmsg;
+
     std::fprintf(stderr, "%s: guard watching %s\n", kProgram, dir.c_str());
 
     for (;;) {
@@ -862,6 +1151,15 @@ int GuardMode(const std::string &logPath, const std::string &logCmd, bool kmsg,
             continue;
         }
         EnsureSwitchFiles(sw, live);
+        EnsureSnapshotFiles(dir);
+
+        // Answered on both sides of the switch. This one covers the idle case;
+        // FollowMode covers a running session, where this loop is not reached
+        // at all. Whichever gets there first clears the request, so the other
+        // sees '0' and does nothing.
+        if (RequestPending(gc.reqPath())) {
+            ServiceSnapshot(gc);
+        }
 
         if (!SwitchIsOn(sw)) {
             sleep(1);
@@ -882,7 +1180,7 @@ int GuardMode(const std::string &logPath, const std::string &logCmd, bool kmsg,
         // timeoutMs 0: the switch ends the session, not a clock.
         // fromNow true: attaching to /dev/kmsg replays the whole ring buffer,
         // and that backlog is not what "since I turned this on" means.
-        FollowMode(MakeSource(logPath, logCmd, kmsg), 0, dedupe, true, live, sw);
+        FollowMode(MakeSource(logPath, logCmd, kmsg), 0, dedupe, true, live, sw, &gc);
     }
 }
 
@@ -1264,6 +1562,7 @@ enum LongOnly {
     kOptOut,
     kOptGuard,
     kOptDir,
+    kOptDebugLog,
 };
 
 } // namespace
@@ -1293,6 +1592,7 @@ int main(int argc, char *argv[])
         {"out", required_argument, nullptr, kOptOut},
         {"guard", no_argument, nullptr, kOptGuard},
         {"dir", required_argument, nullptr, kOptDir},
+        {"debug-log", required_argument, nullptr, kOptDebugLog},
         {nullptr, no_argument, nullptr, 0},
     };
 
@@ -1321,6 +1621,7 @@ int main(int argc, char *argv[])
     std::string outPath;
     std::string guardDir;
     bool guard = false;
+    std::string debugLogPath;
 
     int para = 0;
     while ((para = getopt_long(argc, argv, "hvsl:di:", kOptions, nullptr)) != -1) {
@@ -1395,11 +1696,20 @@ int main(int argc, char *argv[])
             case kOptDir:
                 guardDir = optarg;
                 break;
+            case kOptDebugLog:
+                debugLogPath = optarg;
+                break;
             default:
                 std::fprintf(stderr, "Try '%s -h' for more information.\n", kProgram);
                 return 2;
         }
     }
+
+    // Armed here, opened on first write. Deliberately not validated against
+    // which mode is running: init sends a service's stderr to /dev/null, so a
+    // validation error is a service that dies on every boot in silence. A
+    // --debug-log that no mode ever writes to costs a string.
+    g_debug.path = debugLogPath;
 
     if (asJson && !explain) {
         std::fprintf(stderr, "%s: --json only applies to --explain\n", kProgram);
