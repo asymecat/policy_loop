@@ -64,20 +64,56 @@
 > 24 条 dontaudit 的实测方式：`checkpolicy -b -C -M -o orig.cil <policy.31>`
 > （命令同 `device/selinux_policy/build_policy.sh:148`；产物目录被 gitignore，本机复跑即可得到）。
 
-## 3. 🔴 neverallow 防线本身是漏的（本节最该看）
+## 3. neverallow 防线（2026-10-07 已从"漏"补到"能拦"，下方注明残余）
 
 背景：neverallow 是**编译期断言，不落盘** —— 实测板子反编译出的 `orig.cil` 里 **0 条 neverallow**。
-所以「`secilc` 编译通过」**不证明**没撞 neverallow；这条防线只能由 converge 的索引查询提供（已写进 `0c30345`）。
+所以「`secilc` 编译通过」本身不证明没撞 neverallow：**除非**待编译的 CIL 里重新写出断言。
 
-而 §2.1 的三条正则漏掉的 **164 条 neverallow 根本没进索引**（46 + 68 + 50）。也就是：
+✅ **2026-10-07：落地桥（`tools/apply_converge.py`）把板子对应源树的 neverallow 翻译并注入
+待编译的 CIL，门 4 由"可编译性检查"变成"红线检查"** —— 现在 `secilc` 编译通过**确实**证明没撞
+这些红线。翻译是**精确**的（不是近似）：类型位置的集合写法 → CIL 的 `(or …)`／`(and …)`／
+`(not …)`（合成属性后引用），`*` → `(all)`，`~attr`／`~{…}` → `(not …)`，`self` 用 CIL 自己的
+关键字，类集／权限集宏就地展开，`~{权限}` 按**板子反编译出来的**该类权限表求补，32 位命令号按
+源树语义截成 16 位（`policy_define.c:1973,1993` 的 `(uint16_t)`），xperm 取反补成 `(range lo hi)`。
 
-- **今天的门全绿，并不覆盖这 164 条红线**；
+实测（板子树 5.0.3 `0878c56e3`，分母 = 源树 494 条 neverallow／neverallowxperm 语句）：
+
+| | 值 |
+|---|---|
+| 注入断言 | **710 条**（+ 632 条合成属性声明） |
+| 覆盖语句 | **404 / 494 = 81.8%**（此前 39 条 / 7.9%） |
+| 跳过 | 90 条：88 条含 `developer_only`/`updater_only`/`debug_only`/`non_developer_mode` 条件（38/32/17/1）、1 条板上空转、1 条真畸形（`usb_service.te` 的 `;;`） |
+
+两条独立证据，不是"看起来像检查"：
+
+- **零误报**：`board-policy.cil` + 全部 710 条断言一起编译 **rc=0** —— 板子自己的策略满足每一条重述；
+- **造违例必报**：按 6 类形态分层抽样 18 条，各造一条对应 `allow` ⇒ **18/18 触发**
+  （`/tmp/xp/q*.cil`）。
+
+🔴 **补完之后立刻抓到了真问题**：拿真实 converge 报告（69 行补丁）跑落地桥，**3 条红线冲突被抓**
+（4 行 allow），工具退出码 1：
+
+| 撞线补丁 | 被哪条红线拦下 |
+|---|---|
+| `allow normal_hap sys_file:file { open read }` | `normal_hap.te:46` `neverallow normal_hap_attr sys_file:file never_rw_file;` |
+| `allow storage_daemon fuse_file:filesystem { unmount }` | `filesystem.te:18` `neverallow storage_daemon ~{ exfat … labeledfs }:filesystem unmount;` |
+| `allow sa_device_standby resource_schedule_service:samgr_class { add }` | `domain.te:165` `neverallow * ~sa_service_attr:samgr_class ~list;` |
+
+三条分别落在**并集／属性差集／`*`+`~attr`+`~权限`** 三种新翻译形态上。补完之前这三种形态一律
+"形态不合"跳过 ⇒ 这 4 行会被放行，门 4 报"✓ 编译通过"。删掉这 4 行后其余 45 行 + 710 条断言
+编译 **rc=0**（`policy.31` 494,019 B）—— 即这对正／反例都走过真工具链。
+
+残余（**本节仍未关闭的部分**）：
+
+- 88 条条件表达式（`developer_only` 等）**未注入**：它们是否生效取决于构建配置，跳过是如实计数，
+  但这 88 条红线在门上仍是真空；
+- §2.1 的三条正则漏掉的 **164 条 neverallow 根本没进索引**（46 + 68 + 50）—— 那是 **converge
+  索引查询**那条防线（`policy/index.py`），与上面这条 secilc 防线**相互独立**，本次未动；
 - 已做的核对：把其中能结构化解析的 **72 条**与当前 69 行补丁逐条比对（src／tgt／类／权限，含属性闭包
-  与 `~{}` 语义）⇒ **0 条冲突** —— 今天这份补丁集是干净的；
-- 但**新生成的补丁没有任何东西拦得住它们**。
+  与 `~{}` 语义）⇒ **0 条冲突**。
 
-处置建议：要么修 §2.1（顺带把这道防线补全），要么把「neverallow 防线覆盖不全」作为明确边界写进答辩口径。
-**不能既不改也不说。**
+所以现在是**两道防线**：索引查询（覆盖面有洞，见上）+ 编译期断言（81.8%，实测能拦）。
+答辩口径应说"两道，各自的洞如下"，不能说"neverallow 一律拒放权"。
 
 ## 4. 输入轨道
 
