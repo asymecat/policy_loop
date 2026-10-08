@@ -43,12 +43,19 @@ sh_() { hdc shell "$1"; }
 
 # 把内核此刻真正生效的策略拉回来，数我们的类型。这是唯一可信的判据：
 # 磁盘上那份每次 install 都被还原成原版，看磁盘等于什么都没看。
+#
+# 返回值必须是 python 那个判定的结果，不能是收尾命令的结果：
+# 这里原先直接以 rm -f 收尾，于是函数恒返回 0，上面两处 if 永远走 ✓ 分支 ——
+# status 和 install 第 4 步都成了假绿灯（策略压根没进去也照样报「在」）。
+# 所以先把退出码接住，再删临时文件，最后显式 return。
 verify_live() {
-    local tmp; tmp=$(mktemp /tmp/live_policy.XXXXXX.31)
+    local tmp rc=0; tmp=$(mktemp /tmp/live_policy.XXXXXX.31)
     if ! hdc file recv /sys/fs/selinux/policy "$tmp" >/dev/null 2>&1; then
         echo "   ! 拉取 /sys/fs/selinux/policy 失败"; rm -f "$tmp"; return 1
     fi
-    python3 - "$tmp" << 'PY'
+    # `|| rc=$?` 而不是靠 set -e：被当成 if 条件调用时，set -e 在函数体内是被
+    # 抑制的，光靠它接不住这个非零退出。
+    python3 - "$tmp" << 'PY' || rc=$?
 import sys
 d = open(sys.argv[1], 'rb').read()
 n = d.count(b'pl_collector')
@@ -56,6 +63,7 @@ print(f"   内核策略 {len(d)} 字节, pl_collector 出现 {n} 次")
 sys.exit(0 if n else 1)
 PY
     rm -f "$tmp"
+    return $rc
 }
 
 cmd_status() {
