@@ -194,5 +194,48 @@ class TestIndex(unittest.TestCase):
         self.assertEqual(s["types"], 6)       # 6 type declarations indexed
 
 
+class TestWrappedStatements(unittest.TestCase):
+    """A rule statement can be wrapped across physical lines.
+
+    The upstream tree has 40 of them (33 neverallow, 4 allow, 3 *xperm). Reading
+    line by line loses them all, and loses them *silently*: `_RULE_RE` makes the
+    trailing `;` optional, so a first line that already looks complete is taken
+    as the whole statement and the remainder is discarded -- the statement is
+    still counted as a rule, so `skipped_statements` never notices.
+    """
+
+    def test_wrapped_neverallow_is_kept_whole(self):
+        idx = load_text("type a;\ntype b;\n"
+                        "neverallow a b:file { read\n   write };\n")
+        self.assertEqual(len(idx.rules), 1)
+        self.assertEqual(idx.rules[0].kind, "neverallow")
+        self.assertEqual(idx.rules[0].perms, frozenset({"read", "write"}))
+        self.assertEqual(idx.summary()["skipped_statements"], 0)
+
+    def test_wrapped_allow_grants_every_permission(self):
+        idx = load_text("type app;\ntype dev_file;\n"
+                        "allow app dev_file:file { open\n   read };\n")
+        self.assertTrue(idx.has_access("app", "dev_file", "file", {"read"})[0])
+        self.assertTrue(idx.has_access("app", "dev_file", "file", {"open"})[0])
+
+    def test_wrapped_xperm_keeps_every_command(self):
+        idx = load_text("type app;\ntype dev;\n"
+                        "allowxperm app dev:chr_file ioctl {\n   0x5413\n   0x5414 };\n")
+        self.assertEqual(len(idx.rules), 1)
+        self.assertEqual(idx.rules[0].xperms, frozenset({"0x5413", "0x5414"}))
+
+    def test_comment_on_the_first_line_does_not_truncate(self):
+        idx = load_text("type a;\ntype b;\n"
+                        "neverallow a b:file { read    # the rest is below\n"
+                        "   write };\n")
+        self.assertEqual(idx.rules[0].perms, frozenset({"read", "write"}))
+
+    def test_an_unterminated_statement_is_skipped_not_swallowed(self):
+        """No `;` anywhere: the join must give up rather than eat the file."""
+        idx = load_text("type a;\ntype b;\n" + "neverallow a b:file { read }\n" * 200)
+        self.assertEqual(idx.summary()["rules"], 0)
+        self.assertGreater(idx.summary()["skipped_statements"], 0)
+
+
 if __name__ == "__main__":
     unittest.main()

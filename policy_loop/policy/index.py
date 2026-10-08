@@ -74,6 +74,21 @@ _XP_RE = re.compile(
 )
 
 
+# A statement the index is supposed to model, so a missing `;` means "wrapped",
+# not "a different kind of statement". Only these four are joined (see
+# `_feed_lines`); `dontaudit`/`auditallow` are not modelled either way.
+_RULE_KW_RE = re.compile(r"^(allow|neverallow|allowxperm|neverallowxperm)\b")
+
+# Ceiling on the join, so a file whose rule never terminates cannot swallow the
+# remainder. Past this (or at end of file) the text is *not* fed to the rule
+# regex: a blob of several clauses would match on its first clause and drop the
+# rest -- the same silent narrowing the join exists to prevent -- so it is
+# counted in `skipped_statements` instead, where a malformed statement belongs.
+# Both bail-outs are unreachable on the upstream tree (0 occurrences in 1,315
+# files), so this is a guard against a pathological file, not a live path.
+_MAX_JOIN_LINES = 64
+
+
 # --------------------------------------------------------------------------- #
 # Rule model
 # --------------------------------------------------------------------------- #
@@ -164,6 +179,17 @@ class PolicyIndex:
 
     def _feed_lines(self, text: str, source: str) -> None:
         in_block = False
+        # A rule statement may be wrapped across physical lines: the upstream
+        # tree has 40 of them (33 neverallow, 4 allow, 3 *xperm). Feeding such a
+        # file one line at a time loses them -- and worse, it loses them
+        # *invisibly*: `_RULE_RE` makes the trailing `;` optional, so a first
+        # line that already ends inside the permission slot (`allow A B:file
+        # read` + `write;`) is accepted as a whole statement and the rest is
+        # discarded, narrowing the rule with `skipped_statements` none the
+        # wiser, because the statement *was* counted as a rule. So hold any
+        # rule statement that does not end in `;` and join until it does.
+        pending = ""
+        pending_line = 0
         for lineno, line in enumerate(text.splitlines(), 1):
             s = line.strip()
             if not in_block and self._BLOCK_OPEN_RE.match(s):
@@ -177,7 +203,24 @@ class PolicyIndex:
                     s = s[1:]
                 if s.startswith("`"):
                     s = s[1:]
+            # Strip per physical line, not after joining: a trailing comment on
+            # the first line would otherwise truncate the joined statement.
+            s = s.split("#", 1)[0].strip()
+            if pending:
+                pending = f"{pending} {s}".strip()
+                if pending.endswith(";"):
+                    self._feed_line(pending, source, pending_line)
+                    pending = ""
+                elif lineno - pending_line >= _MAX_JOIN_LINES:
+                    self.skipped_count += 1
+                    pending = ""
+                continue
+            if s and _RULE_KW_RE.match(s) and not s.endswith(";"):
+                pending, pending_line = s, lineno
+                continue
             self._feed_line(s, source, lineno)
+        if pending:
+            self.skipped_count += 1
 
     def _feed_line(self, line: str, source: str, lineno: int) -> None:
         s = line.strip()
