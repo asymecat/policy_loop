@@ -18,10 +18,12 @@ from policy_loop.converge import (
     CAT_HUMAN,
     CAT_NOISE,
     CAT_UNCLASS,
+    _cached_known_tokens,
     _is_mls_level,
     _is_service_placeholder,
     _known_tokens,
     _patch_is_vacuous,
+    apply_guards,
     converge,
     main,
 )
@@ -78,6 +80,96 @@ class TestNoIndex(unittest.TestCase):
         r = converge(denial("app", "dev_file", "file", "read"))
         self.assertEqual(r.unique_cases, 1)
         self.assertIn("未提供策略索引", r.readiness_note())
+
+
+class TestGuardsAreOneFunctionTwoCallers(unittest.TestCase):
+    """`apply_guards` is what converge and `--explain` both call.
+
+    It used to be inlined in the cluster loop, which is why `--explain` -- the
+    path a developer actually reaches for when holding one bad line -- answered
+    with a patch the guards would have refused. These tests pin the invariant
+    that made that visible: the same record must get the same guard verdict
+    from either entry point.
+    """
+
+    def test_a_clean_record_gets_none_from_both(self):
+        from policy_loop.explain import explain
+        from policy_loop.denial import parse as parse_denials
+        te = "type app;\ntype sys_t;\ntype other;\ntype other_t;\n" \
+             "allow other other_t:file { read };\n"
+        raw = denial("app", "sys_t", "file", "read")
+        index = load_text(te)
+
+        self.assertIsNone(apply_guards(parse_denials(raw)[0], "", index))
+        self.assertEqual(converge(raw, index=index).clusters[0]["category"],
+                         CAT_AUTO)
+        self.assertEqual(explain(raw, index=index)["advisory"], "")
+
+    def test_a_refused_record_gets_the_same_sentence_from_both(self):
+        from policy_loop.explain import explain
+        te = "type face_auth_host;\n"
+        raw = ("avc: denied { get } for service=5100 pid=403 "
+               "scontext=u:r:face_auth_host:s0 "
+               "tcontext=u:object_r:default_service:s0 "
+               "tclass=samgr_class permissive=1")
+        index = load_text(te)
+
+        cl = converge(raw, index=index).clusters[0]
+        self.assertEqual(cl["category"], CAT_HUMAN)
+
+        r = explain(raw, index=index)
+        # The batch report carries the sentence in `why`; the single-denial
+        # answer carries it in `advisory`. One function produced both.
+        self.assertEqual(r["advisory"], cl["why"])
+
+    def test_explain_refuses_what_converge_never_saw(self):
+        """The batch path only guards cases it would have auto-applied.
+
+        A case the pipeline already escalated is never rewritten, so converge
+        has nothing to say about its patch. `--explain` shows that patch to a
+        developer regardless, so it has to run the guards anyway -- gating them
+        on the bucket is what let it recommend a rule against a placeholder.
+        """
+        from policy_loop.explain import explain
+        from policy_loop.denial import parse as parse_denials
+        # A POTENTIAL_ESCALATION-style case by classification, but the target
+        # is also a placeholder: the guard must still refuse the patch.
+        te = "type intell_voice_service;\n"
+        raw = ("avc: denied { get } for service=intell_voice_trigger_manager_service "
+               "pid=633 scontext=u:r:intell_voice_service:s0 "
+               "tcontext=u:object_r:default_hdf_service:s0 "
+               "tclass=samgr_class permissive=1")
+        index = load_text(te)
+        rec = parse_denials(raw)[0]
+        self.assertEqual(converge(raw, index=index).clusters[0]["category"],
+                         CAT_HUMAN)
+        self.assertIsNotNone(apply_guards(rec, "", index))
+        self.assertIn("占位符", explain(raw, index=index)["advisory"])
+
+    def test_the_guard_order_is_the_ranking_of_reasons(self):
+        """MLS-as-type is reported as that, not as the unknown token it also is.
+
+        That line's target parses to `s0`, which is *also* absent from every
+        corpus -- so two guards would fire and the order decides which sentence
+        the reader gets. The type-shaped one is the actionable diagnosis.
+        """
+        from policy_loop.denial import parse as parse_denials
+        raw = ("#avc: denied { entrypoint } for pid=235 comm=\"init\" "
+               "path=\"/vendor/bin/charger\" scontext=u:r:charger:s0 "
+               "tcontext=u:charger_exec:s0 tclass=file permissive=1")
+        why = apply_guards(parse_denials(raw)[0], "",
+                           load_text("type charger;\ntype charger_exec;\n"))
+        self.assertIn("安全级别", why)
+
+    def test_no_index_means_no_guard(self):
+        """Without a policy the tokens cannot be checked, so nothing fires."""
+        from policy_loop.denial import parse as parse_denials
+        raw = denial("app", "sys_t", "file", "read")
+        self.assertIsNone(apply_guards(parse_denials(raw)[0], "", None))
+
+    def test_the_token_sets_are_computed_once_per_index(self):
+        index = load_text("type app;\ntype sys_t;\nallow app sys_t:file { read };\n")
+        self.assertIs(_cached_known_tokens(index), _cached_known_tokens(index))
 
 
 class TestDegeneratePatchGuards(unittest.TestCase):
@@ -255,7 +347,7 @@ class TestServicePlaceholderResolution(unittest.TestCase):
     the concrete type `service=` names is what separates "already allowed" from
     "genuinely missing".
 
-    The resolution deliberately does NOT reach the patch text or the five guards;
+    The resolution deliberately does NOT reach the patch text or the six guards;
     the last test here is the one that pins that down.
     """
 

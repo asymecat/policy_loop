@@ -113,6 +113,85 @@ def _known_tokens(index) -> tuple:
     return known, classes, perms
 
 
+def _cached_known_tokens(index) -> tuple:
+    """:func:`_known_tokens`, computed once per index.
+
+    The scan is over every rule in the tree -- 21,824 of them on the rk3568
+    policy -- and the guards ask for it once per case. Converge amortized that
+    by hoisting it out of the cluster loop; the single-denial path cannot, so
+    the result is parked on the index instead. It is keyed off the index
+    identity because it is a pure function of it, and two indexes must not
+    share an entry.
+    """
+    got = index.__dict__.get("_known_tokens")
+    if got is None:
+        got = _known_tokens(index)
+        index.__dict__["_known_tokens"] = got
+    return got
+
+
+def apply_guards(rec, patch: Optional[str], index) -> Optional[str]:
+    """The six guards. Returns the reason a patch must not be auto-applied.
+
+    A verdict has already decided *what is wrong and how one would fix it* by
+    the time this runs; whether that fix may be applied unattended is a
+    separate question, and this is the only thing that answers it. ``None``
+    means no guard fired -- the patch is auto-safe.
+
+    Both entry points call this, and the device calls its own ``ApplyGuards``
+    at the same two points, because the two must not drift: the guards are the
+    difference between "here is a rule that closes the gap" and "here is a rule
+    that cannot land, and the log line you gave me is why".
+
+      * target parsed as a bare MLS level (malformed context, e.g. an upstream
+        typo ``u:charger_exec:s0`` lost the object_r role);
+      * target is a ``default_*`` service placeholder (the real rule must hit
+        the concrete ``sa_*``/``hdf`` type that ``service=`` resolves to);
+      * subject/target not provably part of the indexed policy;
+      * an object class no rule in the policy ever names (a misspelt class in a
+        hand-copied log line -- ``samar_class`` for ``samgr_class`` -- yields a
+        rule that cannot compile);
+      * a requested permission that is not a permission name at all
+        (transcription error in the log: ``denied { 0x5413 }`` with ``ioctl``
+        written outside the braces);
+      * a rule that grants no real permission (an ioctl-only denial routed to
+        allowxperm semantics can come back as ``allow A B:c { };``).
+
+    The order is the ranking of the reasons: the first to fire decides, so a
+    target that is a security level is reported as that rather than as the
+    unknown token it also is.
+    """
+    if index is None:
+        return None
+    known, known_classes, known_perms = _cached_known_tokens(index)
+
+    if _is_mls_level(rec.target_type):
+        return ("目标上下文可疑（被解析成安全级别而非类型，"
+                "多为日志/注释笔误，勿照抄规则）")
+    if _is_service_placeholder(rec.target_type):
+        return ("目标为 default_* 占位符（service 需映射到具体 "
+                "sa_*/hdf 类型才能落规则），转人工")
+    if rec.source_domain not in known or rec.target_type not in known:
+        unknown = (rec.source_domain if rec.source_domain not in known
+                   else rec.target_type)
+        return (f"主体/目标「{unknown}」不在当前策略语料中"
+                "（设备新增域、生成的数字 service 标签或标注异常），"
+                "补丁无法落点验证，转人工")
+    if rec.tclass not in known_classes:
+        return (f"对象类「{rec.tclass}」不在策略任何规则中出现"
+                "（疑为日志笔误），补丁无法落点验证，转人工")
+    bogus = [p for p in (rec.permissions or ()) if p not in known_perms]
+    if bogus:
+        return (f"权限位含非权限名「{'、'.join(bogus)}」"
+                "（策略里没有任何规则授予过它；疑为日志转写笔误——"
+                "ioctl 命令号被写进了权限位，而 `ioctl` 被写在括号外），"
+                "照抄会落到编译不过的规则上，转人工")
+    if _patch_is_vacuous(patch or ""):
+        return ("补丁为空权限（ioctl 类缺口需 allowxperm 语义，"
+                "当前修复路径给不出有效最小补丁），转人工")
+    return None
+
+
 def _patch_is_vacuous(patch: str) -> bool:
     """True when a suggested allow grants no real permission.
 
@@ -183,10 +262,11 @@ class ConvergeReport:
             # No cross-layer view was asked for, so emit none -- not even as
             # nulls. `tests/diff_device.py` compares this report against the
             # on-device `Converge()` and fails on any key the device does not
-            # carry, and the device has no `@hap` table to fill one from. When
-            # the view *is* requested the report is a host-only artifact, and
-            # that gate is run without it -- see the section in
-            # docs/eval-converge.md.
+            # carry. The device *can* now build the view (the `@hap` table
+            # rides in the PLI), but `Converge()` does not emit it, so the key
+            # stays out of the batch report either way. When the view *is*
+            # requested the report stops being device-comparable, and that
+            # gate is run without it -- see the section in docs/eval-converge.md.
             for c in d["clusters"]:
                 c.pop("cross_layer", None)
             d.pop("cross_layer_summary", None)
@@ -223,7 +303,7 @@ def _quick_verdict(index, record) -> dict:
     # in the real corpus turn out to be already allowed.
     #
     # Only the queries use the resolved name. `record.target_type` stays raw for
-    # the reported cluster, the patch text and the five guards -- see the note on
+    # the reported cluster, the patch text and the six guards -- see the note on
     # _PLACEHOLDER_TARGETS above.
     qtgt = tgt
     if _is_service_placeholder(tgt):
@@ -290,9 +370,6 @@ def converge(text: str, index=None, case_prefix: str = "CONV",
         groups.setdefault(fingerprint(rec), []).append(rec)
 
     orch = Orchestrator(index=index) if index is not None else None
-    known, known_classes, known_perms = (_known_tokens(index)
-                                         if index is not None
-                                         else (None, None, None))
     sehap = getattr(index, "sehap", None) if index is not None else None
     want_cross = bool(cross_layer and sehap is not None and sehap.entries)
     clusters: list = []
@@ -337,50 +414,10 @@ def converge(text: str, index=None, case_prefix: str = "CONV",
                 if not target_note and case.patch_target_note:
                     target_note = case.patch_target_note
 
-            # Never auto-suggest a degenerate patch. Five guards:
-            #  * target parsed as a bare MLS level (malformed context, e.g.
-            #    an upstream typo "u:charger_exec:s0" lost the object_r role);
-            #  * target is a default_* service placeholder (real rule must hit
-            #    the concrete sa_*/hdf type that `service=` resolves to);
-            #  * subject/target not provably part of the indexed policy;
-            #  * a requested permission that is not a permission name at all
-            #    (transcription error in the log: "denied { 0x5413 }" with
-            #    `ioctl` written outside the braces);
-            #  * a rule that grants no real permission (ioctl-only denial routed
-            #    to allowxperm semantics can come back as "allow A B:c { };")
+            # Never auto-suggest a degenerate patch (see apply_guards).
             if cl.category == CAT_AUTO:
-                if _is_mls_level(first.target_type):
-                    cl.category, cl.why = CAT_HUMAN, (
-                        "目标上下文可疑（被解析成安全级别而非类型，"
-                        "多为日志/注释笔误，勿照抄规则）")
-                elif _is_service_placeholder(first.target_type):
-                    cl.category, cl.why = CAT_HUMAN, (
-                        "目标为 default_* 占位符（service 需映射到具体 "
-                        "sa_*/hdf 类型才能落规则），转人工")
-                elif first.source_domain not in known or \
-                        first.target_type not in known:
-                    unknown = (first.source_domain
-                               if first.source_domain not in known
-                               else first.target_type)
-                    cl.category, cl.why = CAT_HUMAN, (
-                        f"主体/目标「{unknown}」不在当前策略语料中"
-                        "（设备新增域、生成的数字 service 标签或标注异常），"
-                        "补丁无法落点验证，转人工")
-                elif first.tclass not in known_classes:
-                    cl.category, cl.why = CAT_HUMAN, (
-                        f"对象类「{first.tclass}」不在策略任何规则中出现"
-                        "（疑为日志笔误），补丁无法落点验证，转人工")
-                elif (bogus := [p for p in (first.permissions or ())
-                                if p not in known_perms]):
-                    cl.category, cl.why = CAT_HUMAN, (
-                        f"权限位含非权限名「{'、'.join(bogus)}」"
-                        "（策略里没有任何规则授予过它；疑为日志转写笔误——"
-                        "ioctl 命令号被写进了权限位，而 `ioctl` 被写在括号外），"
-                        "照抄会落到编译不过的规则上，转人工")
-                elif _patch_is_vacuous(cl.patch):
-                    cl.category, cl.why = CAT_HUMAN, (
-                        "补丁为空权限（ioctl 类缺口需 allowxperm 语义，"
-                        "当前修复路径给不出有效最小补丁），转人工")
+                if (reason := apply_guards(first, cl.patch, index)):
+                    cl.category, cl.why = CAT_HUMAN, reason
 
             # The cross-layer view, after the bucket is final: it reads the
             # verdict but never writes one. Note it is computed for every
@@ -607,10 +644,11 @@ def main(argv: Optional[list] = None) -> int:
     ap.add_argument("--md", type=Path, help="write markdown report")
     ap.add_argument("--cross-layer", action="store_true",
                     help="add the application-layer view (APL / shared-domain "
-                         "scope / which layer owns the fix). Host-only: the "
-                         "device has no sehap_contexts to recompute it from, so "
-                         "the default JSON report stays device-comparable. The "
-                         "markdown report always includes it.")
+                         "scope / which layer owns the fix). Off by default so "
+                         "the JSON report stays device-comparable; the on-device "
+                         "tool reaches the same view through "
+                         "`--explain --cross-layer`. The markdown report always "
+                         "includes it.")
     args = ap.parse_args(argv)
 
     if not args.log and not args.text:

@@ -11,6 +11,12 @@ what came out. The batch path (converge.py) shortcuts obviously-noise cases with
 a cheap query; this does not, because the answer a developer wants for one line
 is the one the pipeline would give it, guards and all.
 
+"Guards and all" is load-bearing: the six guards in converge.py:apply_guards
+run here too, and their reason lands in `advisory`. They are a separate step
+from the verdict -- they answer whether the patch may be applied unattended,
+not what it is -- and leaving them out is what let this path recommend a rule
+against a malformed log line.
+
 Deterministic, stdlib-only. Never writes policy.
 """
 
@@ -22,6 +28,7 @@ import sys
 from typing import Optional
 
 from policy_loop.agents import Orchestrator
+from policy_loop.converge import apply_guards
 from policy_loop.denial import parse as parse_denials
 from policy_loop.policy import load
 from policy_loop.policy.cross_layer import LAYER_LABEL
@@ -70,7 +77,17 @@ def explain(text: str, index=None, cross_layer: bool = False) -> Optional[dict]:
     ioctl = v.get("ioctl") or {}
     recommended = case.recommended or {}
 
+    # The guards, at the same point the device runs them. Without this the
+    # pipeline's answer stands alone: a developer who copies a malformed line
+    # out of dmesg is told to write a rule, and the rule cannot land -- the
+    # "target" is a security level, or a service placeholder, or the permission
+    # slot holds an ioctl number. A verdict says what is wrong and how one
+    # would fix it; whether that fix may be applied unattended is a separate
+    # question, and this is the only thing that answers it.
+    advisory = apply_guards(first, case.patch, index) or ""
+
     result = {
+        "advisory": advisory,
         "classification": case.classification,
         "cls": _token(v["cls"]),
         "explanation": case.explanation,
@@ -81,8 +98,12 @@ def explain(text: str, index=None, cross_layer: bool = False) -> Optional[dict]:
         "missing": sorted(set(requested) - set(granted)),
         "needs_human": bool(case.needs_human),
         "patch": case.patch,
+        # A downgraded case's answer *is* the reason it must not be applied, so
+        # the guard's sentence replaces the recommendation's title -- the same
+        # rewrite the device makes. `advisory` is what keeps the two tellable
+        # apart, saying which part of the answer the guards contributed.
         "recommended": {"id": recommended.get("id", ""),
-                        "title": recommended.get("title", "")},
+                        "title": advisory or recommended.get("title", "")},
         "requested": requested,
         "review": (case.review or {}).get("status", ""),
         "src": _token(v["src"]),
@@ -133,6 +154,11 @@ def main(argv=None) -> int:
               f"{{ {' '.join(result['requested'])} }}")
         print(f"说明  {result['explanation']}")
         print(f"建议  {result['recommended']['title']}")
+        if result["advisory"]:
+            # The patch is still printed above -- it is what the pipeline
+            # proposed, and hiding it would hide what the guard is rejecting.
+            # What changes is that it is no longer presented as the answer.
+            print(f"告诫  该补丁不可自动采用：{result['advisory']}")
         _print_cross_layer(result.get("cross_layer"))
     return 0
 

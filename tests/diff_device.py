@@ -298,6 +298,11 @@ def cmd_index(args) -> int:
     device_meta = json.loads(proc.stdout.decode())
 
     kinds = summary["kinds"]
+    # The APL bridge rides along. On an index built from a single `.te` file
+    # there is no sehap_contexts and the host has no `sehap` attribute at all --
+    # the exporter writes zeros there, so the expectation is zeros.
+    hap = getattr(index, "sehap", None)
+    hap_summary = hap.summary() if hap is not None else {}
     expected = {
         "rules": summary["rules"],
         "allow": kinds.get("allow", 0),
@@ -307,6 +312,12 @@ def cmd_index(args) -> int:
         "types": summary["types"],
         "attrs": summary["attributes"],
         "skipped": summary["skipped_statements"],
+        "hap_entries": hap_summary.get("hap_entries", 0),
+        "hap_domains": hap_summary.get("hap_domains", 0),
+        "hap_names": hap_summary.get("hap_names", 0),
+        "hap_apls": hap_summary.get("hap_apls", 0),
+        "hap_debuggable": hap_summary.get("hap_debuggable", 0),
+        "hap_skipped": hap_summary.get("hap_skipped", 0),
     }
     mismatches = [f"{k}: host={v} device={device_meta.get(k)}"
                   for k, v in expected.items() if device_meta.get(k) != v]
@@ -317,7 +328,10 @@ def cmd_index(args) -> int:
         return 1
     print(f"[diff] index counters OK  rules={expected['rules']} "
           f"types={expected['types']} attrs={expected['attrs']} "
-          f"skipped={expected['skipped']}  load={device_meta.get('load_ms')}ms")
+          f"skipped={expected['skipped']} "
+          f"hap_entries={expected['hap_entries']} "
+          f"hap_domains={expected['hap_domains']}  "
+          f"load={device_meta.get('load_ms')}ms")
 
     corpus = pathlib.Path(args.corpus)
     corpus_text = corpus.read_text(encoding="utf-8", errors="replace") if corpus.exists() else ""
@@ -431,12 +445,31 @@ def cmd_explain(args) -> int:
         from policy_loop.policy import is_service_placeholder
         cases = [r for r in cases if is_service_placeholder(r.target_type)]
 
+    # No hand-written guard cases are appended here. They were, briefly, on the
+    # theory that the corpus holds no refusals; it does. Of the 4911 unique
+    # cases, 90 carry a non-empty `advisory`, and between them they exercise all
+    # six `apply_guards` branches (mls-level 5, placeholder 13, unknown-token 59,
+    # unknown-class 6, bogus-perm 3, vacuous-patch 4). The field that was never
+    # compared before was unexercised because `--explain` did not *run* the
+    # guards, not because the corpus could not reach them -- so the fix belongs
+    # in the engine, and this gate picks the coverage up for free.
+
+    # The cross-layer view rides on the same cases and is compared the same way
+    # -- it is the one part of `--explain` whose wording the device has to
+    # reproduce from the `@hap` table rather than from the rules, so it is the
+    # part most likely to drift.
+    extra_flags = ["--cross-layer"] if args.cross_layer else []
+    if args.cross_layer and not any(e.name for e in _hap_entries(index)):
+        print("[diff] index has no @hap table: cross-layer mode has nothing to "
+              "compare", file=sys.stderr)
+        return 2
+
     problems: list = []
     checked = 0
     for rec in cases:
-        expected = explain(rec.raw, index=index)
+        expected = explain(rec.raw, index=index, cross_layer=args.cross_layer)
         proc = run([args.bin, "--index", args.index, "--explain", rec.raw,
-                    "--json"])
+                    "--json"] + extra_flags)
         if proc.returncode != 0:
             problems.append(f"{rec.raw[:100]}\n  device rc={proc.returncode}: "
                             f"{proc.stderr.decode(errors='replace').strip()}")
@@ -465,8 +498,15 @@ def cmd_explain(args) -> int:
         for p in problems:
             print("  " + p)
         return 1
-    print(f"[diff] explain OK  cases={checked}")
+    print(f"[diff] explain OK  cases={checked}"
+          + ("  (with cross-layer)" if args.cross_layer else ""))
     return 0
+
+
+def _hap_entries(index) -> list:
+    """The index's APL bridge, or [] when it has none to compare from."""
+    sehap = getattr(index, "sehap", None)
+    return list(getattr(sehap, "entries", ()) or ())
 
 
 def case_tsv(rec) -> str:
@@ -675,6 +715,9 @@ def main(argv=None) -> int:
                    help="unique cases to check, in corpus order (0 = all)")
     p.add_argument("--placeholder", action="store_true",
                    help="check only samgr/hdf placeholder denials (the M3 cases)")
+    p.add_argument("--cross-layer", action="store_true",
+                   help="compare the application-layer view too (--explain "
+                        "--cross-layer). Needs an index carrying @hap.")
     p.add_argument("--limit", type=int, default=5,
                    help="differences to collect before stopping (default 5)")
     p.set_defaults(func=cmd_explain)

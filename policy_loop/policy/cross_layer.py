@@ -33,11 +33,13 @@ What this module deliberately does **not** do:
 * It does not *decide*. It returns a view (headline + evidence + the queries
   it ran), and the caller decides how loudly to say it. In particular it must
   not silently re-bucket a case in ``converge``: the buckets are byte-compared
-  against the on-device ``Converge()`` (see ``tests/diff_device.py``), and the
-  device has no ``@hap`` table to recompute them from -- so a cross-layer
-  verdict that changed a category would turn the project's main safety net
-  red. Upgrading this from advisory to a seventh guard is a device-side change
-  too, and is tracked as such.
+  against the on-device ``Converge()`` (see ``tests/diff_device.py``), so a
+  cross-layer verdict that changed a category would turn the project's main
+  safety net red. The device now *can* build this view -- the ``@hap`` table
+  rides in the PLI and ``--explain --cross-layer`` reproduces it field for
+  field -- but ``Converge()`` does not emit it and does not consult it, so the
+  batch buckets stay identical on both sides. Upgrading this from advisory to a
+  seventh guard would change that and is tracked as a separate change.
 * It does not guess a bundle name. A denial carries ``scontext``, not a bundle,
   and ``sehap_contexts`` also maps *names* to domains -- so the direction
   "domain -> bundle" is one-to-many and unknowable from a log line. Only the
@@ -50,6 +52,8 @@ Deterministic, stdlib-only. Never writes policy.
 from __future__ import annotations
 
 from typing import Optional, Tuple
+
+from policy_loop.export.pli import _hap_sort_key
 
 __all__ = ["APL_ORDER", "LAYER_LABEL", "apl_rank", "analyze",
            "app_domain_clusters"]
@@ -82,10 +86,18 @@ def apl_rank(apl: str) -> int:
 
 
 def _as_dict(entry) -> dict:
+    """One `sehap_contexts` entry as the view reports it.
+
+    `entry.source` -- the file the entry was read from -- is deliberately not
+    here. It is a build-machine path, the PLI does not carry it (see
+    ``export/pli.py``: seven fields, and the device has no sepolicy source to
+    read one from), and nothing reads it. Carrying it would have made this view
+    the one part of the engine the on-device tool could not reproduce, which is
+    exactly what ``tests/diff_device.py`` exists to catch.
+    """
     return {"apl": entry.apl, "domain": entry.domain, "type": entry.type,
             "debuggable": entry.debuggable, "name": entry.name,
-            "extension": entry.extension, "extra": entry.extra,
-            "source": entry.source}
+            "extension": entry.extension, "extra": entry.extra}
 
 
 def _declared_in(index, domain: str) -> bool:
@@ -226,7 +238,11 @@ def analyze(index, src: str, tgt: str, cls: str, perms,
     if pair["kind"] == "sibling":
         pair["allows"] = index.has_access(pair["domain"], qtgt, cls, perms)[0]
 
-    variants = [_as_dict(e) for e in src_entries]
+    # Sorted, not in file order: the PLI writes its `@hap` lines with the same
+    # key (export/pli.py:_hap_sort_key), so this is the order the on-device tool
+    # can reproduce. File order is a fact about the host's sepolicy tree -- which
+    # files it walked first -- and the device has no tree to walk.
+    variants = [_as_dict(e) for e in sorted(src_entries, key=_hap_sort_key)]
     scope = (f"共享域（APL={levels[0]} 的全部应用共用）"
              if not multi_level else
              f"共享域（同时服务 APL={'/'.join(levels)}）")

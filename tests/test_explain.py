@@ -88,12 +88,43 @@ class TestExplain(unittest.TestCase):
         self.assertFalse(r["needs_human"])
 
     def test_every_key_of_the_contract_is_present(self):
+        """The key set is the device contract, not a convenience.
+
+        tests/diff_device.py compares this object against `denial_check
+        --explain --json` key by key, so a key added here and not on the device
+        (or the reverse) is a gate failure rather than a new field.
+        """
         r = explain(DENIED_MISSING, index=index())
         self.assertEqual(sorted(r), [
-            "classification", "cls", "explanation", "granted", "ioctl",
-            "missing", "needs_human", "patch", "recommended", "requested",
-            "review", "src", "tgt", "verify"])
+            "advisory", "classification", "cls", "explanation", "granted",
+            "ioctl", "missing", "needs_human", "patch", "recommended",
+            "requested", "review", "src", "tgt", "verify"])
         self.assertEqual(sorted(r["recommended"]), ["id", "title"])
+
+    def test_a_clean_case_carries_no_advisory(self):
+        r = explain(DENIED_MISSING, index=index())
+        self.assertEqual(r["advisory"], "")
+        self.assertEqual(r["recommended"]["title"], "最小权限补齐")
+
+    def test_a_placeholder_target_is_refused_not_patched(self):
+        """The defect this field exists for: `--explain` used to hand out a rule
+        against a `default_*` placeholder, which can never land."""
+        line = ('avc: denied { get } for service=x pid=1 '
+                'scontext=u:r:media_service:s0 '
+                'tcontext=u:object_r:default_hdf_service:s0 '
+                'tclass=samgr_class permissive=0')
+        r = explain(line, index=index())
+        self.assertIn("占位符", r["advisory"])
+        # `recommended.title` is rewritten too, so a reader who only looks at
+        # the recommendation still sees the refusal rather than a patch.
+        self.assertEqual(r["recommended"]["title"], r["advisory"])
+
+    def test_an_mls_level_target_is_refused(self):
+        line = ('avc: denied { read } for comm="a" '
+                'scontext=u:r:media_service:s0 '
+                'tcontext=u:object_r:s0 tclass=file permissive=0')
+        r = explain(line, index=index())
+        self.assertIn("安全级别", r["advisory"])
 
 
 class TestToJson(unittest.TestCase):
