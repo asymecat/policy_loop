@@ -14,8 +14,8 @@
 承诺的「工具造成的 denial 会明确标注，不冒充分析结果」。C++ 那份的注释里已经写着
 两份「必须保持一致」—— 这个测试的作用就是让那句话是**真的**，而不是被记住的。
 
-板端源码在隔壁工程里（不在本仓）。它通常是 ~/ohos_audit/pl_console；
-换地方就设 PL_CONSOLE_SRC。找不到时**跳过并出声**，不装作通过。
+板端源码已镜像进本仓 device/pl_console；换地方就设 PL_CONSOLE_SRC。
+找不到时**跳过并出声**，不装作通过。
 """
 
 import importlib.util
@@ -27,7 +27,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 
 CONSOLE_SRC = Path(
-    os.environ.get("PL_CONSOLE_SRC") or (Path.home() / "ohos_audit" / "pl_console")
+    os.environ.get("PL_CONSOLE_SRC") or (ROOT / "device" / "pl_console")
 )
 NAPI = CONSOLE_SRC / "entry" / "src" / "main" / "cpp" / "napi_init.cpp"
 

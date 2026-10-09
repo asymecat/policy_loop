@@ -138,8 +138,10 @@
   与「板子是 5.0.3.135」并不矛盾，两处口径不要互相套用；
 - 语料同源：5,161 行 **96.8% 逐字来自上游 `.te` 注释**，自证色彩重于独立采集（`eval-trust` 已做质检，
   但根上同源）；
-- 🟡 **HAP 源码在仓库外**（`tools/build_hap.sh:18` 指向 `~/ohos_audit/pl_console`）⇒ 第三方拿仓库
-  **复现不出板端控制台**；
+- ✅ **HAP 源码已镜像进本仓**（`device/pl_console`，`tools/build_hap.sh` 的 `PROJ` 默认指向它）
+  ⇒ 第三方 clone 仓库即可构建板端控制台；**构建**离线可做（`./tools/build_hap.sh build`，
+  实测 2–3 s），**签名/装机**才需要本机 UDID 与 hdc。原记 🟡「源码在仓外
+  `~/ohos_audit/pl_console`」已不成立；
 - 索引口径：语料索引 **21,790** 条 vs HAP 内置 **19,800** 条（rev `e1160d2c`，取自 5.0.3 树
   `0878c56e3e41`），已在 `docs/report.md:646` 标注待统一说明。
 

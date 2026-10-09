@@ -1,0 +1,6 @@
+{
+  "name": "libplnative.so",
+  "types": "./index.d.ts",
+  "version": "1.0.0",
+  "description": "PolicyLoop 板端分析引擎（pl_avc_parser / pl_index / pl_converge）的 ArkTS 绑定"
+}

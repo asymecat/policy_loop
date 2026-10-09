@@ -1,0 +1,3 @@
+# 本机 SDK 路径（hvigor 需要）。复制成 local.properties 并改成你自己的。
+# 例：sdk.dir=/opt/OpenHarmony/Sdk
+sdk.dir=$HOME/ohos_sdk_dl/sdk

@@ -15,7 +15,10 @@
 # 多一份 OpenHarmonyApplication.pem（签 hap 本体要用的应用证书）。
 set -euo pipefail
 
-PROJ="${PROJ:-/home/szf/ohos_audit/pl_console}"
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# 板端控制台工程已镜像进本仓 device/pl_console（此前在仓外的 ~/ohos_audit/pl_console，
+# 第三方拿仓库复现不出控制台 —— 见 docs/known-limitations.md）。换地方就设 PROJ。
+PROJ="${PROJ:-$ROOT/device/pl_console}"
 BUNDLE="${BUNDLE:-com.policyloop.console}"
 # OHOS_SRC 是下面两个默认值的基准；都可单独覆盖。
 OHOS_SRC="${OHOS_SRC:-$HOME/ohos_src}"

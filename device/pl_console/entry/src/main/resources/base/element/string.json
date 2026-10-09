@@ -1,0 +1,16 @@
+{
+  "string": [
+    {
+      "name": "module_desc",
+      "value": "PolicyLoop 控制台"
+    },
+    {
+      "name": "EntryAbility_desc",
+      "value": "PolicyLoop 控制台"
+    },
+    {
+      "name": "EntryAbility_label",
+      "value": "PolicyLoop"
+    }
+  ]
+}

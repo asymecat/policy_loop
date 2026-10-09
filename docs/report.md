@@ -203,8 +203,9 @@ policy_loop/
 │   ├── board/                                          板端 init 配置与运维脚本
 │   │   ├── policyloop.cfg / policyloop-probe.cfg
 │   │   └── pl_guard.sh / pl_domtest.sh
+│   ├── pl_console/                  板端控制台 HAP 工程（ArkTS + NAPI，含内置索引）
 │   └── install.sh                                      铺回 OH 源码树
-├── tools/                            devbuild.sh / build_hap.sh / boardscreen.py …
+├── tools/                            devbuild.sh / build_hap.sh / make_app_icon.py …
 ├── data/
 │   ├── corpus/real_denials.txt       真实 denial 语料（5,161 条）
 │   ├── eval/golden.jsonl             自证评测集（3,367 对）
@@ -212,10 +213,10 @@ policy_loop/
 │   ├── reports/                      各项评测报告（已入库）
 │   └── fixtures/                     测试与演示样例
 ├── docs/                             设计与评测文档、配图
-└── tests/                            301 项单测 + 设备差分门禁 diff_device.py
+└── tests/                            306 项单测 + 设备差分门禁 diff_device.py
 ```
 
-> ⚠️ **待确认（工程规范）**：板端控制台 HAP 的工程源码当前在仓库之外（`tools/build_hap.sh` 指向 `$HOME/ohos_audit/pl_console`）。建议像 `denial_check` 一样镜像进 `device/` 子树，否则评委 clone 仓库看不到这一块。
+> ✅ **已解决（工程规范）**：板端控制台 HAP 的工程源码原在仓库之外（`~/ohos_audit/pl_console`），评委会 clone 不到这一块。现已镜像进 `device/pl_console/`，`tools/build_hap.sh` 的 `PROJ` 默认指向它，`tests/test_tool_domains_sync.py` 也跟着改回仓内路径（两份工具域清单不一致时该测试会失败）。构建离线可跑，只有签名（需本机 UDID）与装机（需 hdc）依赖板子。
 
 ## 2.4 模块功能描述
 
@@ -774,8 +775,8 @@ bash install_service.sh demo       # 摆放演示起点
 | 1 | **板子 OpenHarmony 版本** | **【已解决·本次】** 实测 `const.ohos.fullname = OpenHarmony-5.0.3.135`（API 15 / kernel 5.10.208 / enforcing），板子策略 `policy.31` = 424,699 B、sha256 `20d8805c…`，上下文文件三项逐条对上 `OpenHarmony-5.0.3-Release` @ `0878c56e3`（`file_contexts` 513 / `sehap_contexts` 15 / `service_contexts` 350）。`docs/eval-L4.md` 原写「6.1 Release」**是错的**，已改为 5.0.3.135。⚠️ 注意区分：**编译树** `~/ohos_src` 是 **6.1.0.31**，板子跑的是 **5.0.3.135** | 全文（含 README、PPT、视频字幕）统一写**板子 = 5.0.3.135**；若提到编译树，单独写明 6.1.0.31 |
 | 2 | 索引规则数 | 语料索引 **21,824**（rev `a1c8e04358d2`，源 `data/raw/oh-selinux/sepolicy@29a2fc123dd1`）；板端 HAP 内置索引 **19,800**（rev `e1160d2c`）。⚠️ 旧值 **21,790 / skipped 647** 是语料树重钉到 5.0.3 之前那份索引，**`eval-converge.md` / `eval-trust.md` 里带 21,790 的实测表量于旧索引**，两数并存是版本差不是笔误 | 引用「规则索引」时写明是哪一份；带 21,790 的表不要改数 |
 | 3 | converge 分类数 | **【已解决·本次】** `data/reports/converge-full.json` 已重跑为 **1580/3261/70**，与本文档一致（连跑 3 次 sha256 相同、退出码 0、4.05–4.11 s）。⚠️ 口径提醒：`auto_repairable` **70 是案例数**，`auto_patch_lines` **69 是补丁行数**（有一条补丁覆盖 2 个案例）；`related-work-audit2allow.md` 里的「69 条补丁」用的是后者，两者不矛盾。 | — |
-| 4 | 测试数 | **【已解决·本次】** 实测 `python -m unittest discover -s tests` = **301 项，0 失败**（`pytest -q` 收 337）。A–F 六项功能落地后从 196 长上来；`README.md` 原写 214 亦为旧值，已一并更正 | 三处（README / 报告两处）统一写 **301**，并注明命令 |
+| 4 | 测试数 | **【已解决·本次】** 实测 `python -m unittest discover -s tests` = **306 项，0 失败**（`pytest -q` 收 342）。A–F 六项功能落地后从 196 长上来；`README.md` 原写 214、后写 301 亦为旧值，已一并更正。⚠️ 两个数字来自**不同的收集器**，引用时必须连命令一起写 | 三处（README / 报告两处）统一写 **306**，并注明命令 |
 | 5 | 设备端版本债描述 | `device/README.md`「已知债」写 `kPliVersion = 1`，**实际代码已是 2**（`pl_index.cpp:31`）；但 `@hap` 段**确实仍未解析**（`pl_index.cpp:352` 会告警"answers that depend on them (HAP/APL mapping) are wrong"） | 更新该节：删掉已修复的 `kPliVersion` 一条，保留 `@hap` 一条并决定是否在提交前修 |
-| 6 | HAP 源码位置 | 在仓库外（`~/ohos_audit/pl_console`） | 建议镜像进 `device/` |
+| 6 | HAP 源码位置 | **【已解决·本次】** 已镜像进 `device/pl_console/`（23 个源文件），`tools/build_hap.sh` 与 `tests/test_tool_domains_sync.py` 的默认路径同步改回仓内；从新位置构建实测 `BUILD SUCCESSFUL`，产物解包后与仓外那份**只差 native 库的 20 字节 build-id** | — |
 | 7 | 封面/成员/分工 | 【待填】 | 补全 |
 | 8 | 所有 `🔧 待补` 的图与截图 | — | 补图 |

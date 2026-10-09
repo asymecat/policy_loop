@@ -1,0 +1,9 @@
+{
+  "name": "entry",
+  "version": "1.0.0",
+  "description": "PolicyLoop 控制台：在板子上独立解读 SELinux denial",
+  "main": "",
+  "dependencies": {
+    "libplnative.so": "file:./src/main/cpp/types/libplnative"
+  }
+}

@@ -38,3 +38,8 @@ ohos_src/
 device/selinux_policy/out/
 # 同上：tools/apply_converge.py 的编译产物（patched.cil / verify.cil / policy.31）
 device/selinux_policy/out-converge/
+
+# HAP 工程（device/pl_console）：构建缓存与本机 SDK 路径
+device/pl_console/entry/.cxx/
+device/pl_console/oh_modules/
+device/pl_console/local.properties

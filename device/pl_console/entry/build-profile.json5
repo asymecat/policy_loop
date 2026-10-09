@@ -1,0 +1,25 @@
+{
+  "apiType": "stageMode",
+  "buildOption": {
+    "externalNativeOptions": {
+      "path": "./src/main/cpp/CMakeLists.txt",
+      "arguments": "",
+      // 板子是 32 位 ARM musl 用户态（uname 说 aarch64，但只有 /system/lib，
+      // 没有 /system/lib64），所以真正会被加载的是 armeabi-v7a 那份。
+      // hvigor 不允许 v7a 单列，arm64-v8a 是陪跑的——板子不会用到它。
+      "abiFilters": [
+        "arm64-v8a",
+        "armeabi-v7a"
+      ]
+    }
+  },
+  "targets": [
+    {
+      "name": "default",
+      "runtimeOS": "OpenHarmony"
+    },
+    {
+      "name": "ohosTest"
+    }
+  ]
+}

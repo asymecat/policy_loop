@@ -1,0 +1,8 @@
+{
+  "modelVersion": "6.0.0",
+  "description": "MDNS-1 PoC",
+  "dependencies": {},
+  "devDependencies": {
+    "@ohos/hypium": "1.0.19"
+  }
+}
