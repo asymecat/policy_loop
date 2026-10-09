@@ -43,6 +43,12 @@ if [[ ! -d "$INC" ]]; then
     exit 1
 fi
 
+# Always name the tree that was compiled. The live tree wins over the repo
+# mirror, so an edit made in device/ is silently *not* in the binary when an
+# OpenHarmony checkout happens to exist -- which reads as "my change did
+# nothing" and invites verifying the old code against itself. Say it out loud.
+echo "devbuild: source tree $ADAPTER" >&2
+
 # Every pl_*.cpp in the core, plus the tool's main(). Collected explicitly so a
 # newly added module is a build error rather than a silent omission.
 sources=()

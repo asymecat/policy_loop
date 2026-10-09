@@ -171,6 +171,84 @@ void SortUnique(std::vector<SymId> *v)
 
 } // namespace
 
+/*
+ * One `@hap` line: seven positional fields, `-` for an absent one.
+ *
+ * Strict on purpose, mirroring pli.py:_dec_hap. `debuggable` is only ever `0`
+ * or `1` -- anything else means a corrupted line, and inventing a value for it
+ * would produce a table that quietly disagrees with the host about which
+ * entries are debug builds. The field count is exact for the same reason: a
+ * short line is a truncated payload, not a table with fewer columns.
+ */
+bool PlIndex::DecodeHap(const std::string &body, size_t lineNo, std::string *err)
+{
+    std::vector<std::string> f = SplitWhitespace(body);
+    if (f.size() != 7) {
+        *err = "line " + std::to_string(lineNo) + ": @hap expects 7 fields, got " +
+               std::to_string(f.size());
+        return false;
+    }
+    if (f[3] != "0" && f[3] != "1") {
+        *err = "line " + std::to_string(lineNo) + ": malformed @hap debuggable flag: '" +
+               f[3] + "'";
+        return false;
+    }
+    auto field = [&f](size_t i) { return f[i] == "-" ? std::string() : f[i]; };
+    PlHapEntry entry;
+    entry.apl = field(0);
+    entry.domain = field(1);
+    entry.type = field(2);
+    entry.debuggable = (f[3] == "1");
+    entry.name = field(4);
+    entry.extension = field(5);
+    entry.extra = field(6);
+    // A domain-less entry is kept rather than rejected: the host's reader keeps
+    // it too (pli.py:_dec_hap does not check), and dropping it here would make
+    // the two loaders disagree about `hap_entries` -- the counter that exists
+    // to catch exactly this kind of divergence.
+    hap_.push_back(entry);
+    return true;
+}
+
+void PlIndex::BuildHapViews() const
+{
+    if (hapViewsBuilt_) {
+        return;
+    }
+    std::unordered_set<std::string> domains;
+    std::unordered_set<std::string> apls;
+    for (const PlHapEntry &e : hap_) {
+        domains.insert(e.domain);
+        apls.insert(e.apl);
+    }
+    // std::string's ordering is byte-wise over char, which for the ASCII names
+    // in sehap_contexts is the same order Python's sorted() produces.
+    hapDomains_.assign(domains.begin(), domains.end());
+    hapApls_.assign(apls.begin(), apls.end());
+    std::sort(hapDomains_.begin(), hapDomains_.end());
+    std::sort(hapApls_.begin(), hapApls_.end());
+    hapViewsBuilt_ = true;
+}
+
+const std::vector<uint32_t> &PlIndex::HapForDomain(const std::string &domain) const
+{
+    static const std::vector<uint32_t> kEmpty;
+    auto it = hapByDomain_.find(domain);
+    return (it == hapByDomain_.end()) ? kEmpty : it->second;
+}
+
+const std::vector<std::string> &PlIndex::HapDomains() const
+{
+    BuildHapViews();
+    return hapDomains_;
+}
+
+const std::vector<std::string> &PlIndex::HapAplsAll() const
+{
+    BuildHapViews();
+    return hapApls_;
+}
+
 bool PlIndex::DecodeRule(const std::vector<std::string> &fields, size_t lineNo, std::string *err)
 {
     PlRule rule;
@@ -315,6 +393,10 @@ std::unique_ptr<PlIndex> PlIndex::LoadFromText(const std::string &text, std::str
             index->known_.insert(index->Intern(line.substr(7)));
         } else if (StartsWith(line, "@perm ")) {
             index->declaredPerms_.insert(index->Intern(line.substr(6)));
+        } else if (StartsWith(line, "@hap ")) {
+            if (!index->DecodeHap(line.substr(5), i + 1, err)) {
+                return nullptr;
+            }
         } else if (StartsWith(line, "@rev ")) {
             // Validated before the loop; listed so the catch-all below, which
             // must stay last, does not report it as an unknown section.
@@ -376,6 +458,13 @@ std::unique_ptr<PlIndex> PlIndex::LoadFromText(const std::string &text, std::str
     for (uint32_t i = 0; i < index->rules_.size(); ++i) {
         index->rulesByClass_[index->rules_[i].cls].push_back(i);
     }
+    index->BuildCandidates();
+
+    // Same for the APL bridge: entries stay in file order inside a domain, and
+    // the indices into hap_ are what the dedupe-free `lookup_domain` returns.
+    for (uint32_t i = 0; i < index->hap_.size(); ++i) {
+        index->hapByDomain_[index->hap_[i].domain].push_back(i);
+    }
 
     // Reported rather than checked: `skipped` counts macro statements the host
     // indexer could not expand, which is not derivable from the PLI payload.
@@ -394,6 +483,12 @@ std::unique_ptr<PlIndex> PlIndex::LoadFromText(const std::string &text, std::str
     index->meta_.perms = metaGet("perms");
     index->meta_.known = metaGet("known");
     index->meta_.skipped = metaGet("skipped");
+    index->meta_.hapEntries = metaGet("hap_entries");
+    index->meta_.hapDomains = metaGet("hap_domains");
+    index->meta_.hapNames = metaGet("hap_names");
+    index->meta_.hapApls = metaGet("hap_apls");
+    index->meta_.hapDebuggable = metaGet("hap_debuggable");
+    index->meta_.hapSkipped = metaGet("hap_skipped");
 
     if (!index->SelfCheck(err)) {
         return nullptr;
@@ -403,9 +498,13 @@ std::unique_ptr<PlIndex> PlIndex::LoadFromText(const std::string &text, std::str
 
 bool PlIndex::SelfCheck(std::string *err) const
 {
-    auto fail = [err](const std::string &what, long long want, long long got) {
+    // *what* is a `@meta` key and *from* names the lines it should have been
+    // derived from, so a mismatch points at the section that is short rather
+    // than at "the rules" for a counter that has nothing to do with them.
+    auto fail = [err](const std::string &what, const char *from, long long want,
+                      long long got) {
         *err = "PLI self-check failed: " + what + " declares " + std::to_string(want) +
-               " but the rule lines give " + std::to_string(got) +
+               " but the " + from + " lines give " + std::to_string(got) +
                " (truncated or corrupted index?)";
         return false;
     };
@@ -431,30 +530,30 @@ bool PlIndex::SelfCheck(std::string *err) const
     tokenSet.insert(typeNames_.begin(), typeNames_.end());
 
     if (meta_.rules >= 0 && meta_.rules != static_cast<long long>(rules_.size())) {
-        return fail("rules", meta_.rules, static_cast<long long>(rules_.size()));
+        return fail("rules", "rule", meta_.rules, static_cast<long long>(rules_.size()));
     }
     const long long *declared[4] = {&meta_.allow, &meta_.neverallow, &meta_.allowxperm,
                                     &meta_.neverallowxperm};
     const char *names[4] = {"allow", "neverallow", "allowxperm", "neverallowxperm"};
     for (int i = 0; i < 4; ++i) {
         if (*declared[i] >= 0 && *declared[i] != counts[i]) {
-            return fail(names[i], *declared[i], counts[i]);
+            return fail(names[i], "rule", *declared[i], counts[i]);
         }
     }
     if (meta_.types >= 0 && meta_.types != static_cast<long long>(typeNames_.size())) {
-        return fail("types", meta_.types, static_cast<long long>(typeNames_.size()));
+        return fail("types", "@type", meta_.types, static_cast<long long>(typeNames_.size()));
     }
     if (meta_.attrs >= 0 && meta_.attrs != static_cast<long long>(attrNames_.size())) {
-        return fail("attrs", meta_.attrs, static_cast<long long>(attrNames_.size()));
+        return fail("attrs", "@attr", meta_.attrs, static_cast<long long>(attrNames_.size()));
     }
     if (meta_.classes >= 0 && meta_.classes != static_cast<long long>(classes_.size())) {
-        return fail("classes", meta_.classes, static_cast<long long>(classes_.size()));
+        return fail("classes", "@class", meta_.classes, static_cast<long long>(classes_.size()));
     }
     if (meta_.perms >= 0 && meta_.perms != static_cast<long long>(permSet.size())) {
-        return fail("perms", meta_.perms, static_cast<long long>(permSet.size()));
+        return fail("perms", "@perm", meta_.perms, static_cast<long long>(permSet.size()));
     }
     if (meta_.known >= 0 && meta_.known != static_cast<long long>(known_.size())) {
-        return fail("known", meta_.known, static_cast<long long>(known_.size()));
+        return fail("known", "@known", meta_.known, static_cast<long long>(known_.size()));
     }
     // The three declared *sets* are checked as sets, not merely by size, so a
     // corrupt file that drops one token while duplicating another still fails.
@@ -474,6 +573,48 @@ bool PlIndex::SelfCheck(std::string *err) const
     if (declaredClassCounts_ != classCounts) {
         *err = "PLI self-check failed: @class counts disagree with the rule lines";
         return false;
+    }
+
+    // The APL bridge, on the same terms as the rule counters -- and for the
+    // reason the format has counters at all: a payload truncated in transfer
+    // would otherwise load fine and answer cross-layer questions from a
+    // partial table. `hap_skipped` is exempt, like `skipped`: it counts source
+    // lines the host indexer rejected, which the PLI does not carry.
+    if (meta_.hapEntries >= 0 &&
+        meta_.hapEntries != static_cast<long long>(hap_.size())) {
+        return fail("hap_entries", "@hap", meta_.hapEntries, static_cast<long long>(hap_.size()));
+    }
+    BuildHapViews();
+    long long debuggable = 0;
+    for (const PlHapEntry &e : hap_) {
+        if (e.debuggable) {
+            ++debuggable;
+        }
+    }
+    // `by_name` on the host holds only the *named* entries, so an entry with an
+    // absent name contributes nothing here either.
+    std::unordered_set<std::string> hapNames;
+    for (const PlHapEntry &e : hap_) {
+        if (!e.name.empty()) {
+            hapNames.insert(e.name);
+        }
+    }
+    if (meta_.hapDomains >= 0 &&
+        meta_.hapDomains != static_cast<long long>(hapDomains_.size())) {
+        return fail("hap_domains", "@hap", meta_.hapDomains,
+                    static_cast<long long>(hapDomains_.size()));
+    }
+    if (meta_.hapNames >= 0 &&
+        meta_.hapNames != static_cast<long long>(hapNames.size())) {
+        return fail("hap_names", "@hap", meta_.hapNames,
+                    static_cast<long long>(hapNames.size()));
+    }
+    if (meta_.hapApls >= 0 &&
+        meta_.hapApls != static_cast<long long>(hapApls_.size())) {
+        return fail("hap_apls", "@hap", meta_.hapApls, static_cast<long long>(hapApls_.size()));
+    }
+    if (meta_.hapDebuggable >= 0 && meta_.hapDebuggable != debuggable) {
+        return fail("hap_debuggable", "@hap", meta_.hapDebuggable, debuggable);
     }
     return true;
 }
@@ -515,6 +656,32 @@ std::unique_ptr<PlIndex> PlIndex::LoadFile(const std::string &path, std::string 
 // Queries
 // --------------------------------------------------------------------------
 
+namespace {
+
+// Both vectors ascending and deduped (Candidates guarantees it); keep only the
+// members of *a that b also holds.
+void IntersectSorted(std::vector<uint32_t> *a, const std::vector<uint32_t> &b)
+{
+    size_t w = 0;
+    for (uint32_t v : *a) {
+        if (std::binary_search(b.begin(), b.end(), v)) {
+            (*a)[w++] = v;
+        }
+    }
+    a->resize(w);
+}
+
+// Union of two ascending, deduped vectors, left ascending. The candidate sets
+// are tiny (median 1, p90 3 over the corpus), so re-sorting beats a merge.
+void MergeSorted(std::vector<uint32_t> *a, const std::vector<uint32_t> &b)
+{
+    a->insert(a->end(), b.begin(), b.end());
+    std::sort(a->begin(), a->end());
+    a->erase(std::unique(a->begin(), a->end()), a->end());
+}
+
+} // namespace
+
 void PlIndex::RulesForClass(SymId cls, std::vector<const PlRule *> *out) const
 {
     out->clear();
@@ -525,6 +692,59 @@ void PlIndex::RulesForClass(SymId cls, std::vector<const PlRule *> *out) const
     for (uint32_t idx : it->second) {
         out->push_back(&rules_[idx]);
     }
+}
+
+void PlIndex::BuildCandidates()
+{
+    postings_.clear();
+    for (uint32_t i = 0; i < rules_.size(); ++i) {
+        const PlRule &r = rules_[i];
+        for (int side = 0; side < 2; ++side) {
+            const bool isSrc = (side == 0);
+            const std::vector<SymId> &pos = isSrc ? r.src : r.tgt;
+            const bool star = isSrc ? r.srcStar : r.tgtStar;
+            Postings &p = postings_[SideKey(r.kind, isSrc, r.cls)];
+            if (star) {
+                // No token to file it under, so it is a candidate for every
+                // query on this (kind, side, class) -- which is correct: a `*`
+                // side matches whatever is asked.
+                p.star.push_back(i);
+            }
+            for (SymId tok : pos) {
+                p.byToken[tok].push_back(i);
+            }
+        }
+    }
+}
+
+void PlIndex::Candidates(RuleKind kind, bool isSrc, SymId cls, SymId ident,
+                         const std::vector<SymId> &attrs, std::vector<uint32_t> *out) const
+{
+    out->clear();
+    auto it = postings_.find(SideKey(kind, isSrc, cls));
+    if (it == postings_.end()) {
+        return;
+    }
+    const Postings &p = it->second;
+    out->insert(out->end(), p.star.begin(), p.star.end());
+    auto add = [&](SymId tok) {
+        auto f = p.byToken.find(tok);
+        if (f != p.byToken.end()) {
+            out->insert(out->end(), f->second.begin(), f->second.end());
+        }
+    };
+    // The identifier itself *and* every attribute it inherits: Matches accepts
+    // either, so both have to be able to nominate a rule.
+    if (ident != kNoSym) {
+        add(ident);
+    }
+    for (SymId attr : attrs) {
+        add(attr);
+    }
+    // Ascending and deduped, because callers that report "the first matching
+    // rule" must keep the answer a full scan would have given.
+    std::sort(out->begin(), out->end());
+    out->erase(std::unique(out->begin(), out->end()), out->end());
 }
 
 bool PlIndex::Matches(const PlRule &rule, SymId ident, bool isSrc,
@@ -560,12 +780,12 @@ void PlIndex::AllowRules(SymId src, SymId tgt, SymId cls, std::vector<const PlRu
     out->clear();
     const std::vector<SymId> &aSrc = Attrs(src);
     const std::vector<SymId> &aTgt = Attrs(tgt);
-    std::vector<const PlRule *> candidates;
-    RulesForClass(cls, &candidates);
-    for (const PlRule *rule : candidates) {
-        if (rule->kind != RuleKind::kAllow) {
-            continue;
-        }
+    std::vector<uint32_t> candidates, side;
+    Candidates(RuleKind::kAllow, true, cls, src, aSrc, &candidates);
+    Candidates(RuleKind::kAllow, false, cls, tgt, aTgt, &side);
+    IntersectSorted(&candidates, side);
+    for (uint32_t idx : candidates) {
+        const PlRule *rule = &rules_[idx];
         if (!Matches(*rule, src, true, aSrc) || !Matches(*rule, tgt, false, aTgt)) {
             continue;
         }
@@ -580,12 +800,12 @@ void PlIndex::NeverallowRules(SymId src, SymId tgt, SymId cls,
     out->clear();
     const std::vector<SymId> &aSrc = Attrs(src);
     const std::vector<SymId> &aTgt = Attrs(tgt);
-    std::vector<const PlRule *> candidates;
-    RulesForClass(cls, &candidates);
-    for (const PlRule *rule : candidates) {
-        if (rule->kind != RuleKind::kNeverAllow) {
-            continue;
-        }
+    std::vector<uint32_t> candidates, side;
+    Candidates(RuleKind::kNeverAllow, true, cls, src, aSrc, &candidates);
+    Candidates(RuleKind::kNeverAllow, false, cls, tgt, aTgt, &side);
+    IntersectSorted(&candidates, side);
+    for (uint32_t idx : candidates) {
+        const PlRule *rule = &rules_[idx];
         if (!Matches(*rule, src, true, aSrc) || !Matches(*rule, tgt, false, aTgt)) {
             continue;
         }
@@ -700,18 +920,26 @@ IoctlVerdict PlIndex::IoctlAllowedImpl(SymId src, SymId tgt, SymId cls, SymId cm
     const std::vector<SymId> &aSrc = Attrs(src);
     const std::vector<SymId> &aTgt = Attrs(tgt);
 
-    std::vector<const PlRule *> candidates;
-    RulesForClass(cls, &candidates);
+    // The xperm pass wants both xperm kinds together, in rule-index order: the
+    // scan this replaces walked the class ascending and the allowxperm and
+    // neverallowxperm rules were interleaved in whatever order the policy
+    // wrote them.
+    std::vector<uint32_t> candidates, side, other;
+    Candidates(RuleKind::kAllowXperm, true, cls, src, aSrc, &candidates);
+    Candidates(RuleKind::kAllowXperm, false, cls, tgt, aTgt, &side);
+    IntersectSorted(&candidates, side);
+    Candidates(RuleKind::kNeverAllowXperm, true, cls, src, aSrc, &other);
+    Candidates(RuleKind::kNeverAllowXperm, false, cls, tgt, aTgt, &side);
+    IntersectSorted(&other, side);
+    MergeSorted(&candidates, other);
 
     // Only xperm rules whose permission is literally "ioctl" participate --
     // compared as a name, not an interned id, because an empty permission
     // encodes as kNoSym and must not be confused with a real "ioctl".
     std::vector<SymId> whitelist;
     bool invertHit = false;
-    for (const PlRule *rule : candidates) {
-        if (!IsXperm(rule->kind)) {
-            continue;
-        }
+    for (uint32_t idx : candidates) {
+        const PlRule *rule = &rules_[idx];
         if (rule->xpermPerm == kNoSym || syms_[rule->xpermPerm] != "ioctl") {
             continue;
         }
@@ -750,10 +978,13 @@ IoctlVerdict PlIndex::IoctlAllowedImpl(SymId src, SymId tgt, SymId cls, SymId cm
     // NOT satisfy it -- has_access would grant it, ioctl_allowed does not.
     SymId ioctlSym = FindSym("ioctl");
     if (ioctlSym != kNoSym) {
-        for (const PlRule *rule : candidates) {
-            if (rule->kind != RuleKind::kAllow) {
-                continue;
-            }
+        // A second, differently keyed candidate set: the one above holds xperm
+        // rules only, and the fallback is about plain allows.
+        Candidates(RuleKind::kAllow, true, cls, src, aSrc, &candidates);
+        Candidates(RuleKind::kAllow, false, cls, tgt, aTgt, &side);
+        IntersectSorted(&candidates, side);
+        for (uint32_t idx : candidates) {
+            const PlRule *rule = &rules_[idx];
             if (!Matches(*rule, src, true, aSrc) || !Matches(*rule, tgt, false, aTgt)) {
                 continue;
             }

@@ -841,13 +841,14 @@ CaseVerdict ExplainCase(const DenialRecord &rec, PlIndex *index, CasePath path)
     return out;
 }
 
-void ApplyGuards(const DenialRecord &rec, PlIndex *index, CaseVerdict *verdict)
+void ApplyGuards(const DenialRecord &rec, PlIndex *index, CaseVerdict *verdict,
+                 bool requireAuto)
 {
     if (verdict == nullptr) {
         return;
     }
     verdict->guardsApplied = true;
-    if (index == nullptr || verdict->category != kCatAuto) {
+    if (index == nullptr || (requireAuto && verdict->category != kCatAuto)) {
         // Nothing to guard. Either there is no policy to check the tokens
         // against, or the case is not one the pipeline offered to repair --
         // and `autoSafe` stays false for both, because neither is auto-safe.
@@ -1201,6 +1202,487 @@ std::string ReadinessNote(const ConvergeReport &report)
            "只建议，不写盘；真机上 enforcing 回归验证留待 L4。";
 }
 
+// --------------------------------------------------------------------------
+// Cross-layer view
+// --------------------------------------------------------------------------
+
+// The platform's privilege ladder (cross_layer.py:APL_ORDER). ``normal`` <
+// ``system_basic`` < ``system_core``, and the ordering is what turns "some
+// other domain allows it" into "a *higher* level allows it" -- the difference
+// between a deliberate boundary and an accident.
+int AplRank(const std::string &apl)
+{
+    if (apl == "normal") {
+        return 0;
+    }
+    if (apl == "system_basic") {
+        return 1;
+    }
+    if (apl == "system_core") {
+        return 2;
+    }
+    return -1;
+}
+
+// An Optional as the host interpolates it into a sentence: an absent field is
+// the literal token `None`. The JSON keeps it null; only the prose renders it,
+// because a sentence with a hole in it reads as a bug in the tool rather than
+// as a malformed log line.
+std::string RenderOpt(const OptStr &field)
+{
+    return field.present ? field.value : std::string("None");
+}
+
+std::vector<std::string> AplsOfDomain(const PlIndex &index, const std::string &domain)
+{
+    std::vector<std::string> out;
+    for (uint32_t i : index.HapForDomain(domain)) {
+        out.push_back(index.hapEntries()[i].apl);
+    }
+    SortUniqueStr(&out);
+    return out;
+}
+
+// One field of every entry declaring *domain*, as a sorted distinct set --
+// Python compares `{e.extra for e in entries}` and friends as sets, so order
+// must not enter the comparison.
+std::vector<std::string> FieldSetOfDomain(const PlIndex &index, const std::string &domain,
+                                          int which)
+{
+    std::vector<std::string> out;
+    for (uint32_t i : index.HapForDomain(domain)) {
+        const PlHapEntry &e = index.hapEntries()[i];
+        switch (which) {
+            case 0: out.push_back(e.extra); break;
+            case 1: out.push_back(e.name); break;
+            default: out.push_back(e.extension); break;
+        }
+    }
+    SortUniqueStr(&out);
+    return out;
+}
+
+// cross_layer.py:_debug_pair -- the debug/release counterpart of a domain.
+//
+// `apl=normal domain=normal_hap` and `apl=normal debuggable=true
+// domain=debug_hap` are the same application under two builds: the pair behind
+// "debugs fine, dies once packaged". A candidate must match on everything else
+// -- same APL set, same extra/name/extension -- or `input_isolate_debug_hap`
+// would be offered as the debug build of `normal_hap`, which is a wrong answer
+// of exactly the kind this view exists to avoid.
+void FillDebugPair(const PlIndex &index, const std::string &domain,
+                   CrossLayerView::DebugPair *pair)
+{
+    const std::vector<uint32_t> &own = index.HapForDomain(domain);
+    bool ownDebuggable = false;
+    bool ownHasPlain = false;
+    for (uint32_t i : own) {
+        if (index.hapEntries()[i].debuggable) {
+            ownDebuggable = true;
+        } else {
+            ownHasPlain = true;
+        }
+    }
+    // Declared both ways under one domain: the flag then selects the data-file
+    // type rather than the domain, so there is no sibling to look for.
+    if (ownDebuggable && ownHasPlain) {
+        pair->kind = "same_domain";
+        pair->domain = domain;
+        return;
+    }
+    const std::vector<std::string> levels = AplsOfDomain(index, domain);
+    const std::vector<std::string> extra = FieldSetOfDomain(index, domain, 0);
+    const std::vector<std::string> names = FieldSetOfDomain(index, domain, 1);
+    const std::vector<std::string> exts = FieldSetOfDomain(index, domain, 2);
+    for (const std::string &other : index.HapDomains()) {
+        if (other == domain) {
+            continue;
+        }
+        const std::vector<uint32_t> &entries = index.HapForDomain(other);
+        // `len(other_flags) != 1 or other_flags == {own_flag}`: a domain
+        // declared both ways is not a counterpart, and neither is one declared
+        // the same way as this one.
+        bool otherDebuggable = false;
+        bool otherHasPlain = false;
+        for (uint32_t i : entries) {
+            if (index.hapEntries()[i].debuggable) {
+                otherDebuggable = true;
+            } else {
+                otherHasPlain = true;
+            }
+        }
+        if (otherDebuggable && otherHasPlain) {
+            continue;
+        }
+        if (otherDebuggable == ownDebuggable) {
+            continue;
+        }
+        if (AplsOfDomain(index, other) == levels &&
+            FieldSetOfDomain(index, other, 0) == extra &&
+            FieldSetOfDomain(index, other, 1) == names &&
+            FieldSetOfDomain(index, other, 2) == exts) {
+            pair->kind = "sibling";
+            pair->domain = other;
+            return;
+        }
+    }
+    pair->kind = "none";
+}
+
+} // namespace
+
+CrossLayerView CrossLayerViewOf(PlIndex *indexPtr, const DenialRecord &rec,
+                                const CaseVerdict &verdict)
+{
+    // A plain reference, not a const one: the permission query below interns
+    // the names the log asked about, exactly as the pipeline's does.
+    PlIndex &index = *indexPtr;
+    CrossLayerView view;
+    const std::string src = RenderOpt(rec.source_domain);
+
+    std::vector<std::string> perms = verdict.requested;
+    SortUniqueStr(&perms);
+    view.perms = perms;
+
+    // M3: undo the placeholder before asking anything, so every query below is
+    // about the *same* access the pipeline judged. The raw target stays in
+    // `target` -- that is what the log carried, and what the advice prints.
+    const std::string resolvedTgt = ResolveLogicalTarget(index, rec);
+    view.resolvedTarget = resolvedTgt;
+    view.targetPresent = rec.target_type.present;
+    view.target = RenderOpt(rec.target_type);
+    view.clsPresent = rec.tclass.present;
+    view.cls = RenderOpt(rec.tclass);
+
+    // Both branches carry the scontext itself: "not an app domain" is an
+    // answer about *that* domain, and the host reports it the same way.
+    view.domainPresent = rec.source_domain.present;
+    view.domain = src;
+
+    if (index.HapForDomain(src).empty()) {
+        view.headline = "scontext「" + src + "」不是应用域（未在 sehap_contexts "
+                        "中声明），跨层不适用：按系统层处理。";
+        view.fixLayer = "system";
+        return view;
+    }
+    view.app = true;
+
+    const std::vector<uint32_t> &srcEntries = index.HapForDomain(src);
+    const std::vector<std::string> levels = AplsOfDomain(index, src);
+    view.apl = levels;
+    view.multiLevelDomain = levels.size() > 1;
+    for (uint32_t i : srcEntries) {
+        if (index.hapEntries()[i].debuggable) {
+            view.debuggable = true;
+        }
+    }
+    // `lookup_domain` hands back the entries themselves for `variants`, in file
+    // order; the index into hap_ is that order.
+    for (uint32_t i : srcEntries) {
+        view.variants.push_back(index.hapEntries()[i]);
+    }
+
+    // --- who else could do it? ---------------------------------------------
+    SymId tgtId = resolvedTgt.empty() ? (rec.target_type.present
+                                             ? index.FindSym(rec.target_type.value)
+                                             : kNoSym)
+                                      : index.FindSym(resolvedTgt);
+    SymId clsId = rec.tclass.present ? index.FindSym(rec.tclass.value) : kNoSym;
+    std::vector<SymId> permIds;
+    permIds.reserve(perms.size());
+    for (const std::string &p : perms) {
+        permIds.push_back(index.Intern(p));
+    }
+
+    std::vector<std::pair<std::string, std::vector<std::string>>> allowing;
+    std::vector<std::string> uncovered;
+    for (const std::string &other : index.HapDomains()) {
+        if (other == src) {
+            continue;
+        }
+        // A sehap_contexts entry for a domain this corpus never declares
+        // cannot be queried: reporting it as "denied" would dress up "not in
+        // this index" as a policy answer.
+        if (!index.IsDeclaredTypeOrAttr(other)) {
+            uncovered.push_back(other);
+            continue;
+        }
+        if (index.HasAccess(index.FindSym(other), tgtId, clsId, permIds, nullptr)) {
+            allowing.push_back({other, AplsOfDomain(index, other)});
+        }
+    }
+    std::sort(allowing.begin(), allowing.end(),
+              [](const std::pair<std::string, std::vector<std::string>> &a,
+                 const std::pair<std::string, std::vector<std::string>> &b) {
+                  return a.first < b.first;
+              });
+
+    int ownRank = -1;
+    for (const std::string &lvl : levels) {
+        ownRank = std::max(ownRank, AplRank(lvl));
+    }
+    // An APL outside the known ladder makes "higher" meaningless -- every
+    // ranked level would look higher than -1. `higher` is still reported (the
+    // evidence line says what it is), but `boundary` refuses the claim.
+    const bool unknownApl = (ownRank == -1);
+    std::vector<std::string> higher;
+    for (const auto &entry : allowing) {
+        for (const std::string &lvl : entry.second) {
+            if (AplRank(lvl) > ownRank) {
+                higher.push_back(lvl);
+            }
+        }
+    }
+    SortUniqueStr(&higher);
+    // Sorted by ladder position, not alphabetically: the ranking *is* the
+    // claim ("a higher level has it"), so the list has to read in that order.
+    std::stable_sort(higher.begin(), higher.end(),
+                     [](const std::string &a, const std::string &b) {
+                         return AplRank(a) < AplRank(b);
+                     });
+    const bool boundary = !view.multiLevelDomain && !unknownApl && !higher.empty();
+
+    FillDebugPair(index, src, &view.debugPair);
+    view.hasDebugPair = true;
+    if (view.debugPair.kind == "sibling") {
+        std::vector<SymId> none;
+        view.debugPair.allows = index.HasAccess(index.FindSym(view.debugPair.domain),
+                                                tgtId, clsId, permIds, nullptr);
+        view.debugPair.hasAllows = true;
+    }
+
+    const std::string levelsJoined = JoinStr(levels, "/");
+    view.scope = view.multiLevelDomain
+                     ? ("共享域（同时服务 APL=" + levelsJoined + "）")
+                     : ("共享域（APL=" + levels[0] + " 的全部应用共用）");
+
+    const long long domainCount = static_cast<long long>(index.HapDomains().size());
+    std::string who;
+    if (verdict.allAllowed) {
+        who = std::to_string(domainCount) + " 个应用域中，" +
+              std::to_string(static_cast<long long>(allowing.size()) + 1) +
+              " 个允许该访问（含 scontext 自身）";
+    } else if (!allowing.empty()) {
+        who = "除 scontext 外的 " + std::to_string(domainCount - 1) +
+              " 个应用域中，" + std::to_string(static_cast<long long>(allowing.size())) +
+              " 个允许该访问";
+    } else {
+        who = "除 scontext 外的 " + std::to_string(domainCount - 1) +
+              " 个应用域均不允许该访问";
+    }
+    view.evidence.push_back(who);
+    view.evidence.push_back(higher.empty()
+                                ? "没有任何更高 APL 等级允许该访问"
+                                : "更高 APL 等级已允许：" + JoinStr(higher, "、"));
+    if (!uncovered.empty()) {
+        std::vector<std::string> shown = uncovered;
+        SortUniqueStr(&shown);
+        if (shown.size() > 4) {
+            shown.resize(4);
+        }
+        view.evidence.push_back(std::to_string(static_cast<long long>(uncovered.size())) +
+                                " 个应用域不在本策略语料中，无法查询（" +
+                                JoinStr(shown, ", ") + "）");
+    }
+    if (view.multiLevelDomain) {
+        view.evidence.push_back("该域同时服务多个 APL 等级（" + levelsJoined +
+                                "），无法把拒绝归因到某一等级");
+    }
+    if (unknownApl) {
+        view.evidence.push_back("APL 等级「" + levelsJoined + "」不在已建模的阶梯（" +
+                                "normal、system_basic、system_core）中，"
+                                "不判断是否为分级边界");
+    }
+    if (view.debugPair.kind == "sibling") {
+        view.evidence.push_back(
+            std::string("调试/发布域对照：") +
+            (view.debuggable ? "debuggable 域" : "普通域") + "「" + src + "」被拒，对照域「" +
+            view.debugPair.domain + "」" + (view.debugPair.allows ? "允许" : "同样拒绝"));
+    } else if (view.debugPair.kind == "same_domain") {
+        view.evidence.push_back("「" + src + "」本身同时声明了普通与 debuggable 两种情形"
+                                "（同域，debuggable 只改变数据文件类型）");
+    }
+
+    // A placeholder target cannot be patched (M3): the rule has to name the
+    // concrete type `service=` resolves to. Say which, rather than print a rule
+    // against `default_service` that would compile and do nothing.
+    const std::string patchTgt = resolvedTgt.empty() ? RenderOpt(rec.target_type) : resolvedTgt;
+    const std::string placeholderNote =
+        patchTgt == RenderOpt(rec.target_type)
+            ? std::string()
+            : ("注意：日志里的目标「" + RenderOpt(rec.target_type) +
+               "」是 service 占位符，规则必须落在解析后的具体类型「" + patchTgt +
+               "」上，写占位符本身落不了地（M3）");
+    const std::string permsJoined = JoinStr(perms, " ");
+
+    if (verdict.allAllowed) {
+        view.fixLayer = "none";
+        view.headline = "scontext「" + src + "」是应用域（APL=" + levelsJoined +
+                        (view.debuggable ? "，debuggable" : "") + "），" + view.scope +
+                        "。该访问在策略中已被允许，跨层无需处理。";
+    } else if (boundary) {
+        view.fixLayer = "app";
+        view.headline = "scontext「" + src + "」是应用域（APL=" + levelsJoined + "），" +
+                        view.scope + "；而该访问在更高 APL 上已被允许（" +
+                        JoinStr(higher, "、") +
+                        "）—— 这更像 APL 分级边界，不是漏配的规则。";
+        view.advice.push_back(
+            "应用层：先确认该应用是否应当以当前 APL 直接访问该系统资源。"
+            "若确需，应提升应用 APL（签名 profile / module.json 的权限声明）"
+            "或改由系统服务代理访问，而不是在系统层放开。");
+        view.advice.push_back("系统层：" + src + " 是共享域，`allow " + src + " " +
+                              patchTgt + ":" + view.cls + " { " + permsJoined +
+                              " };` 的受益者是该等级的全部应用，"
+                              "等于把高等级能力下放，通常不是想要的修复。");
+    } else {
+        view.fixLayer = "system";
+        if (!allowing.empty()) {
+            std::vector<std::string> others;
+            for (const auto &entry : allowing) {
+                others.push_back(entry.first);
+            }
+            std::sort(others.begin(), others.end());
+            if (others.size() > 4) {
+                others.resize(4);
+            }
+            view.headline = "scontext「" + src + "」是应用域（APL=" + levelsJoined + "），" +
+                            view.scope + "；该访问在 " +
+                            std::to_string(static_cast<long long>(allowing.size())) +
+                            " 个应用域上有先例（" + JoinStr(others, "、") +
+                            "），但没有任何更高 APL 允许它。";
+        } else {
+            view.headline = "scontext「" + src + "」是应用域（APL=" + levelsJoined + "），" +
+                            view.scope + "；" + std::to_string(domainCount) +
+                            " 个应用域（覆盖 " +
+                            std::to_string(static_cast<long long>(index.HapAplsAll().size())) +
+                            " 个 APL 等级）均未允许该访问。";
+        }
+        view.advice.push_back("系统层：跨应用等级一致的缺口，按最小权限补`allow " + src + " " +
+                              patchTgt + ":" + view.cls + " { " + permsJoined + " };`。");
+        view.advice.push_back("影响面须知：" + src + " 是共享域，该规则对该 APL 等级的全部应用生效；"
+                              "若只有本应用需要，应改走专用域或系统服务，避免扩大共享域权限。");
+    }
+    if (!placeholderNote.empty()) {
+        view.advice.push_back(placeholderNote);
+    }
+
+    view.hasBoundary = true;
+    view.boundary.checked = domainCount - 1;
+    view.boundary.allowing = allowing;
+    view.boundary.higherAplAllowing = higher;
+    view.boundary.uncovered = uncovered;
+    SortUniqueStr(&view.boundary.uncovered);
+    return view;
+}
+
+namespace {
+
+void AppendNullableString(std::string *out, bool present, const std::string &value)
+{
+    if (!present) {
+        *out += "null";
+        return;
+    }
+    AppendJsonString(out, value);
+}
+
+void AppendHapEntry(std::string *out, const PlHapEntry &e)
+{
+    // Sorted keys, as everywhere else: `_as_dict` minus `source`, which is a
+    // build-machine path the PLI deliberately does not carry.
+    *out += "{\"apl\": ";
+    AppendJsonString(out, e.apl);
+    *out += ", \"debuggable\": ";
+    *out += e.debuggable ? "true" : "false";
+    *out += ", \"domain\": ";
+    AppendJsonString(out, e.domain);
+    *out += ", \"extension\": ";
+    AppendJsonString(out, e.extension);
+    *out += ", \"extra\": ";
+    AppendJsonString(out, e.extra);
+    *out += ", \"name\": ";
+    AppendJsonString(out, e.name);
+    *out += ", \"type\": ";
+    AppendJsonString(out, e.type);
+    *out += "}";
+}
+
+void AppendCrossLayerJson(std::string *out, const CrossLayerView &v)
+{
+    *out += "{\"advice\": ";
+    AppendStringArray(out, v.advice);
+    *out += ", \"apl\": ";
+    AppendStringArray(out, v.apl);
+    *out += ", \"app\": ";
+    *out += v.app ? "true" : "false";
+    *out += ", \"boundary\": ";
+    if (!v.hasBoundary) {
+        *out += "null";
+    } else {
+        *out += "{\"allowing\": {";
+        for (size_t i = 0; i < v.boundary.allowing.size(); ++i) {
+            if (i != 0) {
+                *out += ", ";
+            }
+            AppendJsonString(out, v.boundary.allowing[i].first);
+            *out += ": ";
+            AppendStringArray(out, v.boundary.allowing[i].second);
+        }
+        *out += "}, \"checked\": " + std::to_string(v.boundary.checked);
+        *out += ", \"higher_apl_allowing\": ";
+        AppendStringArray(out, v.boundary.higherAplAllowing);
+        *out += ", \"uncovered\": ";
+        AppendStringArray(out, v.boundary.uncovered);
+        *out += "}";
+    }
+    *out += ", \"cls\": ";
+    AppendNullableString(out, v.clsPresent, v.cls);
+    *out += ", \"debug_pair\": ";
+    if (!v.hasDebugPair) {
+        *out += "null";
+    } else {
+        *out += "{\"allows\": ";
+        if (v.debugPair.hasAllows) {
+            *out += v.debugPair.allows ? "true" : "false";
+        } else {
+            *out += "null";
+        }
+        *out += ", \"domain\": ";
+        AppendJsonString(out, v.debugPair.domain);
+        *out += ", \"kind\": ";
+        AppendJsonString(out, v.debugPair.kind);
+        *out += "}";
+    }
+    *out += ", \"debuggable\": ";
+    *out += v.debuggable ? "true" : "false";
+    *out += ", \"domain\": ";
+    AppendNullableString(out, v.domainPresent, v.domain);
+    *out += ", \"evidence\": ";
+    AppendStringArray(out, v.evidence);
+    *out += ", \"fix_layer\": ";
+    AppendJsonString(out, v.fixLayer);
+    *out += ", \"headline\": ";
+    AppendJsonString(out, v.headline);
+    *out += ", \"multi_level_domain\": ";
+    *out += v.multiLevelDomain ? "true" : "false";
+    *out += ", \"perms\": ";
+    AppendStringArray(out, v.perms);
+    *out += ", \"resolved_target\": ";
+    AppendJsonString(out, v.resolvedTarget);
+    *out += ", \"scope\": ";
+    AppendJsonString(out, v.scope);
+    *out += ", \"target\": ";
+    AppendNullableString(out, v.targetPresent, v.target);
+    *out += ", \"variants\": [";
+    for (size_t i = 0; i < v.variants.size(); ++i) {
+        if (i != 0) {
+            *out += ", ";
+        }
+        AppendHapEntry(out, v.variants[i]);
+    }
+    *out += "]}";
+}
+
 } // namespace
 
 std::string ReportToJson(const ConvergeReport &report)
@@ -1332,7 +1814,7 @@ std::string ExplainHuman(const std::string &classification,
 // because it never ran the agent; here it is the agent's recommendation title,
 // which is what Python's single-case path reports. Same class, two true
 // sentences -- not a drift to reconcile.
-ExplainResult ExplainDenial(const std::string &line, PlIndex *index)
+ExplainResult ExplainDenial(const std::string &line, PlIndex *index, bool withCrossLayer)
 {
     ExplainResult r;
     if (index == nullptr) {
@@ -1346,6 +1828,17 @@ ExplainResult ExplainDenial(const std::string &line, PlIndex *index)
     r.parsed = true;
 
     CaseVerdict v = ExplainCase(rec, index, CasePath::kFullPipeline);
+    // The same guards the batch path runs, at the same point: after the verdict,
+    // which says what is wrong and how one would fix it, and before the answer
+    // is handed out. Without them a developer who pastes a malformed line gets
+    // a rule that cannot land -- the "target" is a security level, or a service
+    // placeholder, or the permission slot holds an ioctl number -- and no
+    // indication that anything is off. They leave `needsHuman` alone, as in the
+    // report, where the bucket alone carries that; here `advisory` does.
+    // `requireAuto = false`: one line is being explained, not a batch triaged,
+    // so the guards' question is put to every answer rather than only to the
+    // ones the pipeline already offered to repair.
+    ApplyGuards(rec, index, &v, false);
 
     r.src = v.src;
     r.tgt = v.tgt;
@@ -1370,10 +1863,21 @@ ExplainResult ExplainDenial(const std::string &line, PlIndex *index)
         r.recommendedId = "B";
     }
     r.recommendedTitle = v.why;
+    r.advisory = v.advisory;
     r.needsHuman = v.needsHuman;
     r.patch = v.patch;
     r.reviewStatus = v.reviewStatus;
     r.verifyStatus = v.verifyStatus;
+
+    // The application-layer view, last: it reads the verdict and never writes
+    // one, so nothing above may depend on it. The empty table is the "no bridge
+    // to answer from" case -- the host returns None there and its caller omits
+    // the key, so the key is left unset rather than filled with a view that
+    // says nothing.
+    if (withCrossLayer && !index->hapEntries().empty()) {
+        r.crossLayer = CrossLayerViewOf(index, rec, v);
+        r.hasCrossLayer = true;
+    }
     return r;
 }
 
@@ -1385,10 +1889,16 @@ std::string ExplainToJson(const ExplainResult &r)
 {
     std::string out;
     out.reserve(1024);
-    out += "{\"classification\": ";
+    out += "{\"advisory\": ";
+    AppendJsonString(&out, r.advisory);
+    out += ", \"classification\": ";
     AppendJsonString(&out, r.classification);
     out += ", \"cls\": ";
     AppendJsonString(&out, r.cls);
+    if (r.hasCrossLayer) {
+        out += ", \"cross_layer\": ";
+        AppendCrossLayerJson(&out, r.crossLayer);
+    }
     out += ", \"explanation\": ";
     AppendJsonString(&out, r.explanation);
     out += ", \"granted\": ";
