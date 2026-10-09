@@ -3,7 +3,7 @@
 
 ``--selftest`` exists so that a device with no policy index and no denial log
 can still tell "the binary does not run" apart from "the binary computes the
-wrong answer". It carries its own small policy (as PLI text) and twenty-three
+wrong answer". It carries its own small policy (as PLI text) and twenty-six
 denial lines, and compares the device's convergence output against a table of
 expected lines.
 
@@ -13,11 +13,29 @@ would pass no matter what the binary did, which is the one thing a self test
 must not do.
 
 The vectors are chosen for branch coverage rather than for realism: one case in
-each category, each classification, each of the five guards that downgrades an
+each category, each classification, each of the six guards that downgrades an
 automatic patch to a human decision, plus the malformed records whose output is
 subtlest (a missing scontext, a missing tclass, and a target context that is a
 bare MLS level). Those three render an absent field into a patch line and then
 have to rule on whether the result is applicable.
+
+The last three lines close the guard coverage. The real corpus does reach all
+six branches, but it reaches them from a 1.3 MB policy; a device self test that
+carries its own policy has to make each one *constructible* from a handful of
+rules, or a porting bug in a branch no vector touches sails through:
+
+  * a target context whose full-width colon survives transcription, so the
+    field parses as the bare security level ``s0`` (guard 1 -- note the patch
+    keeps ``s0`` as its target, which is exactly why it must not be applied);
+  * an ioctl command number written *inside* the permission braces, next to a
+    real permission (guard 5 -- ``{ read 0x5413 }``, the shape a hand-copied
+    ``denied { ioctl }`` line degrades into);
+  * an ioctl the policy grants *and* a ``neverallowxperm`` invert rules out.
+    This is the one that isn't a typo: the grant makes ``missing`` empty, so
+    the "minimal" patch comes back as ``allow A B:c {  };`` -- a rule that
+    grants nothing (guard 6). Its real-corpus twin is
+    ``medialibrary_hap -> hmdfs:file ioctl 0xf205``, refused by the tree's
+    ``neverallowxperm hap_domain hmdfs:file ioctl ~{ ... 0xf205 ... }``.
 
 The last eight lines cover the M3 service mapping, which the real corpus can
 only partly reach -- it exercises the *resolvable* half and none of the refusals:
@@ -38,6 +56,9 @@ cluster and only the first line's ``service=`` is ever consulted.
 Regenerating the table means pasting both blocks below into
 ``framework/tools/denial_check/test.cpp`` (`kSelfTestPli`, `kSelfTestLog` and
 `kSelfTestVectors`), then re-running ``denial_check --selftest`` on the host.
+The fourth block, `kSelfTestExplainVectors`, is printed with its declaration so
+it pastes as one region -- it is what makes the self test cover `--explain`,
+not just the batch converger.
 
     python3 tools/gen_selftest_vectors.py
 
@@ -84,6 +105,7 @@ type sa_audio_svc, file_type;
 type hdf_sensor_dev, file_type;
 type sa_evil_svc, file_type;
 type sa_gap_svc, file_type;
+type sa_vac_file, file_type;
 type audio_svc, domain;
 
 allow init dev_null:chr_file { read write open };
@@ -96,11 +118,24 @@ allow media_service sa_audio_svc:samgr_class { get };
 allow audio_svc sa_audio_svc:samgr_class { add };
 allow media_service hdf_sensor_dev:hdf_devmgr_class { get };
 neverallow media_service sa_evil_svc:samgr_class { get };
+
+# The vacuous-patch shape: the plain allow grants ioctl, so the verdict comes
+# back `all_allowed=True` with an empty `missing` set -- but the invert rule
+# takes the command number away, which is what makes the case real (and what
+# makes the minimal patch degenerate).
+allow media_service sa_vac_file:chr_file { ioctl };
+neverallowxperm media_service sa_vac_file:chr_file ioctl ~{ 0x9001 };
 """
 
-# Fifteen lines against thirteen expected clusters: the two `init` reads and the
-# two `media_service` writes collapse pairwise, which is what makes `count` and
-# the dedup path part of what is being tested rather than incidental.
+# Twenty-six lines against twenty-four expected clusters: the two `init` reads
+# and the two `media_service` writes collapse pairwise, which is what makes
+# `count` and the dedup path part of what is being tested rather than incidental.
+#
+# Line 24 is malformed *on purpose*: `u:object_r：dev_null:s0` uses a full-width
+# colon (U+FF1A), the shape a context takes after passing through a document or
+# an IME. It splits on `:` into three fields like any other, so the target ends
+# up as the security level `s0` -- do not "fix" it to an ASCII colon, that is
+# the vector (guard 1).
 LOG = """\
 audit: type=1400 audit(1700000000.1:1): avc:  denied  { read } for  pid=1 comm="init" scontext=u:r:init:s0 tcontext=u:object_r:dev_null:s0 tclass=chr_file permissive=1
 audit: type=1400 audit(1700000000.2:2): avc:  denied  { read } for  pid=1 comm="init" scontext=u:r:init:s0 tcontext=u:object_r:dev_null:s0 tclass=chr_file permissive=0
@@ -125,6 +160,9 @@ audit: type=1400 audit(1700000000.20:20): avc:  denied  { get open } for  pid=18
 audit: type=1400 audit(1700000000.21:21): avc:  denied  { get } for  pid=19 comm="media_service" scontext=u:r:media_service:s0 tcontext=u:object_r:default_service:s0 tclass=chr_file service=audio_svc permissive=0
 audit: type=1400 audit(1700000000.22:22): avc:  denied  { get write } for  pid=20 comm="media_service" scontext=u:r:media_service:s0 tcontext=u:object_r:default_service:s0 tclass=samgr_class service=evil_svc permissive=0
 audit: type=1400 audit(1700000000.23:23): avc:  denied  { get } for  pid=21 comm="audio_svc" scontext=u:r:audio_svc:s0 tcontext=u:object_r:default_service:s0 tclass=samgr_class service=gap_svc permissive=0
+audit: type=1400 audit(1700000000.24:24): avc:  denied  { read } for  pid=22 comm="media_service" scontext=u:r:media_service:s0 tcontext=u:object_r：dev_null:s0 tclass=chr_file permissive=0
+audit: type=1400 audit(1700000000.25:25): avc:  denied  { read 0x5413 } for  pid=23 comm="media_service" scontext=u:r:media_service:s0 tcontext=u:object_r:dev_camera_file:s0 tclass=chr_file permissive=0
+audit: type=1400 audit(1700000000.26:26): avc:  denied  { ioctl } for  pid=24 comm="media_service" scontext=u:r:media_service:s0 tcontext=u:object_r:sa_vac_file:s0 tclass=chr_file ioctlcmd=0x9001 permissive=0
 """
 
 
@@ -158,6 +196,12 @@ def digest(cluster: dict) -> str:
 # literal token `None` into src, and a placeholder that resolves but is still
 # denied, where the patch keeps the placeholder and the guard is the only thing
 # standing between it and an operator.
+#
+# The last three are there for one field. `advisory` is the only thing on the
+# explain path that carries a refusal, and the converge digests cannot see it
+# at all -- they compare `why`, the same sentence in its report-side spelling.
+# Pinning the JSON of the three guard lines is what makes a porting bug in
+# `ApplyGuards` fail the device self test instead of quietly emptying the field.
 EXPLAIN_PICKS = [
     (3,  "MISSING_RULE  -- patch + APPROVE + SUCCESS"),
     (4,  "POTENTIAL_ESCALATION -- neverallow, no patch, human"),
@@ -167,6 +211,9 @@ EXPLAIN_PICKS = [
     (10, "malformed: no scontext, so src renders the literal token None"),
     (16, "placeholder resolves and the policy already allows it"),
     (23, "placeholder resolves onto a real gap -- still needs a human"),
+    (24, "guard 1: target is a bare MLS level -- advisory is non-empty"),
+    (25, "guard 5: a permission slot holds an ioctl command number"),
+    (26, "guard 6: the minimal patch grants no permission at all"),
 ]
 
 
@@ -213,11 +260,13 @@ def main() -> int:
         report["by_classification"]))
     print()
     print("// ---- kSelfTestExplainVectors ----")
+    print("const SelfTestExplainVector kSelfTestExplainVectors[] = {")
     for (lineno, label), (line, expected) in zip(EXPLAIN_PICKS,
                                                  explain_vectors(index)):
         print("    // %s" % label)
         print("    {" + _cpp_str(line) + ",")
         print("     " + _cpp_str(expected) + "},")
+    print("};")
     return 0
 
 

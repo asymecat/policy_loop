@@ -82,6 +82,12 @@ void PrintUsage()
         "                        copied out of hilog/dmesg. Nothing is applied --\n"
         "                        the output is advice. Exits 4 if <line> holds no\n"
         "                        denial.\n"
+        "      --cross-layer     with --explain: add the application-layer view --\n"
+        "                        is the scontext an app domain, at what APL, is the\n"
+        "                        fix the app's or the system's. Off by default: the\n"
+        "                        default object is the one the differential harness\n"
+        "                        compares against the host, and a key that appears\n"
+        "                        in one and not the other is a gate failure.\n"
         "      --json            with --explain: print that answer as one JSON\n"
         "                        object instead of for reading\n"
         "      --case <file>     decide one already-split record per line and print\n"
@@ -214,24 +220,32 @@ int SelfTestSha1()
 // --------------------------------------------------------------------------
 
 /*
- * A nine-rule policy and twenty-three denial lines, both small enough to read.
+ * An eleven-rule policy and twenty-six denial lines, both small enough to read.
  *
  * The point of the pair is coverage of the *decisions*, not of the parser: the
  * differential harness against the host engine needs the device to work and a
  * log to work on, and on a fresh device neither is guaranteed. So the vectors
  * are chosen to land one case in every branch of the convergence pipeline --
- * each category, each classification, each guard that downgrades an automatic
- * patch to a human decision -- plus the malformed records that produce the
- * subtlest output: a missing scontext, a missing tclass, and a target context
- * that is a bare MLS level. Those three are the ones where the tool has to
- * render an absent field and still produce a patch line the verifier can rule
- * on, so they are exactly the cases a self test should pin.
+ * each category, each classification, all six guards that downgrade an
+ * automatic patch to a human decision -- plus the malformed records that
+ * produce the subtlest output: a missing scontext, a missing tclass, and a
+ * target context that is a bare MLS level. Those three are the ones where the
+ * tool has to render an absent field and still produce a patch line the
+ * verifier can rule on, so they are exactly the cases a self test should pin.
+ *
+ * The last three rules and lines exist for the guards. A small policy makes a
+ * guard *constructible*; the real corpus reaches all six branches too, but from
+ * a 1.3 MB index, so a device that carries its own policy has to be able to
+ * build each one out of a handful of rules or a porting bug in that branch has
+ * nothing to fail against. The shapes are the ones the corpus actually shows:
+ * a full-width colon in a target context, an ioctl number written inside the
+ * permission braces, and a grant that a `neverallowxperm` takes back.
  */
 const char *const kSelfTestPli = R"PLI(PLI1
 @rev 2
 @src selftest.embedded gen=2026-09-10T00:00:00Z exporter=policy_loop/export/pli.py
-@meta rules=9 allow=6 neverallow=2 allowxperm=1 neverallowxperm=0 types=13 attrs=2 classes=3 perms=6 known=13 skipped=0 hap_entries=0 hap_domains=0 hap_names=0 hap_apls=0 hap_debuggable=0 hap_skipped=0
-@class chr_file 5
+@meta rules=11 allow=7 neverallow=2 allowxperm=1 neverallowxperm=1 types=14 attrs=2 classes=3 perms=6 known=14 skipped=0 hap_entries=0 hap_domains=0 hap_names=0 hap_apls=0 hap_debuggable=0 hap_skipped=0
+@class chr_file 7
 @class hdf_devmgr_class 1
 @class samgr_class 3
 @type app_service domain
@@ -246,6 +260,7 @@ const char *const kSelfTestPli = R"PLI(PLI1
 @type sa_binder file_type
 @type sa_evil_svc file_type
 @type sa_gap_svc file_type
+@type sa_vac_file file_type
 @type unknown_domain domain
 @attr domain
 @attr file_type
@@ -261,6 +276,7 @@ const char *const kSelfTestPli = R"PLI(PLI1
 @known sa_binder
 @known sa_evil_svc
 @known sa_gap_svc
+@known sa_vac_file
 @known unknown_domain
 @perm add
 @perm get
@@ -268,7 +284,7 @@ const char *const kSelfTestPli = R"PLI(PLI1
 @perm open
 @perm read
 @perm write
-@rules 9
+@rules 11
 a chr_file init dev_null open,read,write
 a chr_file media_service dev_camera_file open,read
 n chr_file app_service dev_camera_file write
@@ -278,6 +294,8 @@ a samgr_class media_service sa_audio_svc get
 a samgr_class audio_svc sa_audio_svc add
 a hdf_devmgr_class media_service hdf_sensor_dev get
 n samgr_class media_service sa_evil_svc get
+a chr_file media_service sa_vac_file ioctl
+z chr_file media_service sa_vac_file ~ioctl:0x9001
 )PLI";
 
 const char *const kSelfTestLog = R"LOG(audit: type=1400 audit(1700000000.1:1): avc:  denied  { read } for  pid=1 comm="init" scontext=u:r:init:s0 tcontext=u:object_r:dev_null:s0 tclass=chr_file permissive=1
@@ -303,6 +321,9 @@ audit: type=1400 audit(1700000000.20:20): avc:  denied  { get open } for  pid=18
 audit: type=1400 audit(1700000000.21:21): avc:  denied  { get } for  pid=19 comm="media_service" scontext=u:r:media_service:s0 tcontext=u:object_r:default_service:s0 tclass=chr_file service=audio_svc permissive=0
 audit: type=1400 audit(1700000000.22:22): avc:  denied  { get write } for  pid=20 comm="media_service" scontext=u:r:media_service:s0 tcontext=u:object_r:default_service:s0 tclass=samgr_class service=evil_svc permissive=0
 audit: type=1400 audit(1700000000.23:23): avc:  denied  { get } for  pid=21 comm="audio_svc" scontext=u:r:audio_svc:s0 tcontext=u:object_r:default_service:s0 tclass=samgr_class service=gap_svc permissive=0
+audit: type=1400 audit(1700000000.24:24): avc:  denied  { read } for  pid=22 comm="media_service" scontext=u:r:media_service:s0 tcontext=u:object_r：dev_null:s0 tclass=chr_file permissive=0
+audit: type=1400 audit(1700000000.25:25): avc:  denied  { read 0x5413 } for  pid=23 comm="media_service" scontext=u:r:media_service:s0 tcontext=u:object_r:dev_camera_file:s0 tclass=chr_file permissive=0
+audit: type=1400 audit(1700000000.26:26): avc:  denied  { ioctl } for  pid=24 comm="media_service" scontext=u:r:media_service:s0 tcontext=u:object_r:sa_vac_file:s0 tclass=chr_file ioctlcmd=0x9001 permissive=0
 )LOG";
 
 /*
@@ -349,6 +370,67 @@ const char *const kSelfTestVectors[] = {
     "1ac85dc76bb5|1|media_service|default_service|chr_file|get|needs_human|MISSING_RULE|APPROVE|SUCCESS|目标为 default_* 占位符（service 需映射到具体 sa_*/hdf 类型才能落规则），转人工|allow media_service default_service:chr_file { get };",
     "c078a0bca052|1|media_service|default_service|samgr_class|get,write|needs_human|POTENTIAL_ESCALATION|||命中 neverallow 红线：禁止自动放权（转人工）|",
     "33aa1b00e716|1|audio_svc|default_service|samgr_class|get|needs_human|MISSING_RULE|APPROVE|SUCCESS|目标为 default_* 占位符（service 需映射到具体 sa_*/hdf 类型才能落规则），转人工|allow audio_svc default_service:samgr_class { get };",
+    "99b70f9a8855|1|media_service|s0|chr_file|read|needs_human|MISSING_RULE|APPROVE|SUCCESS|目标上下文可疑（被解析成安全级别而非类型，多为日志/注释笔误，勿照抄规则）|allow media_service s0:chr_file { read };",
+    "c9b71b20217f|1|media_service|dev_camera_file|chr_file|read,0x5413|needs_human|MISSING_RULE|APPROVE|SUCCESS|权限位含非权限名「0x5413」（策略里没有任何规则授予过它；疑为日志转写笔误——ioctl 命令号被写进了权限位，而 `ioctl` 被写在括号外），照抄会落到编译不过的规则上，转人工|allow media_service dev_camera_file:chr_file { 0x5413 };",
+    "4fb2d1fea962|1|media_service|sa_vac_file|chr_file|ioctl|needs_human|MISSING_RULE|APPROVE|SUCCESS|补丁为空权限（ioctl 类缺口需 allowxperm 语义，当前修复路径给不出有效最小补丁），转人工|allow media_service sa_vac_file:chr_file {  };",
+};
+
+/*
+ * The same log lines again, this time through `--explain`, paired with the JSON
+ * object that entry point owes the caller.
+ *
+ * The digest table above pins the batch converger. `--explain` is a second
+ * entry into the same engine -- same classification, same patch, same guards --
+ * and it is the one an operator reaches for first, but it renders a different
+ * object, so nothing above would notice if only this path broke. Three of these
+ * vectors are there for a single field: `advisory` is the only thing on the
+ * explain path that carries a guard's refusal, and the digests cannot see it at
+ * all (they compare `why`, the same sentence in its report-side spelling).
+ *
+ * Whole objects rather than a digest, because the fields this path adds --
+ * `advisory`, `missing`, the recommendation id -- are precisely the ones a
+ * digest would drop, and a mismatch would not say which of them moved. Both
+ * sides carry one trailing newline; the table is generated with it stripped.
+ */
+struct SelfTestExplainVector {
+    const char *line;
+    const char *json;
+};
+
+const SelfTestExplainVector kSelfTestExplainVectors[] = {
+    // MISSING_RULE  -- patch + APPROVE + SUCCESS
+    {"audit: type=1400 audit(1700000000.3:3): avc:  denied  { write } for  pid=2 comm=\"media_service\" scontext=u:r:media_service:s0 tcontext=u:object_r:dev_camera_file:s0 tclass=chr_file permissive=0",
+     "{\"advisory\": \"\", \"classification\": \"MISSING_RULE\", \"cls\": \"chr_file\", \"explanation\": \"安全策略缺少允许规则：media_service 访问 dev_camera_file:chr_file 的 {write} 权限，当前策略未授予。需要确认该访问是否合理后，按最小权限补齐缺失权限。\", \"granted\": [], \"ioctl\": null, \"missing\": [\"write\"], \"needs_human\": false, \"patch\": \"allow media_service dev_camera_file:chr_file { write };\", \"recommended\": {\"id\": \"B\", \"title\": \"最小权限补齐\"}, \"requested\": [\"write\"], \"review\": \"APPROVE\", \"src\": \"media_service\", \"tgt\": \"dev_camera_file\", \"verify\": \"SUCCESS\"}"},
+    // POTENTIAL_ESCALATION -- neverallow, no patch, human
+    {"audit: type=1400 audit(1700000000.4:4): avc:  denied  { write } for  pid=3 comm=\"app_service\" scontext=u:r:app_service:s0 tcontext=u:object_r:dev_camera_file:s0 tclass=chr_file permissive=1",
+     "{\"advisory\": \"\", \"classification\": \"POTENTIAL_ESCALATION\", \"cls\": \"chr_file\", \"explanation\": \"该访问命中 neverallow 红线：app_service 请求 dev_camera_file:chr_file {write}。即使技术上可加规则，也极可能是越权或架构问题，PolicyLoop 拒绝自动放权。\", \"granted\": [], \"ioctl\": null, \"missing\": [\"write\"], \"needs_human\": true, \"patch\": \"\", \"recommended\": {\"id\": \"C\", \"title\": \"人工确认/架构调整（禁止自动放权）\"}, \"requested\": [\"write\"], \"review\": \"SKIP\", \"src\": \"app_service\", \"tgt\": \"dev_camera_file\", \"verify\": \"HUMAN_REVIEW_REQUIRED\"}"},
+    // XPERM_GAP -- allowxperm patch, not a plain allow
+    {"audit: type=1400 audit(1700000000.6:6): avc:  denied  { ioctl } for  pid=5 comm=\"media_service\" scontext=u:r:media_service:s0 tcontext=u:object_r:dev_camera_file:s0 tclass=chr_file ioctlcmd=0x5402 permissive=0",
+     "{\"advisory\": \"\", \"classification\": \"XPERM_GAP\", \"cls\": \"chr_file\", \"explanation\": \"media_service 对 dev_camera_file:chr_file 的 ioctl(0x5402) 被拒：策略已允许 ioctl 大类，但该命令号不在 allowxperm 白名单内，属于「细粒度权限缺口」而非「完全没有权限」。\", \"granted\": [\"ioctl\"], \"ioctl\": \"0x5402\", \"missing\": [], \"needs_human\": false, \"patch\": \"allowxperm media_service dev_camera_file:chr_file ioctl { 0x5402 };\", \"recommended\": {\"id\": \"B\", \"title\": \"最小权限补齐\"}, \"requested\": [\"ioctl\"], \"review\": \"APPROVE\", \"src\": \"media_service\", \"tgt\": \"dev_camera_file\", \"verify\": \"SUCCESS\"}"},
+    // the allowxperm'd command -- already allowed, so label mismatch
+    {"audit: type=1400 audit(1700000000.7:7): avc:  denied  { ioctl } for  pid=6 comm=\"media_service\" scontext=u:r:media_service:s0 tcontext=u:object_r:dev_camera_file:s0 tclass=chr_file ioctlcmd=0x5401 permissive=0",
+     "{\"advisory\": \"\", \"classification\": \"DOMAIN_OR_LABEL_MISMATCH\", \"cls\": \"chr_file\", \"explanation\": \"策略已允许但 enforcing 下仍被拒：疑似进程域或对象标签与实际不符，应检查 type_transition / file_contexts 等，而非加权限。\", \"granted\": [\"ioctl\"], \"ioctl\": \"0x5401\", \"missing\": [], \"needs_human\": true, \"patch\": \"\", \"recommended\": {\"id\": \"C\", \"title\": \"检查域与标签（非权限问题）\"}, \"requested\": [\"ioctl\"], \"review\": \"SKIP\", \"src\": \"media_service\", \"tgt\": \"dev_camera_file\", \"verify\": \"HUMAN_REVIEW_REQUIRED\"}"},
+    // NOISE_OR_ALREADY_FIXED -- read that the policy grants
+    {"audit: type=1400 audit(1700000000.2:2): avc:  denied  { read } for  pid=1 comm=\"init\" scontext=u:r:init:s0 tcontext=u:object_r:dev_null:s0 tclass=chr_file permissive=0",
+     "{\"advisory\": \"\", \"classification\": \"DOMAIN_OR_LABEL_MISMATCH\", \"cls\": \"chr_file\", \"explanation\": \"策略已允许但 enforcing 下仍被拒：疑似进程域或对象标签与实际不符，应检查 type_transition / file_contexts 等，而非加权限。\", \"granted\": [\"read\"], \"ioctl\": null, \"missing\": [], \"needs_human\": true, \"patch\": \"\", \"recommended\": {\"id\": \"C\", \"title\": \"检查域与标签（非权限问题）\"}, \"requested\": [\"read\"], \"review\": \"SKIP\", \"src\": \"init\", \"tgt\": \"dev_null\", \"verify\": \"HUMAN_REVIEW_REQUIRED\"}"},
+    // malformed: no scontext, so src renders the literal token None
+    {"audit: type=1400 audit(1700000000.10:10): avc:  denied  { read } for  pid=9 comm=\"media_service\" tcontext=u:object_r:dev_null:s0 tclass=chr_file permissive=0",
+     "{\"advisory\": \"主体/目标「None」不在当前策略语料中（设备新增域、生成的数字 service 标签或标注异常），补丁无法落点验证，转人工\", \"classification\": \"MISSING_RULE\", \"cls\": \"chr_file\", \"explanation\": \"安全策略缺少允许规则：None 访问 dev_null:chr_file 的 {read} 权限，当前策略未授予。需要确认该访问是否合理后，按最小权限补齐缺失权限。\", \"granted\": [], \"ioctl\": null, \"missing\": [\"read\"], \"needs_human\": false, \"patch\": \"allow None dev_null:chr_file { read };\", \"recommended\": {\"id\": \"B\", \"title\": \"主体/目标「None」不在当前策略语料中（设备新增域、生成的数字 service 标签或标注异常），补丁无法落点验证，转人工\"}, \"requested\": [\"read\"], \"review\": \"APPROVE\", \"src\": \"None\", \"tgt\": \"dev_null\", \"verify\": \"FAILED\"}"},
+    // placeholder resolves and the policy already allows it
+    {"audit: type=1400 audit(1700000000.16:16): avc:  denied  { get } for  pid=14 comm=\"media_service\" scontext=u:r:media_service:s0 tcontext=u:object_r:default_service:s0 tclass=samgr_class service=audio_svc permissive=1",
+     "{\"advisory\": \"目标为 default_* 占位符（service 需映射到具体 sa_*/hdf 类型才能落规则），转人工\", \"classification\": \"NOISE_OR_ALREADY_FIXED\", \"cls\": \"samgr_class\", \"explanation\": \"当前策略已允许该访问（denial 仍出现且处于 permissive），多为历史日志或噪声/已修复记录，不建议新增权限。\", \"granted\": [\"get\"], \"ioctl\": null, \"missing\": [], \"needs_human\": false, \"patch\": \"\", \"recommended\": {\"id\": \"-\", \"title\": \"目标为 default_* 占位符（service 需映射到具体 sa_*/hdf 类型才能落规则），转人工\"}, \"requested\": [\"get\"], \"review\": \"SKIP\", \"src\": \"media_service\", \"tgt\": \"default_service\", \"verify\": \"VERIFIED_AS_NOISE\"}"},
+    // placeholder resolves onto a real gap -- still needs a human
+    {"audit: type=1400 audit(1700000000.23:23): avc:  denied  { get } for  pid=21 comm=\"audio_svc\" scontext=u:r:audio_svc:s0 tcontext=u:object_r:default_service:s0 tclass=samgr_class service=gap_svc permissive=0",
+     "{\"advisory\": \"目标为 default_* 占位符（service 需映射到具体 sa_*/hdf 类型才能落规则），转人工\", \"classification\": \"MISSING_RULE\", \"cls\": \"samgr_class\", \"explanation\": \"安全策略缺少允许规则：audio_svc 访问 default_service:samgr_class 的 {get} 权限，当前策略未授予。需要确认该访问是否合理后，按最小权限补齐缺失权限。\", \"granted\": [], \"ioctl\": null, \"missing\": [\"get\"], \"needs_human\": false, \"patch\": \"allow audio_svc default_service:samgr_class { get };\", \"recommended\": {\"id\": \"B\", \"title\": \"目标为 default_* 占位符（service 需映射到具体 sa_*/hdf 类型才能落规则），转人工\"}, \"requested\": [\"get\"], \"review\": \"APPROVE\", \"src\": \"audio_svc\", \"tgt\": \"default_service\", \"verify\": \"SUCCESS\"}"},
+    // guard 1: target is a bare MLS level -- advisory is non-empty
+    {"audit: type=1400 audit(1700000000.24:24): avc:  denied  { read } for  pid=22 comm=\"media_service\" scontext=u:r:media_service:s0 tcontext=u:object_r：dev_null:s0 tclass=chr_file permissive=0",
+     "{\"advisory\": \"目标上下文可疑（被解析成安全级别而非类型，多为日志/注释笔误，勿照抄规则）\", \"classification\": \"MISSING_RULE\", \"cls\": \"chr_file\", \"explanation\": \"安全策略缺少允许规则：media_service 访问 s0:chr_file 的 {read} 权限，当前策略未授予。需要确认该访问是否合理后，按最小权限补齐缺失权限。\", \"granted\": [], \"ioctl\": null, \"missing\": [\"read\"], \"needs_human\": false, \"patch\": \"allow media_service s0:chr_file { read };\", \"recommended\": {\"id\": \"B\", \"title\": \"目标上下文可疑（被解析成安全级别而非类型，多为日志/注释笔误，勿照抄规则）\"}, \"requested\": [\"read\"], \"review\": \"APPROVE\", \"src\": \"media_service\", \"tgt\": \"s0\", \"verify\": \"SUCCESS\"}"},
+    // guard 5: a permission slot holds an ioctl command number
+    {"audit: type=1400 audit(1700000000.25:25): avc:  denied  { read 0x5413 } for  pid=23 comm=\"media_service\" scontext=u:r:media_service:s0 tcontext=u:object_r:dev_camera_file:s0 tclass=chr_file permissive=0",
+     "{\"advisory\": \"权限位含非权限名「0x5413」（策略里没有任何规则授予过它；疑为日志转写笔误——ioctl 命令号被写进了权限位，而 `ioctl` 被写在括号外），照抄会落到编译不过的规则上，转人工\", \"classification\": \"MISSING_RULE\", \"cls\": \"chr_file\", \"explanation\": \"安全策略缺少允许规则：media_service 访问 dev_camera_file:chr_file 的 {0x5413} 权限，当前策略未授予。需要确认该访问是否合理后，按最小权限补齐缺失权限。\", \"granted\": [\"read\"], \"ioctl\": null, \"missing\": [\"0x5413\"], \"needs_human\": false, \"patch\": \"allow media_service dev_camera_file:chr_file { 0x5413 };\", \"recommended\": {\"id\": \"B\", \"title\": \"权限位含非权限名「0x5413」（策略里没有任何规则授予过它；疑为日志转写笔误——ioctl 命令号被写进了权限位，而 `ioctl` 被写在括号外），照抄会落到编译不过的规则上，转人工\"}, \"requested\": [\"0x5413\", \"read\"], \"review\": \"APPROVE\", \"src\": \"media_service\", \"tgt\": \"dev_camera_file\", \"verify\": \"SUCCESS\"}"},
+    // guard 6: the minimal patch grants no permission at all
+    {"audit: type=1400 audit(1700000000.26:26): avc:  denied  { ioctl } for  pid=24 comm=\"media_service\" scontext=u:r:media_service:s0 tcontext=u:object_r:sa_vac_file:s0 tclass=chr_file ioctlcmd=0x9001 permissive=0",
+     "{\"advisory\": \"补丁为空权限（ioctl 类缺口需 allowxperm 语义，当前修复路径给不出有效最小补丁），转人工\", \"classification\": \"MISSING_RULE\", \"cls\": \"chr_file\", \"explanation\": \"安全策略缺少允许规则：media_service 访问 sa_vac_file:chr_file 的 {chr_file} 权限，当前策略未授予。需要确认该访问是否合理后，按最小权限补齐缺失权限。\", \"granted\": [\"ioctl\"], \"ioctl\": \"0x9001\", \"missing\": [], \"needs_human\": false, \"patch\": \"allow media_service sa_vac_file:chr_file {  };\", \"recommended\": {\"id\": \"B\", \"title\": \"补丁为空权限（ioctl 类缺口需 allowxperm 语义，当前修复路径给不出有效最小补丁），转人工\"}, \"requested\": [\"ioctl\"], \"review\": \"APPROVE\", \"src\": \"media_service\", \"tgt\": \"sa_vac_file\", \"verify\": \"SUCCESS\"}"},
 };
 
 // One cluster's outcome as a single comparable line; the inverse of the comment
@@ -377,7 +459,7 @@ int SelfTestConverge()
         policy_loop::PlIndex::LoadFromText(kSelfTestPli, &err);
     if (index == nullptr) {
         // Not a vector mismatch but a broken embedded policy: the vectors below
-        // could never pass, so say so once instead of thirteen times.
+        // could never pass, so say so once instead of once per vector.
         std::fprintf(stderr, "selftest: converge FAIL  embedded PLI did not load: %s\n",
                      err.c_str());
         return 1;
@@ -468,11 +550,53 @@ int SelfTestNeverallowScope()
     return failures;
 }
 
+int SelfTestExplain()
+{
+    int failures = 0;
+    const size_t want =
+        sizeof(kSelfTestExplainVectors) / sizeof(kSelfTestExplainVectors[0]);
+
+    std::string err;
+    std::unique_ptr<policy_loop::PlIndex> index =
+        policy_loop::PlIndex::LoadFromText(kSelfTestPli, &err);
+    if (index == nullptr) {
+        std::fprintf(stderr, "selftest: explain FAIL  embedded PLI did not load: %s\n",
+                     err.c_str());
+        return 1;
+    }
+
+    for (size_t i = 0; i < want; ++i) {
+        const SelfTestExplainVector &v = kSelfTestExplainVectors[i];
+        policy_loop::ExplainResult r =
+            policy_loop::ExplainDenial(v.line, index.get(), false);
+        if (!r.parsed) {
+            std::fprintf(stderr,
+                         "selftest: explain FAIL  vector %zu holds no denial\n  line %s\n",
+                         i, v.line);
+            ++failures;
+            continue;
+        }
+        std::string got = policy_loop::ExplainToJson(r);
+        while (!got.empty() && got.back() == '\n') {
+            got.pop_back();
+        }
+        if (got != v.json) {
+            std::fprintf(stderr,
+                         "selftest: explain FAIL  vector %zu\n  expected %s\n  got      %s\n",
+                         i, v.json, got.c_str());
+            ++failures;
+        }
+    }
+    std::printf("selftest: explain %zu vectors, %d failure(s)\n", want, failures);
+    return failures;
+}
+
 int SelfTest()
 {
     int failures = 0;
     failures += SelfTestSha1();
     failures += SelfTestConverge();
+    failures += SelfTestExplain();
     failures += SelfTestNeverallowScope();
     if (failures == 0) {
         std::fputs("selftest: PASS\n", stdout);
@@ -1196,11 +1320,20 @@ int IndexInfo(const std::string &indexPath)
     double loadMs = NowMs() - start;
 
     const policy_loop::IndexMeta &meta = index->meta();
+    // The `hap_*` counters are part of what a caller has to be able to check:
+    // they size the APL bridge, and a payload that lost its `@hap` lines is a
+    // valid-looking file whose cross-layer answers are wrong. Printing them is
+    // what lets the differential harness compare them against the host's
+    // SehapTable instead of taking the reader's word for it.
     std::printf("{\"allow\": %lld, \"allowxperm\": %lld, \"attrs\": %lld, \"classes\": %lld, "
+                "\"hap_apls\": %lld, \"hap_debuggable\": %lld, \"hap_domains\": %lld, "
+                "\"hap_entries\": %lld, \"hap_names\": %lld, \"hap_skipped\": %lld, "
                 "\"known\": %lld, \"load_ms\": %.1f, \"neverallow\": %lld, "
                 "\"neverallowxperm\": %lld, \"perms\": %lld, \"rev\": %s, \"rules\": %lld, "
                 "\"skipped\": %lld, \"source\": %s, \"types\": %lld}\n",
                 meta.allow, meta.allowxperm, meta.attrs, meta.classes,
+                meta.hapApls, meta.hapDebuggable, meta.hapDomains,
+                meta.hapEntries, meta.hapNames, meta.hapSkipped,
                 meta.known, loadMs, meta.neverallow, meta.neverallowxperm,
                 meta.perms, policy_loop::JsonString(index->rev()).c_str(), meta.rules,
                 meta.skipped, policy_loop::JsonString(meta.source).c_str(), meta.types);
@@ -1397,9 +1530,10 @@ std::string JoinSpaces(const std::vector<std::string> &v)
  * rule, which is the distinction the 说明 paragraph exists to draw -- so showing
  * the request here and the patch below is the point, not a redundancy.
  */
-int ExplainMode(policy_loop::PlIndex *index, const std::string &line, bool asJson)
+int ExplainMode(policy_loop::PlIndex *index, const std::string &line, bool asJson,
+                bool crossLayer)
 {
-    policy_loop::ExplainResult r = policy_loop::ExplainDenial(line, index);
+    policy_loop::ExplainResult r = policy_loop::ExplainDenial(line, index, crossLayer);
     if (!r.parsed) {
         // "That is not a denial" is an answer, not a failure: the line was
         // copied out of a log window, and picking the wrong one is easy.
@@ -1426,6 +1560,19 @@ int ExplainMode(policy_loop::PlIndex *index, const std::string &line, bool asJso
         std::printf("补丁  %s\n", r.patch.c_str());
         std::printf("评审  %s\n", r.reviewStatus.c_str());
         std::printf("验证  %s\n", r.verifyStatus.c_str());
+    }
+    // The application-layer answer last, because it is the one that can
+    // overrule the reading above: `normal_hap` is not this app, it is every
+    // normal-APL app, so a rule against it is a platform-wide grant.
+    if (r.hasCrossLayer) {
+        const policy_loop::CrossLayerView &cl = r.crossLayer;
+        std::printf("跨层  %s\n", cl.headline.c_str());
+        for (const std::string &line : cl.evidence) {
+            std::printf("      · %s\n", line.c_str());
+        }
+        for (const std::string &line : cl.advice) {
+            std::printf("      → %s\n", line.c_str());
+        }
     }
     return 0;
 }
@@ -1553,6 +1700,7 @@ enum LongOnly {
     kOptKmsg,
     kOptTimeoutMs,
     kOptExplain,
+    kOptCrossLayer,
     kOptJson,
     kOptCase,
     kOptFull,
@@ -1583,6 +1731,7 @@ int main(int argc, char *argv[])
         {"kmsg", no_argument, nullptr, kOptKmsg},
         {"timeout-ms", required_argument, nullptr, kOptTimeoutMs},
         {"explain", required_argument, nullptr, kOptExplain},
+        {"cross-layer", no_argument, nullptr, kOptCrossLayer},
         {"json", no_argument, nullptr, kOptJson},
         {"case", required_argument, nullptr, kOptCase},
         {"full", no_argument, nullptr, kOptFull},
@@ -1614,6 +1763,7 @@ int main(int argc, char *argv[])
     bool converge = false;
     bool explain = false;
     bool asJson = false;
+    bool crossLayer = false;
     bool full = false;
     bool follow = false;
     bool dedupe = false;
@@ -1669,6 +1819,9 @@ int main(int argc, char *argv[])
                 explainLine = optarg;
                 explain = true;
                 break;
+            case kOptCrossLayer:
+                crossLayer = true;
+                break;
             case kOptJson:
                 asJson = true;
                 break;
@@ -1713,6 +1866,10 @@ int main(int argc, char *argv[])
 
     if (asJson && !explain) {
         std::fprintf(stderr, "%s: --json only applies to --explain\n", kProgram);
+        return 2;
+    }
+    if (crossLayer && !explain) {
+        std::fprintf(stderr, "%s: --cross-layer only applies to --explain\n", kProgram);
         return 2;
     }
     if (full && casePath.empty()) {
@@ -1789,7 +1946,7 @@ int main(int argc, char *argv[])
             std::fprintf(stderr, "%s: %s\n", kProgram, err.c_str());
             return 3;
         }
-        return ExplainMode(index.get(), explainLine, asJson);
+        return ExplainMode(index.get(), explainLine, asJson, crossLayer);
     }
 
     // One log source, chosen once. Silently preferring one over another would
