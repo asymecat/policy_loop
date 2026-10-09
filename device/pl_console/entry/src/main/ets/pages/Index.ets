@@ -636,21 +636,139 @@ struct Index {
     return resp;
   }
 
+  // ------------------------------------------------------------------ 视图
+  //
+  // 配色一律走 $r('app.color.*')（定义在 resources/base/element/color.json）。
+  // 原先这里散着 70 多处硬编码十六进制，改一处要全局找；更要紧的是
+  // start_window_background 那份**也是**同一个文件 —— 它当时是 #FFFFFF，
+  // 于是深色界面启动时要先闪一帧白，见 color.json 里的值。
+
+  /**
+   * 状态语义色。顶上那盏灯、开关卡片里的小点、卡片描边三处必须同色，
+   * 所以只留这一个出口 —— 各写各的迟早会出现"灯是绿的、字是灰的"。
+   */
+  private statusTone(): Resource {
+    if (this.err.length > 0) {
+      return $r('app.color.err');
+    }
+    if (this.snapMode) {
+      return $r('app.color.warn');
+    }
+    return this.guardOn ? $r('app.color.ok') : $r('app.color.text_3');
+  }
+
+  /** 状态灯里那两个字。完整那句话（窗口行数 / 累计案例）仍显示在开关卡片里。 */
+  private statusTag(): string {
+    if (this.err.length > 0) {
+      return '异常';
+    }
+    if (this.snapMode) {
+      return '快照';
+    }
+    return this.guardOn ? '监听中' : '已停止';
+  }
+
+  /**
+   * 结论那一行的颜色。
+   *
+   * 引擎给的 verdict 有两种形态（见 device/selinux_adapter/.../napi_init.cpp）：
+   * 要么是 `需人工介入`，要么是 `<评审结论> · <验证结论>`。前者原先和后者一样
+   * 渲染成绿色 —— 于是"这条我不敢自动修"在屏幕上看起来跟"已通过"一模一样。
+   * 这里按字面判一次；只影响颜色，不动引擎给的任何字段。
+   */
+  private verdictTone(v: string): Resource {
+    return v.indexOf('需人工') >= 0 ? $r('app.color.warn') : $r('app.color.ok');
+  }
+
+  /** 品牌标：一个圆角方块 + 两个字母，没有图片资源也能立住视觉重心。 */
+  @Builder
+  brandMark(size: number, solid: boolean) {
+    Column() {
+      Text('PL')
+        .fontSize(size * 0.44)
+        .fontWeight(FontWeight.Bold)
+        .fontColor(solid ? $r('app.color.bg') : $r('app.color.text_4'))
+    }
+    .width(size)
+    .height(size)
+    .borderRadius(size * 0.3)
+    .backgroundColor(solid ? $r('app.color.accent') : $r('app.color.surface'))
+    // 实心那版的描边和底色同色，等于没有 —— 这样两版共用一句，不用分叉。
+    .border({ width: 1, color: solid ? $r('app.color.accent') : $r('app.color.line') })
+    .justifyContent(FlexAlign.Center)
+    .alignItems(HorizontalAlign.Center)
+  }
+
+  /** 小圆角标签。类型名、"新 denial" 都用它，保证同一套圆角与内边距。 */
+  @Builder
+  chip(label: string, fg: Resource, bg: Resource) {
+    Text(label)
+      .fontSize(10)
+      .fontWeight(FontWeight.Medium)
+      .fontColor(fg)
+      .backgroundColor(bg)
+      .padding({ left: 7, right: 7, top: 3, bottom: 3 })
+      .borderRadius(6)
+      .maxLines(1)
+  }
+
+  /** 最小修复那一行：等宽 + 高亮。弹窗与列表卡片共用，两处观感一致。 */
+  @Builder
+  fixLine(text: string, lines: number) {
+    Text(text)
+      .fontSize(11)
+      .fontColor($r('app.color.info'))
+      .fontFamily('monospace')
+      .lineHeight(16)
+      .width('100%')
+      .maxLines(lines)
+      .textOverflow({ overflow: TextOverflow.Ellipsis })
+  }
+
   @Builder
   header() {
-    Column() {
-      Text('PolicyLoop 控制台')
-        .fontSize(22)
-        .fontWeight(FontWeight.Bold)
-        .fontColor('#FFFFFF')
-      Text('索引 ' + this.indexName + ' · 板端独立采集与解读')
-        .fontSize(12)
-        .fontColor('#8A9099')
-        .margin({ top: 4 })
+    Row() {
+      this.brandMark(30, true)
+
+      Column() {
+        Text('PolicyLoop 控制台')
+          .fontSize(16)
+          .fontWeight(FontWeight.Bold)
+          .fontColor($r('app.color.text'))
+          .maxLines(1)
+        // 索引版本留在首屏：现场被问"你这套规则是哪一版"时，不用翻文档。
+        Text('索引 ' + this.indexName)
+          .fontSize(10)
+          .fontColor($r('app.color.text_3'))
+          .margin({ top: 3 })
+          .maxLines(1)
+          .textOverflow({ overflow: TextOverflow.Ellipsis })
+      }
+      .alignItems(HorizontalAlign.Start)
+      .layoutWeight(1)
+      .margin({ left: 10, right: 8 })
+
+      this.statusPill()
     }
-    .alignItems(HorizontalAlign.Start)
     .width('100%')
-    .padding({ left: 18, right: 18, top: 16, bottom: 12 })
+    .alignItems(VerticalAlign.Center)
+    .padding({ left: 18, right: 18, top: 14, bottom: 14 })
+  }
+
+  /** 首屏右上角那盏灯：一个点 + 两个字。开关开没开不用读整句话。 */
+  @Builder
+  statusPill() {
+    Row({ space: 6 }) {
+      Circle({ width: 7, height: 7 }).fill(this.statusTone())
+      Text(this.statusTag())
+        .fontSize(10)
+        .fontWeight(FontWeight.Medium)
+        .fontColor(this.statusTone())
+    }
+    .padding({ left: 9, right: 11, top: 5, bottom: 5 })
+    .backgroundColor($r('app.color.surface'))
+    .border({ width: 1, color: $r('app.color.line') })
+    .borderRadius(20)
   }
 
   @Builder
@@ -658,63 +776,65 @@ struct Index {
     Column() {
       Row() {
         Column() {
-          Text('PolicyLoop 守护')
-            .fontSize(18)
-            .fontColor('#FFFFFF')
-          Text('读到 denial 就弹出来给最小修复，不依赖 PC')
-            .fontSize(12)
-            .fontColor('#8A9099')
+          Text('运行时捕获')
+            .fontSize(15)
+            .fontWeight(FontWeight.Medium)
+            .fontColor($r('app.color.text'))
+          Text('读到 denial 就给出最小修复 · 板端独立，不依赖 PC')
+            .fontSize(11)
+            .fontColor($r('app.color.text_3'))
             .margin({ top: 4 })
+            .maxLines(2)
         }
         .alignItems(HorizontalAlign.Start)
         .layoutWeight(1)
+        .margin({ right: 10 })
 
         Toggle({ type: ToggleType.Switch, isOn: this.guardOn })
-          .selectedColor('#4C8DFF')
+          .selectedColor($r('app.color.accent'))
           .enabled(!this.busy && this.indexReady)
           .onChange((v: boolean) => {
             this.applyToggle(v);
           })
       }
       .width('100%')
+      .alignItems(VerticalAlign.Center)
 
-      Divider().color('#242A31').margin({ top: 14, bottom: 10 })
+      Divider()
+        .color($r('app.color.line'))
+        .margin({ top: 14, bottom: 12 })
 
-      Row() {
+      // 状态行：一个点 + 一句话。点的颜色与顶上那盏灯同源（statusTone）。
+      Row({ space: 8 }) {
+        Circle({ width: 6, height: 6 }).fill(this.statusTone())
         Text(this.status)
-          .fontSize(13)
-          .fontColor(this.guardOn ? '#5BD98A' : '#8A9099')
+          .fontSize(12)
+          .fontColor($r('app.color.text_2'))
           .layoutWeight(1)
+          .maxLines(2)
+      }
+      .width('100%')
+      .alignItems(VerticalAlign.Center)
 
+      // 两个动作并排，主次分明：主按钮实心、次按钮浅底。
+      Row({ space: 8 }) {
         Button(this.busy ? '分析中…' : '载入当前快照')
           .fontSize(13)
-          .height(32)
-          .backgroundColor('#242A31')
-          .fontColor('#D5DAE1')
+          .fontWeight(FontWeight.Medium)
+          .height(36)
+          .layoutWeight(1)
+          .backgroundColor($r('app.color.accent'))
+          .fontColor($r('app.color.bg'))
           .enabled(!this.busy && this.indexReady)
           .onClick(() => {
             this.loadSnapshot();
           })
-      }
-      .width('100%')
 
-      // 按钮这条动线自己的结果/报错。紧贴按钮下面，因为按完按钮眼睛就在这儿。
-      if (this.snapMsg.length > 0) {
-        Text(this.snapMsg)
-          .fontSize(11)
-          .fontColor(this.snapMsgBad ? '#FF8A80' : '#5BD98A')
-          .width('100%')
-          .margin({ top: 8 })
-      }
-
-      // 第二条数据来源，明确标注成"预录"并降级为文字链。主按钮指向的永远是
-      // **此刻这块板子上的**东西；这份 9/21 的样本是**素材**。
-      // 被问"是不是预录的"时，指的就是这一行 —— 它自己写着"非实时"。
-      Row() {
-        Text('回放预录样本（9/21 采 · 756 行 · 非实时）')
-          .fontSize(11)
-          .fontColor('#5C646E')
-          .decoration({ type: TextDecorationType.Underline, color: '#5C646E' })
+        Button('回放预录样本')
+          .fontSize(13)
+          .height(36)
+          .backgroundColor($r('app.color.surface_hi'))
+          .fontColor($r('app.color.text_2'))
           .onClick(() => {
             // busy 的拦截交给 replaySample 自己（入口已有 guard），
             // 不在这里加 .enabled —— Row 上禁用子控件的点击行为不如入口判断可靠。
@@ -722,12 +842,33 @@ struct Index {
           })
       }
       .width('100%')
-      .justifyContent(FlexAlign.End)
-      .margin({ top: 8 })
+      .margin({ top: 14 })
+
+      // 按钮这条动线自己的结果/报错。紧贴按钮下面，因为按完按钮眼睛就在这儿。
+      if (this.snapMsg.length > 0) {
+        Text(this.snapMsg)
+          .fontSize(11)
+          .fontColor(this.snapMsgBad ? $r('app.color.err') : $r('app.color.ok'))
+          .width('100%')
+          .margin({ top: 10 })
+      }
+
+      // 第二条数据来源的**常驻标注**。
+      //
+      // 主按钮指向的永远是**此刻这块板子上的**东西；这份 9/21 的样本是**素材**。
+      // 被问"是不是预录的"时，屏幕上这一行就是答案 —— 所以"非实时"三个字必须
+      // 留在明面上。原先是 11px 的文字链压在最暗的灰上（#5C646E on #1A1F26），
+      // 几乎看不见，等于把这条标注藏了起来。
+      Text('预录样本 9/21 采 · 756 行 · 非实时，仅供对照')
+        .fontSize(10)
+        .fontColor($r('app.color.text_4'))
+        .width('100%')
+        .margin({ top: 10 })
     }
     .width('100%')
     .padding(16)
-    .backgroundColor('#1A1F26')
+    .backgroundColor($r('app.color.surface'))
+    .border({ width: 1, color: $r('app.color.line') })
     .borderRadius(14)
   }
 
@@ -736,50 +877,18 @@ struct Index {
   popCard() {
     Column() {
       Row() {
-        Text('新 denial')
-          .fontSize(11)
-          .fontColor('#101418')
-          .backgroundColor('#FFC66D')
-          .padding({ left: 8, right: 8, top: 2, bottom: 2 })
-          .borderRadius(4)
+        this.chip('新 denial', $r('app.color.bg'), $r('app.color.warn'))
         Text(this.popBody)
           .fontSize(11)
-          .fontColor('#8A9099')
+          .fontColor($r('app.color.text_3'))
           .layoutWeight(1)
           .margin({ left: 8 })
           .maxLines(1)
           .textOverflow({ overflow: TextOverflow.Ellipsis })
-      }
-      .width('100%')
-
-      Text(this.popTitle)
-        .fontSize(15)
-        .fontWeight(FontWeight.Medium)
-        .fontColor('#FFFFFF')
-        .width('100%')
-        .margin({ top: 8 })
-        .maxLines(2)
-        .textOverflow({ overflow: TextOverflow.Ellipsis })
-
-      if (this.popFix.length > 0) {
-        Text('最小修复  ' + this.popFix)
-          .fontSize(12)
-          .fontColor('#7FD1FF')
-          .fontFamily('monospace')
-          .width('100%')
-          .margin({ top: 8 })
-          .maxLines(4)
-          .textOverflow({ overflow: TextOverflow.Ellipsis })
-      }
-
-      Row() {
-        Text('本次会话已发现 ' + this.newCount + ' 个新案例')
-          .fontSize(11)
-          .fontColor('#5BD98A')
-          .layoutWeight(1)
         Text('收起')
           .fontSize(11)
-          .fontColor('#6B7280')
+          .fontColor($r('app.color.text_3'))
+          .margin({ left: 8 })
           .onClick(() => {
             this.popTitle = '';
             this.popBody = '';
@@ -787,13 +896,51 @@ struct Index {
           })
       }
       .width('100%')
+      .alignItems(VerticalAlign.Center)
+
+      Text(this.popTitle)
+        .fontSize(15)
+        .fontWeight(FontWeight.Medium)
+        .fontColor($r('app.color.text'))
+        .width('100%')
+        .margin({ top: 10 })
+        .maxLines(2)
+        .textOverflow({ overflow: TextOverflow.Ellipsis })
+
+      if (this.popFix.length > 0) {
+        Column() {
+          Text('最小修复')
+            .fontSize(10)
+            .fontColor($r('app.color.text_4'))
+            .width('100%')
+            .margin({ bottom: 5 })
+          this.fixLine(this.popFix, 4)
+        }
+        .width('100%')
+        .padding(10)
+        .backgroundColor($r('app.color.bg'))
+        .borderRadius(8)
+        .margin({ top: 10 })
+      }
+
+      Row() {
+        Text('本次会话已发现 ' + this.newCount + ' 个新案例')
+          .fontSize(11)
+          .fontColor($r('app.color.ok'))
+          .layoutWeight(1)
+        Text('板端引擎解读')
+          .fontSize(10)
+          .fontColor($r('app.color.text_4'))
+      }
+      .width('100%')
+      .alignItems(VerticalAlign.Center)
       .margin({ top: 10 })
     }
     .width('100%')
     .padding(14)
-    .backgroundColor('#1F2A1F')
-    .border({ width: 1, color: '#2F5D3A' })
-    .borderRadius(12)
+    .backgroundColor($r('app.color.pop_bg'))
+    .border({ width: 1, color: $r('app.color.pop_line') })
+    .borderRadius(14)
     .margin({ top: 12 })
   }
 
@@ -801,77 +948,130 @@ struct Index {
   findingCard(f: Finding) {
     Column() {
       Row() {
-        Text(f.src + ' → ' + f.tgt)
-          .fontSize(14)
-          .fontColor('#E8ECF1')
-          .fontWeight(FontWeight.Medium)
-          .layoutWeight(1)
-          .maxLines(1)
-          .textOverflow({ overflow: TextOverflow.Ellipsis })
+        // 主体/目标两段分开上色：一眼能看出箭头两边谁是发起方。
+        // Span 挂在同一个 Text 下，所以超长时按一行整体省略，不会两段各截各的。
+        Text() {
+          Span(f.src)
+            .fontColor($r('app.color.text'))
+            .fontWeight(FontWeight.Medium)
+          Span('  →  ')
+            .fontColor($r('app.color.text_4'))
+          Span(f.tgt)
+            .fontColor($r('app.color.text_2'))
+        }
+        .fontSize(13)
+        .layoutWeight(1)
+        .maxLines(1)
+        .textOverflow({ overflow: TextOverflow.Ellipsis })
 
-        Text(f.cls)
-          .fontSize(11)
-          .fontColor('#FFC66D')
-          .backgroundColor('#2A2418')
-          .padding({ left: 8, right: 8, top: 3, bottom: 3 })
-          .borderRadius(6)
+        this.chip(f.cls, $r('app.color.warn'), $r('app.color.warn_soft'))
       }
       .width('100%')
+      .alignItems(VerticalAlign.Center)
 
       if (f.op.length > 0) {
         Text(f.op)
-          .fontSize(12)
-          .fontColor('#8A9099')
-          .margin({ top: 6 })
+          .fontSize(11)
+          .fontColor($r('app.color.text_3'))
           .width('100%')
+          .margin({ top: 6 })
+          .maxLines(1)
+          .textOverflow({ overflow: TextOverflow.Ellipsis })
       }
 
       if (f.fix.length > 0) {
-        Text(f.fix)
-          .fontSize(12)
-          .fontColor('#7FD1FF')
-          .fontFamily('monospace')
-          .margin({ top: 8 })
-          .width('100%')
-          .maxLines(3)
-          .textOverflow({ overflow: TextOverflow.Ellipsis })
+        Column() {
+          this.fixLine(f.fix, 3)
+        }
+        .width('100%')
+        .padding(9)
+        .backgroundColor($r('app.color.bg'))
+        .borderRadius(7)
+        .margin({ top: 8 })
       }
 
       Row() {
         Text(f.verdict)
-          .fontSize(11)
-          .fontColor('#5BD98A')
+          .fontSize(10)
+          .fontColor(this.verdictTone(f.verdict))
           .layoutWeight(1)
+          .maxLines(1)
+          .textOverflow({ overflow: TextOverflow.Ellipsis })
         Text(originLabel(f.origin))
-          .fontSize(11)
-          .fontColor('#6B7280')
+          .fontSize(10)
+          .fontColor(f.origin === 'board' ? $r('app.color.text_3') : $r('app.color.text_4'))
       }
       .width('100%')
-      .margin({ top: 8 })
+      .alignItems(VerticalAlign.Center)
+      .margin({ top: 9 })
     }
     .width('100%')
     .padding(14)
-    .backgroundColor('#1A1F26')
+    .backgroundColor($r('app.color.surface'))
+    .border({ width: 1, color: $r('app.color.line') })
     .borderRadius(12)
     .margin({ bottom: 10 })
+  }
+
+  /** 空状态。复用品牌标（描边灰版），让"这里本该有东西"也有重心。 */
+  @Builder
+  emptyState() {
+    Column() {
+      this.brandMark(44, false)
+
+      Text(this.snapMode
+        ? '这一份快照里没有 denial'
+        : (this.guardOn ? '监听中，还没有 denial' : '开关关闭，未开始监听'))
+        .fontSize(13)
+        .fontColor($r('app.color.text_3'))
+        .margin({ top: 16 })
+
+      Text(this.snapMode
+        ? '拨一次开关恢复实时刷新'
+        : (this.guardOn ? '一有 denial 就会出现在这里，并弹出通知' : '打开上面的开关，开始实时捕获'))
+        .fontSize(11)
+        .fontColor($r('app.color.text_4'))
+        .margin({ top: 6 })
+
+      // 沙箱路径留在屏幕上：现场最容易出错的就是"两边看的不是同一个目录"。
+      Text('沙箱 ' + this.sandbox)
+        .fontSize(10)
+        .fontColor($r('app.color.text_4'))
+        .margin({ top: 18 })
+        .maxLines(1)
+        .textOverflow({ overflow: TextOverflow.Ellipsis })
+    }
+    .width('100%')
+    .layoutWeight(1)
+    .justifyContent(FlexAlign.Center)
+    .alignItems(HorizontalAlign.Center)
+    .padding({ left: 16, right: 16, bottom: 48 })
   }
 
   build() {
     Column() {
       this.header()
 
+      Divider().color($r('app.color.line'))
+
       Column() {
         this.switchCard()
 
         if (this.err.length > 0) {
-          Text(this.err)
-            .fontSize(12)
-            .fontColor('#FF8A80')
-            .backgroundColor('#2A1618')
-            .padding(10)
-            .borderRadius(8)
-            .width('100%')
-            .margin({ top: 12 })
+          Row({ space: 8 }) {
+            Circle({ width: 6, height: 6 }).fill($r('app.color.err'))
+            Text(this.err)
+              .fontSize(11)
+              .fontColor($r('app.color.err'))
+              .layoutWeight(1)
+          }
+          .width('100%')
+          .alignItems(VerticalAlign.Top)
+          .padding(12)
+          .backgroundColor($r('app.color.err_soft'))
+          .border({ width: 1, color: $r('app.color.err_soft') })
+          .borderRadius(10)
+          .margin({ top: 12 })
         }
 
         if (this.popTitle.length > 0) {
@@ -879,28 +1079,33 @@ struct Index {
         }
 
         if (this.summary.length > 0) {
-          Text(this.summary)
-            .fontSize(12)
-            .fontColor('#8A9099')
+          Column() {
+            Row() {
+              Text('案例明细')
+                .fontSize(12)
+                .fontWeight(FontWeight.Medium)
+                .fontColor($r('app.color.text_2'))
+              Text(this.findings.length + ' 个案例')
+                .fontSize(11)
+                .fontColor($r('app.color.text_4'))
+            }
             .width('100%')
-            .margin({ top: 12 })
+            .justifyContent(FlexAlign.SpaceBetween)
+            .alignItems(VerticalAlign.Center)
+
+            Text(this.summary)
+              .fontSize(10)
+              .fontColor($r('app.color.text_4'))
+              .width('100%')
+              .margin({ top: 5 })
+              .maxLines(2)
+          }
+          .width('100%')
+          .margin({ top: 18 })
         }
 
         if (this.findings.length === 0) {
-          Column() {
-            Text(this.guardOn ? '监听中，还没有 denial。' : '开关关闭。')
-              .fontSize(14)
-              .fontColor('#6B7280')
-            // 沙箱路径留在屏幕上：现场最容易出错的就是"两边看的不是同一个目录"。
-            Text('沙箱 ' + this.sandbox)
-              .fontSize(10)
-              .fontColor('#3A424D')
-              .margin({ top: 10 })
-              .maxLines(1)
-              .textOverflow({ overflow: TextOverflow.Ellipsis })
-          }
-          .width('100%')
-          .padding({ top: 40 })
+          this.emptyState()
         } else {
           List({ space: 0 }) {
             ForEach(this.findings, (f: Finding) => {
@@ -912,7 +1117,7 @@ struct Index {
           .width('100%')
           .layoutWeight(1)
           .scrollBar(BarState.Auto)
-          .margin({ top: 14 })
+          .margin({ top: 10 })
         }
       }
       .width('100%')
@@ -921,6 +1126,6 @@ struct Index {
     }
     .width('100%')
     .height('100%')
-    .backgroundColor('#101418')
+    .backgroundColor($r('app.color.bg'))
   }
 }
