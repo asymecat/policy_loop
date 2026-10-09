@@ -128,8 +128,14 @@
 
 ## 5. 平台与自证
 
-- 🔴 **板子版本口径仍冲突**：`docs/eval-L4.md:27,148,247` 写 6.1 Release；`docs/demo-realtime.md:3`
-  写 OpenHarmony 5.0.3.135。**必须二选一** —— 它决定索引该对齐哪棵树；
+- ✅ **板子版本口径已统一（原为冲突项）**：板子实测 `const.ohos.fullname =
+  OpenHarmony-5.0.3.135`（API 15 / kernel 5.10.208 / enforcing），`policy.31` = 424,699 B、
+  sha256 `20d8805c…`，上下文文件三项（`file_contexts` 513 / `sehap_contexts` 15 /
+  `service_contexts` 350）逐条对上 `OpenHarmony-5.0.3-Release` @ `0878c56e3`
+  ⇒ **索引对齐该树**（板端 HAP 内置索引即是，rev `e1160d2c`，19,800 条）。
+  `docs/eval-L4.md` 原写「6.1 Release」**是事实错误，已改**。
+  ⚠️ 但**编译树** `~/ohos_src` 确实是 **6.1.0.31** —— 设备端二进制由它交叉编译，
+  与「板子是 5.0.3.135」并不矛盾，两处口径不要互相套用；
 - 语料同源：5,161 行 **96.8% 逐字来自上游 `.te` 注释**，自证色彩重于独立采集（`eval-trust` 已做质检，
   但根上同源）；
 - 🟡 **HAP 源码在仓库外**（`tools/build_hap.sh:18` 指向 `~/ohos_audit/pl_console`）⇒ 第三方拿仓库

@@ -76,6 +76,7 @@ avc: denied { read } for pid=2208 comm="media_service" path="/dev/video0"
 | 加哪条规则？ | **最小**的那条规则是什么？多一个权限位都算失败 |
 | 加完就行了吗？ | 加完之后 denial 消失了吗？有没有引入新的越权？ |
 | 一条一条看 | 整份日志一次收敛成可执行清单 |
+| 拿不准的就写"转人工" | 转人工之后呢？1,580 条**逐条归因**"该谁修"（实测真正要打补丁的只有 **0** 条） |
 
 **验收目标是可量化的**，对应四组指标：策略覆盖率、补丁最小性、零越权（撞 neverallow 一律拒绝）、以及真机 enforcing 下的端到端一致性。
 
@@ -91,7 +92,7 @@ avc: denied { read } for pid=2208 comm="media_service" path="/dev/video0"
 |---|---|---|---|
 | L1 确定性内核 | denial 解析器 + `.te` 策略索引 | `policy_loop/denial`、`policy_loop/policy` | 解析/查询差分逐字节一致 |
 | L2 评测基线 | 从上游真实语料构造 golden 集并回放 | `data/eval/golden.jsonl`、`docs/eval-L2.md` | 覆盖率、可复现命令 |
-| L3 诊断闭环 | 六 Agent 最小权限闭环 + 批量收敛 | `policy_loop/agents`、`converge.py` | 留一法回归、零过宽 |
+| L3 诊断闭环 | 六 Agent 最小权限闭环 + 批量收敛 + 补丁最小化/归因 | `policy_loop/agents`、`converge.py`、`minimize.py`、`attribution.py` | 留一法回归、零过宽、闭环反验 |
 | L4 设备端 | 系统组件 `denial_check` + 采集服务 + 控制台 | `device/`、板端 HAP | 真机五项门禁 |
 
 四层的关系是**同一份判定逻辑的三次落地**：先在 Python 上把语义做对（L1–L3），再用评测证明它收敛（L2/L3），最后把它变成设备上的原生系统组件并用差分证明两端等价（L4）。
@@ -168,6 +169,7 @@ policy_loop/
 │   ├── policy/
 │   │   ├── index.py                  .te 策略索引与查询（allow/neverallow/allowxperm）
 │   │   ├── cross_layer.py            应用层 APL 跨层反查
+│   │   ├── cil.py                    板子 policy.31 反编译 CIL 的只读视图
 │   │   └── sehap.py                  sehap_contexts 解析
 │   ├── agents/                       六 Agent 闭环
 │   │   ├── orchestrator.py           严格状态机
@@ -183,6 +185,8 @@ policy_loop/
 │   │   └── agent_eval.py / agent_llm_eval.py   留一回归 / LLM 护栏对比
 │   ├── export/pli.py + cli.py        PLI 索引导出器
 │   ├── converge.py                   批量收敛（整份日志 → 三分清单）
+│   ├── minimize.py                   补丁集根因归并 + 闭环反验 + 爆炸半径
+│   ├── attribution.py                「需人工」1580 条的根因归因（该谁修）
 │   ├── explain.py                    单条诊断
 │   └── selfcheck.py                  环境 + 模块 + 冒烟自检
 ├── webui/server.py                   Web UI（stdlib HTTP server + /api/analyze）
@@ -208,7 +212,7 @@ policy_loop/
 │   ├── reports/                      各项评测报告（已入库）
 │   └── fixtures/                     测试与演示样例
 ├── docs/                             设计与评测文档、配图
-└── tests/                            196 项单测 + 设备差分门禁 diff_device.py
+└── tests/                            301 项单测 + 设备差分门禁 diff_device.py
 ```
 
 > ⚠️ **待确认（工程规范）**：板端控制台 HAP 的工程源码当前在仓库之外（`tools/build_hap.sh` 指向 `$HOME/ohos_audit/pl_console`）。建议像 `denial_check` 一样镜像进 `device/` 子树，否则评委 clone 仓库看不到这一块。
@@ -267,7 +271,75 @@ policy_loop/
 | 4 | 补丁须过 Reviewer 安全评审 | 广度过宽/危险模式拦截 |
 | 5 | 补丁须在索引副本上 Verify 成功 | 必须真的消除且无回归 |
 
-### 2.4.5 评测体系（`policy_loop.eval`）
+> ⚠️ **别把这张表与代码里的 `apply_guards` 混为一谈**，它们是两套分法、数也不同：
+> 这里是**闭环里的 5 个拒绝点**（含 Reviewer / Verify），代码里的 `apply_guards`
+> 是**另一组 6 个分支**（MLS 级目标 / `default_*` 占位符 / 主体或目标不在语料 /
+> 对象类不在语料 / 权限位含非权限名 / 空权限补丁）。后者才是 converge 与 `--explain`
+> **共用的那一份**——同一份实现、两个调用点，同一条记录从哪个入口问都必须拿到同一句话
+> （见 `eval-converge.md`）。
+
+### 2.4.5 补丁最小化与闭环反验（`policy_loop.minimize`）
+
+- **标识**：`policy_loop.minimize`
+- **类型**：批处理后处理（**只在宿主机跑**，不改设备端一个字节）
+- **目的**：`converge` 回答的是**逐案例**的问题——"哪一条规则能关掉这一个案例？"
+  这对看单个案例的人是对的，对看整份日志的人是错的：两个案例只要内核打印权限的次序
+  不同，就会被投影成两条规则，而它们其实是同一个根因。
+
+  ```
+  allow init write_updater_exec:file { execute };
+  allow init write_updater_exec:file { map };
+  allow init write_updater_exec:file { open read };
+  ```
+  三个 cluster，一个根因：*init 压根不该用这个 updater 二进制*。
+
+- **功能列表**（对应创新点 A / B / F）：
+  - **A 根因归并**：重读收敛报告，把同一 `(src, tgt, cls)` 的补丁行并成一条根因规则，
+    并记录它**关闭了哪些案例**、是**扩了已有规则**还是**新增**。
+  - **B 闭环反验**：把归并后的规则集套回索引的副本上**重新查询**，要求
+    "补丁前未解决的案例，套回后全部解决"，且"套回前它们确实没被解决"。
+    `converge` 只断言补丁**编译得过**；这一步断言补丁**真的有用**。
+  - **F 爆炸半径**：每条规则给出 `BlastRadius` —— 展开后实际受影响的类型数与规则数。
+    ⚠️ 判定"最窄规则"必须按**展开后的影响面**，不能按 token 数：
+    `{domain}` 只用 1 个 token，却覆盖 **235** 个类型。
+
+- **输出**：`rules`（最小规则集 + 关闭的案例 + 爆炸半径）、`verify`（闭环结论）、
+  `--cil`（给 `secilc` 与 neverallow 门禁用）、`--patch-report`（喂给
+  `tools/apply_converge.py`，让红线门禁验**归并后**的集合而不是逐案例投影）。
+- **实测**：补丁 **69 行 → 54 条根因规则**（归并 10 组、省 15 行；26 条折叠进已有规则，
+  其中 3 条会波及属性成员；25 条为新增），闭环反验 **70 未解决 → 0**。
+
+### 2.4.6 策略级根因归因（`policy_loop.attribution`）
+
+- **标识**：`policy_loop.attribution`
+- **类型**：批处理后处理（只读，不产生补丁）
+- **目的**：`converge` 把 4,911 个唯一案例分成三类，其中 **1,580 个进 `needs_human`**
+  ——占三分之一，而它对这些案例说的话只有一句「转人工」。对着一屏"转人工"，读者学到的
+  是**工具不知道**，而不是工具知道什么。本模块把那 1,580 条逐条问出根因，
+  **判据全部是可证伪的查询**（问板子自己的 `policy.31` 反编译视图、问上游树、
+  问日志字段是否完整），不是启发式。
+- **每条案例落到一个 owner**——这才是真正交付的东西：
+
+  | owner | 含义 | 实测 |
+  |---|---|---|
+  | `DEVICE` | 板上真要补权限（**唯一**需要打补丁的一类） | **0** |
+  | `TOOL` | 工具侧该修（索引/版本对齐、语料收录） | 342 |
+  | `LOG` | 采集/日志质量（缺字段、上下文畸形） | 53 |
+  | `HUMAN` | 需要架构决策（撞 neverallow 红线） | 38 |
+  | `NONE` | 无需动作（现在已允许） | 1,147 |
+
+- **退出码即判据**：`0` 仅当残留 `UNATTRIBUTED` 为 0——**归因不完备就失败**，
+  不许悄悄漏掉。实测 1,580 → 归因 1,580、残留 **0**。
+- **主动证伪的三类根因**：板子策略里 `(boolean` 出现 **0** 次、`(constrain` **0** 次、
+  `(mlsconstrain` 只有 **1** 条且只约束 `(filesystem (relabelto))`。所以"boolean 未开"、
+  "constraint 拦下"、"MLS 级不匹配"在本平台**原理上无从发生**——把它们列进报告当
+  "检查过了"是撒谎，本模块选择**写明证伪**。
+
+> **这条结论最反直觉**：1,580 条"转人工"里，真正需要给设备补权限的是 **0** 条；
+> 1,147 条是**语料的历史噪声**（日志是上游 `.te` 注释里的旧记录，写下时规则还不存在，
+> 后来被补上了），342 条是工具侧要对齐的，53 条是日志质量问题，38 条是架构决策。
+
+### 2.4.7 评测体系（`policy_loop.eval`）
 
 - **标识**：`policy_loop.eval`
 - **类型**：开发期验证工具（**不随设备发行**）
@@ -280,7 +352,7 @@ policy_loop/
   - `agent_eval`：**留一法**回归——剔除某 denial 的修复规则使其回到"未修复"，再跑闭环，比对生成补丁；
   - `agent_llm_eval`：同批 denial 上让 LLM 自由起草补丁，量化越权率与护栏拦截率。
 
-### 2.4.6 设备端组件 `denial_check`（`device/`）
+### 2.4.8 设备端组件 `denial_check`（`device/`）
 
 - **标识**：`denial_check`，安装于 `/system/bin/denial_check`
 - **类型**：OpenHarmony 原生可执行程序（32 位 ARM / musl 动态链接）
@@ -288,9 +360,24 @@ policy_loop/
 - **功能列表 / 处理**：
   - 核心是一个**独立静态库** `libdenial_check_core`（6 个编译单元），`external_deps` 为空——即它只能链到 `libc`/`libc++`/`libm`，**不得**引入 hilog 或 libselinux。原因是它的全部意义就在于"在任何能读到输入的域下运行，并把结论写 stdout 而不是写 hilog"。这条规则是**可检查的**，不是声明。
   - 固定 API 入口：`--selftest` / `--index-info` / `--query` / `--dump-denials` / `--converge` / `--explain` / `--case`。
+  - `--explain` 另带 `--cross-layer`（显式打开跨层视图，需索引含 `@hap` 段）；不给就只有默认契约。
+  - **`--explain` 与批处理走同一份守门**：设备端只有一个 `ApplyGuards`，单条诊断与
+    批量收敛调的是它。这一点是**补出来的**——守门原本内联在聚类循环里，于是
+    `--explain`（开发者捏着一条坏日志时最先用的那条路）会推荐一条**编译得过、
+    Verify 也判成功、只是落不了地**的规则（实例：对着 `default_service` 写
+    `allow X default_service:samgr_class { get };`）。同一条记录从哪个入口问，
+    现在必须拿到同一句话。
+  - **两条路径都进自检**：`--selftest` 内嵌一份 11 条规则的小策略与 26 条 denial，
+    比对 24 组收敛向量 + 11 组解释向量（后者按**整份 JSON** 比，其中 6 组 `advisory`
+    非空）。两条路径**分别**钉住：把 `--explain` 路径上的 `ApplyGuards` 调用删掉，
+    解释向量 6/11 报错而收敛向量 24/24 全绿——收敛向量结构上看不见解释路径，所以
+    这不是同一批断言换个写法。六道守门在收敛向量里**一道不缺**。
+  - **`@hap` 进索引**：`sehap_contexts` 的 APL↔域桥表随 PLI 下发，设备端才能复现
+    跨层结论（"这是 APL 分级边界" vs "这是漏配的规则"）。改动前设备**解析了这张表
+    却把它丢掉**：把 17 行 `@hap` 全删掉，设备照样静默装载。
   - **绝不写盘**：只输出建议补丁文本。
 
-### 2.4.7 板端采集服务 `pl_collector`
+### 2.4.9 板端采集服务 `pl_collector`
 
 - **标识**：`pl_collector`，init service（`/system/etc/init/policyloop.cfg`）
 - **类型**：系统服务（OpenHarmony init 托管）
@@ -298,7 +385,7 @@ policy_loop/
 - **功能列表**：开机自启；运行在**自己的 enforcing 域** `u:r:pl_collector:s0`（无 permissive 兜底）；读 `/dev/kmsg` → 指纹去重 → 写应用沙箱内的 `live.jsonl`；响应控制台的"现读快照"请求。
 - **处理**：域策略已 persist 到磁盘，重启仍生效（实测重启后 `up 0 min` 时服务已在域内采集，开机以来本域 denial = 0 条）。
 
-### 2.4.8 板端控制台 HAP
+### 2.4.10 板端控制台 HAP
 
 - **标识**：`com.policyloop.console`
 - **类型**：OpenHarmony 应用（HAP）
@@ -378,7 +465,7 @@ real 0m4.161s
 | 接口 | 形态 | 说明 |
 |---|---|---|
 | **PLI 索引** | 文本数据文件 | 构建期导出、随镜像下发的只读策略投影（含规则、类型、属性、`@hap` 段） |
-| `denial_check` CLI | 命令行 | 固定 API：`--selftest` / `--index-info` / `--query` / `--dump-denials` / `--converge` / `--explain` / `--case` |
+| `denial_check` CLI | 命令行 | 固定 API：`--selftest` / `--index-info` / `--query` / `--dump-denials` / `--converge` / `--explain` / `--case`（`--explain` 可加 `--cross-layer`） |
 | `--case` 逐条判定 | 行式 JSON/TSV | 一行一条已拆好字段的记录进，一行一个 JSON 判定出；**只输出建议，绝不写盘** |
 | 收敛报告 | JSON | 字段与宿主引擎逐个相同，可直接 `diff` |
 | Web UI | HTTP | `python -m webui.server` 提供 `/api/analyze` 与 Agent Trace 前端 |
@@ -454,29 +541,53 @@ real 0m4.161s
 
 | # | 门禁 | 做法 | 结果 |
 |---|---|---|---|
-| 1 | `--selftest` | 内嵌固定向量，比对**由宿主 Python 生成并冻结**的 digest 表（不是拿 C++ 自己的输出当答案） | **PASS**：sha1 13 组 + converge 21 组，0 失败 |
-| 2 | `--index-info` | 两端加载同一 PLI，比计数器 | `rules=21790 types=1267 attrs=49 skipped=647`，与宿主一致 |
+| 1 | `--selftest` | 内嵌固定向量，比对**由宿主 Python 生成并冻结**的 digest 表（不是拿 C++ 自己的输出当答案） | **PASS**：sha1 13 组 + converge 21 组，0 失败（2026-10-09 扩到 converge 24 组 + explain 11 组，见 3.2.2）|
+| 2 | `--index-info` | 两端加载同一 PLI，比计数器 | `rules=21824 types=1267 attrs=49 skipped=524 hap_entries=17 hap_domains=13`，与宿主一致 |
 | 3 | 报告差分 | 同一份语料两端各出完整 JSON 报告，比 sha256 | **逐字节相同** |
 | 4 | 真机采样 | 真读本机 kmsg | `suppressed≈107` 非零，量化了 printk 丢帧 |
 | 5 | 查询差分 | **27,912 条**查询，比整个输出体的 sha256 | **2,984,884 B 逐字节相同**（一次覆盖 5 个字段） |
 
 **为什么"2.98 MB 逐字节相同"是有说服力的证据**：两端是**独立实现**（Python vs C++）喂完全相同的输入。这个项目里真实存在的语义陷阱——空 perms 是通配而非空集、xperm 命令是不透明字符串且大小写敏感、`permissive=2` 是三态不是布尔、通配规则命中时未知 perm 名要原样带上——只要错一个，哈希当场炸掉。**我们不是"相信"两端一致，是让它们互相证明。**
 
-**性能**：设备 27,912 条查询 71.25 s（2.55 ms/条，含 297 ms 索引装载）；宿主同工作量 40.85 s（1.46 ms/条）。RK3568 四核 A55 对桌面 x86 约 1.7 倍，属合理量级。
+**性能**：查询路径原为**按对象类线性扫描**，设备 27,912 条查询 71.25 s（2.55 ms/条，含 297 ms 索引装载），宿主同工作量 40.85 s（1.46 ms/条）。已改为**类型对倒排索引**（`_hit_index` / `pl_index.cpp::BuildCandidates`），并让 clone 继承父索引的 postings 使 ~10 ms 的建表**每棵索引树只做一次**（否则一次 converge 要重建 151 次）。同机 A/B、两侧各用真实实现、输出逐字节相同：**设备查询路径 34×**（0.0987 → 0.0029 ms/条），**宿主判定路径 238×**（1.800 → 0.008 ms/案）。板端 71.25 s 是旧代码在 RK3568 上的实测，按 34× 外推约 2 s —— **外推值，上板后须复测**。
 
 ### 2.8.5 板端实时闭环
 
 冷启动实测：`up 0 min` 时服务已在域内采集，**开机以来本域 denial = 0 条**（采集器自身不产生越权）。拨开关后 1~2 秒内控制台给出分类与最小补丁。
 
-### 2.8.6 工程自证
+### 2.8.6 补丁最小化与归因的实测
+
+两组数字都可由**仓库内命令**复现（见附录 A）。
+
+| 项 | 结果 |
+|---|---|
+| 补丁行数 | **69 → 54**（归并 10 组、省 15 行） |
+| 归并方式 | 26 条折叠进**已有**规则（其中 3 条会波及属性成员）、25 条为新增 |
+| 闭环反验 | 补丁前未解决 **70** → 套回后 **0**（`verify.closed = true`） |
+| 归因完备性 | 1,580 个人工案例 → 归因 **1,580**、残留 **0**（退出码 0 即判据） |
+| 真正待补权限 | owner=`DEVICE` 为 **0** |
+
+**为什么"闭环反验"比"补丁编译得过"强**：`converge` 的 Verify 只保证补丁能编译、且名字级
+匹配上"应用后该 denial 消失"；`minimize` 走的是另一条路——把归并后的规则集**套回索引副本
+重新查询**，并额外要求"套回**之前**这些案例确实没被解决"。缺了后半句，一个本来就已经
+被允许的案例会被算成"补丁的功劳"，那个数字就没有意义。
+
+**归因那一行最反直觉**：1,580 条"转人工"里真正需要给设备补权限的是 **0** 条。
+1,147 条是**语料的历史噪声**（这份语料每一行都以 `#` 开头，是上游 `.te` 注释里的旧 denial
+记录，不是一次设备采集——写下时规则还不存在，后来被补上了），342 条是工具侧要对齐的
+（索引/版本），53 条是日志质量问题，38 条是架构决策（撞 neverallow 红线）。
+
+> ⚠️ 归因里 `DEVICE_LAGS_TREE` 与 `BOARD_SYMBOL_ABSENT` 两档的**数量**随所选上游树变化
+> （换成本设备自己的 5.0.3 血脉树，符号缺失会显著变多、版本差会变少）；
+> 跨树稳定的是 `DEVICE` 那一档为 0 这个结论。
+
+### 2.8.7 工程自证
 
 | 项 | 值 |
 |---|---|
-| 单元测试 | **196 项**（`python -m unittest discover -s tests`） |
+| 单元测试 | **301 项**，0 失败（`python -m unittest discover -s tests`；`python -m pytest -q` 收 337 项） |
 | 自检 | `python -m policy_loop.selfcheck` 全绿 |
 | 第三方运行时依赖 | **0**（主机端纯标准库；设备端仅 libc/libc++/libm） |
-
-> ⚠️ **待确认**：`README.md` 中"97 个单测"与"现状（2026-09-09）"为过期信息，需同步。
 
 ---
 
@@ -510,7 +621,9 @@ real 0m4.161s
 
 为什么真实语料抓不到：真实语料里的 token 几乎都在某条规则里出现过，所以"**声明了但没被任何规则引用**"的类型只在人造小策略上出现。
 
-**教训**：差分语料证明的是"常见路径一致"，证明不了"分支覆盖"。固定向量必须按**分支**专门设计（每个 category、每个 classification、5 个 guard 各一组，外加缺 `scontext` / 缺 `tclass` / MLS 级 `tcontext` 三类畸形记录）。这也是为什么最终是"21 组固定向量 + 差分"两条腿走路。
+**教训**：差分语料证明的是"常见路径一致"，证明不了"分支覆盖"。固定向量必须按**分支**专门设计（每个 category、每个 classification、六道 guard 各一组，外加缺 `scontext` / 缺 `tclass` / MLS 级 `tcontext` 三类畸形记录）。这也是为什么最终是"固定向量 + 差分"两条腿走路。
+
+这条教训在 2026-10-09 又应验了一次，且方向相反：**差分覆盖得住，自检覆盖不住**。那时 21 组 converge 向量只钉住六道守门里的 3 道，另外 3 道（MLS 级目标 / 权限位含非权限名 / 空权限补丁）一个向量都没有；更要命的是 `--explain` 的自检向量表**生成了却没人消费**——设备自检根本不跑解释路径，而"`--explain` 也要走守门"正是功能 E 的核心。补齐后 26 行 / 24 簇 + 11 组 explain 向量；把 C++ 里 `--explain` 路径上的 `ApplyGuards` 调用删掉，explain 6/11 报错而 converge 24/24 全绿——证明新表覆盖的是旧表结构上看不见的一条路径。
 
 ### 3.2.3 init 的 `caps` 是**整套替换**，而 DAC 失败不产生 AVC
 
@@ -570,7 +683,7 @@ M3（占位符逻辑目标解析）接进流水线后，实测差集**恰好 4 �
 
 | 指标 | audit2allow | PolicyLoop |
 |---|---|---|
-| 输出规则数 | **2,833 条** | **69 条补丁** |
+| 输出规则数 | **2,833 条** | **69 条补丁**（根因归并后 **54 条**，见 2.4.5） |
 | 其中当前策略本来就允许的（no-op） | **2,687 条（94.8%）** | 0（有守门拦截） |
 | 撞 neverallow | 34 条 | 0（一律转人工） |
 | 引用不存在的类名 | 4 条 | 0（转人工） |
@@ -592,7 +705,7 @@ M3（占位符逻辑目标解析）接进流水线后，实测差集**恰好 4 �
 ```bash
 # ── 自检与单测 ────────────────────────────────────────────────
 python -m policy_loop.selfcheck          # 环境 + 模块 + 冒烟
-python -m unittest discover -s tests     # 196 项
+python -m unittest discover -s tests     # 301 项，0 失败
 
 # ── 拉取上游语料（一次性）────────────────────────────────────
 git clone --depth 1 --sparse \
@@ -619,6 +732,22 @@ python -m policy_loop.converge \
     --policy data/raw/oh-selinux/sepolicy \
     --json data/reports/converge.json --md converge.md
 
+# ── 补丁最小化 + 闭环反验（2.8.6 的数字来源）─────────────────
+# 注意：data/reports/converge-permissive.json 是刻意冻结的历史批次，
+# 不要就地重生成；一律把产物写到 /tmp。
+python -m policy_loop.minimize \
+    --log data/corpus/real_denials.txt \
+    --policy data/raw/oh-selinux/sepolicy \
+    --json /tmp/min.json --md /tmp/min.md --cil /tmp/min.cil
+# 期望：补丁 69 行 → 54 条根因规则；闭环反验 70 未解决 → 0
+
+# ── 「需人工」的根因归因（2.8.6 的数字来源）──────────────────
+python -m policy_loop.attribution \
+    --log data/corpus/real_denials.txt \
+    --policy data/raw/oh-selinux/sepolicy \
+    --json /tmp/attr.json --md /tmp/attr.md
+# 期望：1580 个人工案例 → 归因 1580、残留 0（退出码 0 即判据）
+
 # ── 设备端（L4）──────────────────────────────────────────────
 python -m policy_loop.export --policy data/raw/oh-selinux/sepolicy \
     --out build/pli/ohos-rk3568.pli                       # 导出 PLI 索引
@@ -642,10 +771,10 @@ bash install_service.sh demo       # 摆放演示起点
 
 | # | 冲突点 | 现状 | 需动作 |
 |---|---|---|---|
-| 1 | **板子 OpenHarmony 版本** | `docs/eval-L4.md` 写 **6.1 Release**；`docs/demo-realtime.md`（10-04）写 **5.0.3.135** | **二选一，全文统一**（含 README、PPT、视频字幕） |
-| 2 | 索引规则数 | 语料索引 **21,790**；板端 HAP 内置索引 **19,800**（rev `e1160d2c`） | 说明二者来源差异，或统一到一份索引 |
+| 1 | **板子 OpenHarmony 版本** | **【已解决·本次】** 实测 `const.ohos.fullname = OpenHarmony-5.0.3.135`（API 15 / kernel 5.10.208 / enforcing），板子策略 `policy.31` = 424,699 B、sha256 `20d8805c…`，上下文文件三项逐条对上 `OpenHarmony-5.0.3-Release` @ `0878c56e3`（`file_contexts` 513 / `sehap_contexts` 15 / `service_contexts` 350）。`docs/eval-L4.md` 原写「6.1 Release」**是错的**，已改为 5.0.3.135。⚠️ 注意区分：**编译树** `~/ohos_src` 是 **6.1.0.31**，板子跑的是 **5.0.3.135** | 全文（含 README、PPT、视频字幕）统一写**板子 = 5.0.3.135**；若提到编译树，单独写明 6.1.0.31 |
+| 2 | 索引规则数 | 语料索引 **21,824**（rev `a1c8e04358d2`，源 `data/raw/oh-selinux/sepolicy@29a2fc123dd1`）；板端 HAP 内置索引 **19,800**（rev `e1160d2c`）。⚠️ 旧值 **21,790 / skipped 647** 是语料树重钉到 5.0.3 之前那份索引，**`eval-converge.md` / `eval-trust.md` 里带 21,790 的实测表量于旧索引**，两数并存是版本差不是笔误 | 引用「规则索引」时写明是哪一份；带 21,790 的表不要改数 |
 | 3 | converge 分类数 | **【已解决·本次】** `data/reports/converge-full.json` 已重跑为 **1580/3261/70**，与本文档一致（连跑 3 次 sha256 相同、退出码 0、4.05–4.11 s）。⚠️ 口径提醒：`auto_repairable` **70 是案例数**，`auto_patch_lines` **69 是补丁行数**（有一条补丁覆盖 2 个案例）；`related-work-audit2allow.md` 里的「69 条补丁」用的是后者，两者不矛盾。 | — |
-| 4 | 测试数 | **【已解决·本次】** `README.md` 已由 **97** 更正为 **196**（192 passed + 4 skipped，后者需先交叉编译设备二进制） | — |
+| 4 | 测试数 | **【已解决·本次】** 实测 `python -m unittest discover -s tests` = **301 项，0 失败**（`pytest -q` 收 337）。A–F 六项功能落地后从 196 长上来；`README.md` 原写 214 亦为旧值，已一并更正 | 三处（README / 报告两处）统一写 **301**，并注明命令 |
 | 5 | 设备端版本债描述 | `device/README.md`「已知债」写 `kPliVersion = 1`，**实际代码已是 2**（`pl_index.cpp:31`）；但 `@hap` 段**确实仍未解析**（`pl_index.cpp:352` 会告警"answers that depend on them (HAP/APL mapping) are wrong"） | 更新该节：删掉已修复的 `kPliVersion` 一条，保留 `@hap` 一条并决定是否在提交前修 |
 | 6 | HAP 源码位置 | 在仓库外（`~/ohos_audit/pl_console`） | 建议镜像进 `device/` |
 | 7 | 封面/成员/分工 | 【待填】 | 补全 |

@@ -37,6 +37,25 @@ python -m policy_loop.converge \
 4. **产出**：去重比 / 各根因分布 / 去重后最小补丁集合（含覆盖案例与条数）/
    需人工清单（附原因与样例 raw）/ enforcing 就绪度一段话。
 
+### 守门只有一个实现，两个调用点（E）
+
+守门原本**内联在聚类循环里**——于是 `--explain` 这条路径（开发者捏着一条坏日志时
+最先用的那条）给出的补丁，恰恰是守门会拒绝的那个。最直观的例子：把上面第 2 条
+（`default_service` + `samgr_class`）交给 `--explain`，它会推荐一条
+`allow X default_service:samgr_class { get };` —— 这条规则**编译得过、也会被
+Verify 判成功**，只是落不了地。
+
+修法不是"在 explain 里也抄一遍守门"，是把它抽成一个函数 `apply_guards(rec, patch,
+index)`，converge 与 `--explain` **调同一份**，设备端同样只有一个 `ApplyGuards`。
+被钉住的不变量是：**同一条记录从哪个入口问，都必须拿到同一句话**——
+批处理报告把它放进 `clusters[].why`，单条诊断把它放进 `advisory`，两者逐字符相等
+（`tests/test_converge.py::TestGuardsAreOneFunctionTwoCallers`，6 项）。顺序也被钉住：
+一个目标既是 MLS 级别又是未知 token 时，先报的那条决定措辞。
+
+⚠️ 顺带说明一处**刻意的不一致**：`--explain` 对**任何**记录都跑守门，converge
+只对会被自动应用的记录跑。这不是漏洞——批处理里已经升级为人工的案例不会再被改写，
+守门对它没有意义；而单条诊断无论如何都会把补丁给人看，所以必须跑。
+
 ## 补丁守门（为什么自动项可信）
 
 闭环自身的 Review/Verify 只做「应用后能消除 denial、无回归」的名字级匹配，
@@ -77,7 +96,7 @@ python -m policy_loop.converge \
 | 数字 `service=` + `get` | **不解析** | 远端 SA 需要外部 samgr id→name 注册表 |
 | 候选类型未被策略声明 | **不解析** | 绝不臆造 target |
 
-**关键设计：解析结果只喂给那三次查询，不喂给补丁文本，也不喂给五道守门。**
+**关键设计：解析结果只喂给那三次查询，不喂给补丁文本，也不喂给六道守门。**
 
 这不是保守，是两条硬约束：
 
@@ -185,9 +204,15 @@ scontext=u:r:normal_hap  →  APL=normal  →  全部 normal 应用共用这个�
 
 它**不改变**任何判定。`classification`/`patch`/review/verify 与没有 sehap 表时逐字节
 相同（`TestCrossLayerDoesNotChangeVerdicts` 拿同一份语料跑两遍做差钉住）。原因是硬
-约束：这些字段要与设备端 `Converge()` 逐字节对齐，而设备端没有 `@hap` 表可复算跨层
-结论——把它升格成"第七道守门"是一次设备侧改动，按此记录。同理 `--json` 是设备契约，
-跨层键**默认不出现**，要 `--cross-layer` 显式打开（`--md` 隐含打开）；人读输出则总是给。
+约束：这些字段要与设备端 `Converge()` 逐字节对齐，而跨层结论一旦影响分类就会把
+两边拆开。同理 `--json` 是设备契约，跨层键**默认不出现**，要 `--cross-layer` 显式打开
+（`--md` 隐含打开）；人读输出则总是给。
+
+> **E 之后的修正**：上面原写"设备端没有 `@hap` 表可复算跨层结论"。**表已经有了**——
+> `@hap` 进了 PLI，设备端 `--explain --cross-layer` 与宿主逐字段相同（4911 案差分，
+> 见 `eval-L4.md`）。所以"搬到设备上"这件事已经做完；**仍然没做**的是把它升格成
+> 第七道守门（即让跨层结论改变 `classification`）——那会同时改动 converge 的分类，
+> 属于门禁 3/5 的字节口径变更，不是加法。
 
 ### 实测（真实语料 5161 条 / 4911 唯一）
 

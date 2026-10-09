@@ -35,15 +35,18 @@ hdc shell "denial_check --selftest"
 **期望输出**
 ```
 selftest: sha1 13 vectors, 0 failure(s)
-selftest: converge 21 vectors, 0 failure(s)
+selftest: converge 24 vectors, 0 failure(s)
+selftest: explain 11 vectors, 0 failure(s)
 selftest: neverallow 2 probes, 0 failure(s)
 selftest: PASS
 ```
 
 **台词**
-> 先证明这个二进制在真机上**能跑、且算得对**。它自带一份小策略和 23 条 denial，
-> 21 组收敛向量 + 2 组 neverallow 探针，全部与**宿主参考实现**比对
+> 先证明这个二进制在真机上**能跑、且算得对**。它自带一份小策略和 26 条 denial，
+> 24 组收敛向量 + 11 组解释向量 + 2 组 neverallow 探针，全部与**宿主参考实现**比对
 > ——向量不是拿它自己的输出当期望值，那样无论算成什么样都会通过。
+> 收敛向量钉住六道守门**一道不缺**，解释向量按整份 JSON 比（含只有解释路径才有的
+> `advisory` 字段），所以"移植时漏抄一处守门"这种 bug 跑不过这一条命令。
 
 ---
 
