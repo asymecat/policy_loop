@@ -85,6 +85,14 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
 
+if str(REPO) not in sys.path:           # tools/ 不是包根，库在仓库根下
+    sys.path.insert(0, str(REPO))
+from policy_loop.policy.cil import (   # noqa: E402
+    Board,
+    xperm_covered as _xperm_covered,
+    xperm_intervals as _xperm_intervals,
+)
+
 DEFAULT_BOARD_FP = Path(os.environ.get("BOARD_FP", "/home/szf/board-5.0.3-fingerprint"))
 DEFAULT_OHOS_SRC = Path(os.environ.get("OHOS_SRC", "/home/szf/ohos_src"))
 POLICYVERS = 31
@@ -155,108 +163,11 @@ _NA_ATTR_PREFIX = "pl_na_set"
 #   ((0xf50c (range 0xf546 0xf547)))   多个混排
 # 板子实测 522/714 是"单个"、其余是各种区间混排。要判"某值是否已被覆盖"
 # 就必须把区间摊平，光做字符串比较会漏掉藏在 range 里的值。
-_RE_XPERM_RANGE = re.compile(r"\(range (0x[0-9a-fA-F]+) (0x[0-9a-fA-F]+)\)")
-_RE_XPERM_HEX = re.compile(r"0x[0-9a-fA-F]+")
-
-
-def _xperm_intervals(expr: str) -> list[tuple[int, int]]:
-    """把 CIL 的 xperm 表达式文本摊平成 [(lo, hi), ...] 区间。"""
-    ivals = [(int(a, 16), int(b, 16)) for a, b in _RE_XPERM_RANGE.findall(expr)]
-    if "(all)" in expr:
-        ivals.append((0, 0xFFFFFFFF))
-    bare = _RE_XPERM_RANGE.sub(" ", expr)          # 先摘掉 range，免得端点被当单值重复计入
-    ivals += [(int(a, 16), int(a, 16)) for a in _RE_XPERM_HEX.findall(bare)]
-    return ivals
-
-
-def _xperm_covered(intervals: list[tuple[int, int]], value: int) -> bool:
-    return any(lo <= value <= hi for lo, hi in intervals)
 
 
 # --------------------------------------------------------------------------
 # 板子策略
 # --------------------------------------------------------------------------
-class Board:
-    """板子 CIL 的可查询视图：有哪些符号、已允许了什么。"""
-
-    def __init__(self, text: str, path: Path):
-        self.path = path
-        self.classes = set(_RE_CLASS.findall(text))
-        self.types = set(_RE_TYPE.findall(text))
-        self.attrs = set(_RE_ATTR.findall(text))
-        self.symbols = self.types | self.attrs
-
-        # 类 → 该类的完整权限集（自有 ∪ 经 classcommon 继承的 common）
-        common = {n: set(p.split()) for n, p in _RE_COMMON.findall(text)}
-        binding = dict(_RE_CLASSCOMMON.findall(text))
-        self.class_perms = {
-            c: set(perms.split()) | common.get(binding.get(c), set())
-            for c, perms in re.findall(r"^\(class (\S+) \(([^)]*)\)\)", text, re.M)
-        }
-
-        # 属性闭包：n → n 所属的全部属性（含传递）
-        members: dict[str, set[str]] = collections.defaultdict(set)
-        for attr, body in _RE_ATTRSET.findall(text):
-            members[attr].update(body.split())
-
-        self._closure_cache: dict[str, frozenset[str]] = {}
-
-        def closure(n: str) -> frozenset[str]:
-            got = self._closure_cache.get(n)
-            if got is not None:
-                return got
-            seen: set[str] = set()
-            stack = [n]
-            while stack:
-                cur = stack.pop()
-                if cur in seen:
-                    continue
-                seen.add(cur)
-                # 反向：谁把 cur 当成员，谁就是 cur 所属的属性
-                for attr, mem in members.items():
-                    if cur in mem:
-                        stack.append(attr)
-            got = frozenset(seen)
-            self._closure_cache[n] = got
-            return got
-
-        self.closure = closure
-
-        # 已有授权：(src, tgt, cls) → 权限集合
-        self.allows: dict[tuple[str, str, str], set[str]] = collections.defaultdict(set)
-        for src, tgt, cls, perms in _RE_ALLOW.findall(text):
-            self.allows[(src, tgt, cls)].update(perms.split())
-
-        # 已有 xperm：(src, tgt, cls) → 覆盖到的 ioctl 号区间
-        # ★ 必须按 `(allowx ...)` 找。按 `allowxperm` 找会得 0 条 ——
-        #   `allowxperm` 是 .te/conf 的写法，CIL 里根本不存在这个词。
-        #   （板子实测有 714 条 xperm，全写成 allowx。这个坑骗过一次。）
-        self.xperms: dict[tuple[str, str, str], list[tuple[int, int]]] = collections.defaultdict(list)
-        for src, tgt, cls, expr in re.findall(
-            r"^\(allowx (\S+) (\S+) \(ioctl (\S+) \((.*)\)\)\)\s*$", text, re.M
-        ):
-            self.xperms[(src, tgt, cls)].extend(_xperm_intervals(expr))
-
-    def satisfied(self, src: str, tgt: str, cls: str, perms: set[str]) -> bool:
-        """板上是否已允许这组权限（含 src/tgt 的属性闭包展开）。"""
-        for s in self.closure(src):
-            for t in self.closure(tgt):
-                if perms <= self.allows.get((s, t, cls), set()):
-                    return True
-        return False
-
-    def xperm_satisfied(self, src: str, tgt: str, cls: str, xperms: set[str]) -> bool:
-        """板上已覆盖这组 ioctl 号吗（区间也算覆盖）。"""
-        for s in self.closure(src):
-            for t in self.closure(tgt):
-                ivals = self.xperms.get((s, t, cls))
-                if not ivals:
-                    continue
-                if all(_xperm_covered(ivals, int(x, 16)) for x in xperms):
-                    return True
-        return False
-
-
 # --------------------------------------------------------------------------
 # 五道门
 # --------------------------------------------------------------------------
