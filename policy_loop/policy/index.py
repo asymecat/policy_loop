@@ -170,6 +170,13 @@ class PolicyIndex:
         c.skipped_count = self.skipped_count
         c._sources = list(self._sources)
         c.sehap = self.sehap
+        # Build the postings *before* forking, then hand the same read-only
+        # object to the clone. The clone's `rules` is the parent's prefix, so
+        # the postings describe it exactly; the patch the clone is about to
+        # append lands past `base` and is handled by the tail scan in
+        # `_rule_hits`. Without this line every clone would rebuild a 21k-rule
+        # index (~12 ms) for a one-rule question.
+        c._hit = self._hit_index()
         return c
 
     def load_text(self, text: str, source: str = "<text>") -> "PolicyIndex":
@@ -388,15 +395,26 @@ class PolicyIndex:
     def _rule_hits(self, kind: str, src: str, tgt: str, cls: str) -> List[Rule]:
         a_src = self._attrs(src)
         a_tgt = self._attrs(tgt)
+        base, index = self._hit_index()
+        cand = (self._candidates(index, kind, "s", cls, src, a_src)
+                & self._candidates(index, kind, "t", cls, tgt, a_tgt))
+        rules = self.rules
         out = []
-        for r in self._rules_for_class(cls):
-            if r.kind != kind:
+        for i in sorted(cand):
+            if i >= base:
                 continue
-            if not self._matches(r.src, r.src_neg, r.src_star, src, a_src):
-                continue
-            if not self._matches(r.tgt, r.tgt_neg, r.tgt_star, tgt, a_tgt):
-                continue
-            out.append(r)
+            r = rules[i]
+            if self._matches(r.src, r.src_neg, r.src_star, src, a_src) \
+                    and self._matches(r.tgt, r.tgt_neg, r.tgt_star, tgt, a_tgt):
+                out.append(r)
+        # Rules appended after the index was built (a patch being tried out)
+        # are not in the postings; they sit past every candidate index, so
+        # appending them keeps the by-rule-order contract of this method.
+        for r in rules[base:]:
+            if r.kind == kind and r.cls == cls \
+                    and self._matches(r.src, r.src_neg, r.src_star, src, a_src) \
+                    and self._matches(r.tgt, r.tgt_neg, r.tgt_star, tgt, a_tgt):
+                out.append(r)
         return out
 
     def _rules_for_class(self, cls: str) -> list:
@@ -410,6 +428,75 @@ class PolicyIndex:
             self._class_cache = cache
             self._cache_len = len(self.rules)
         return cache.get(cls, ())
+
+    # ---- inverted index -----------------------------------------------------
+    #
+    # What this replaces, and why it was worth replacing: the query path used to
+    # walk every rule of the object class. On the rk3568 sepolicy tree that is
+    # 7,400 rules for `file` and 3,447 for `dir`, and `file` alone carries 1,588
+    # of the corpus's 4,784 unique cases -- 18.4M rule visits for one pass over
+    # the corpus, each visit two `_matches` calls of set intersections.
+    #
+    # The replacement is exact, not a heuristic. `_matches` accepts a rule when
+    # `star`, or when the query symbol or one of its ancestor attributes is in
+    # the rule's positive set -- and rejects it when either is in the negative
+    # set. So the rules that *could* pass are exactly those carrying one of the
+    # query's tokens on that side (or the star), and that set is what gets
+    # indexed. Negatives are still applied by `_matches`, so the index only ever
+    # has to be a **superset** of the true hits: an extra candidate costs one
+    # `_matches` call, a missing one would silently drop a rule and change an
+    # answer. Everything below is arranged so the index can only be too big.
+    #
+    # Measured on the real corpus: candidates after intersecting both sides are
+    # median 1, p90 3, max 11, against 7,400 scanned before.
+
+    def _hit_index(self) -> tuple:
+        """Return ``(base, index)``: the postings, and how many rules they cover.
+
+        The pair is the whole trick that makes this compatible with the repair
+        loop. A clone gets its parent's postings and a ``base`` of the parent's
+        current length, so the ~12 ms build happens **once per index tree**
+        instead of once per clone -- and a patch appended to a clone lands past
+        ``base``, where :meth:`_rule_hits` picks it up with a linear scan of the
+        (one or two rule) tail. Sharing is safe because the postings are never
+        mutated after the build: the object handed to every clone is read-only
+        by construction. Rebuilding on append instead would have cost the build
+        once per patch attempt -- 151 times in one converge run.
+        """
+        got = self.__dict__.get("_hit")
+        if got is not None:
+            return got
+        post: dict = {}
+        star: dict = {}
+        for i, r in enumerate(self.rules):
+            for side, pos, st in (("s", r.src, r.src_star),
+                                  ("t", r.tgt, r.tgt_star)):
+                key = (r.kind, side, r.cls)
+                if st:
+                    star.setdefault(key, []).append(i)
+                for tok in pos:
+                    post.setdefault(key, {}).setdefault(tok, []).append(i)
+        got = (len(self.rules), (post, star))
+        self._hit = got
+        return got
+
+    @staticmethod
+    def _candidates(index, kind: str, side: str, cls: str, ident: str,
+                    attrs: Set[str]) -> set:
+        """Rule indices that could match *ident* on one side. A superset."""
+        post, star = index
+        key = (kind, side, cls)
+        out = set(star.get(key, ()))
+        d = post.get(key)
+        if d is not None:
+            for tok in attrs:
+                lst = d.get(tok)
+                if lst:
+                    out.update(lst)
+            lst = d.get(ident)
+            if lst:
+                out.update(lst)
+        return out
 
     def allow_rules(self, src: str, tgt: str, cls: str) -> List[Rule]:
         """allow rules granting (src -> tgt:cls) access at all."""
@@ -504,21 +591,46 @@ class PolicyIndex:
         return out
 
     def ioctl_whitelist(self, src: str, tgt: str, cls: str) -> tuple:
-        """Return (xperm_allowed_cmds, invert_rules) for allowxperm on ioctl."""
+        """Return (xperm_allowed_cmds, invert_rules) for allowxperm on ioctl.
+
+        Same two-sided candidate narrowing as :meth:`_rule_hits`; the difference
+        is that the class filter alone used to leave all 21,824 rules to walk
+        (only 515 of them are ``allowxperm``), and this runs once per ioctl
+        denial. ``xperm_perm == "ioctl"`` is checked *after* the candidate
+        narrowing, which is sound for the same superset reason spelled out on
+        ``_hit_index``: a rule dropped here for the wrong ``xperm_perm`` would
+        be a rule dropped forever.
+        """
+        a_src, a_tgt = self._attrs(src), self._attrs(tgt)
         allowed: Set[str] = set()
         inverts: List[Rule] = []
-        for r in self.rules:
-            if r.kind == "allowxperm" and r.cls == cls and r.xperm_perm == "ioctl":
-                a_src, a_tgt = self._attrs(src), self._attrs(tgt)
-                if (self._matches(r.src, r.src_neg, r.src_star, src, a_src)
-                        and self._matches(r.tgt, r.tgt_neg, r.tgt_star, tgt, a_tgt)):
-                    allowed |= r.xperms
-            elif r.kind == "neverallowxperm" and r.cls == cls and r.xperm_perm == "ioctl":
-                a_src, a_tgt = self._attrs(src), self._attrs(tgt)
-                if (self._matches(r.src, r.src_neg, r.src_star, src, a_src)
-                        and self._matches(r.tgt, r.tgt_neg, r.tgt_star, tgt, a_tgt)):
-                    inverts.append(r)
+        for r in self._xperm_hits(cls, src, tgt, a_src, a_tgt):
+            if r.xperm_perm != "ioctl":
+                continue
+            if r.kind == "allowxperm":
+                allowed |= r.xperms
+            else:
+                inverts.append(r)
         return frozenset(allowed), inverts
+
+    def _xperm_hits(self, cls: str, src: str, tgt: str, a_src: Set[str],
+                    a_tgt: Set[str]) -> List[Rule]:
+        """``allowxperm``/``neverallowxperm`` rules reaching (src, tgt, cls)."""
+        base, index = self._hit_index()
+        cand: set = set()
+        for kind in ("allowxperm", "neverallowxperm"):
+            cand |= (self._candidates(index, kind, "s", cls, src, a_src)
+                     & self._candidates(index, kind, "t", cls, tgt, a_tgt))
+        # Ascending rule index, tail last: the caller returns the *first*
+        # matching neverallowxperm rule, so this order is observable output.
+        out = [self.rules[i] for i in sorted(cand) if i < base]
+        out += [r for r in self.rules[base:] if r.is_xperm and r.cls == cls]
+        return [r for r in out if self._hits(r, src, tgt, a_src, a_tgt)]
+
+    def _hits(self, r: Rule, src: str, tgt: str, a_src: Set[str],
+              a_tgt: Set[str]) -> bool:
+        return (self._matches(r.src, r.src_neg, r.src_star, src, a_src)
+                and self._matches(r.tgt, r.tgt_neg, r.tgt_star, tgt, a_tgt))
 
     def ioctl_allowed(self, src: str, tgt: str, cls: str, cmd: str) -> tuple:
         """Best-effort ioctl verdict given a denial's ioctlcmd.
