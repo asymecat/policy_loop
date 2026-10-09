@@ -2,23 +2,23 @@
   "color": [
     {
       "name": "start_window_background",
-      "value": "#0B0F14"
+      "value": "#0A0E13"
     },
     {
       "name": "bg",
-      "value": "#0B0F14"
+      "value": "#0A0E13"
     },
     {
       "name": "surface",
-      "value": "#161C25"
+      "value": "#171F2A"
     },
     {
       "name": "surface_hi",
-      "value": "#1E2531"
+      "value": "#212B38"
     },
     {
       "name": "line",
-      "value": "#252D3A"
+      "value": "#3A465B"
     },
     {
       "name": "text",
@@ -30,11 +30,11 @@
     },
     {
       "name": "text_3",
-      "value": "#748092"
+      "value": "#838E9E"
     },
     {
       "name": "text_4",
-      "value": "#505B6B"
+      "value": "#6F7E93"
     },
     {
       "name": "accent",
@@ -71,6 +71,46 @@
     {
       "name": "pop_line",
       "value": "#2C6B41"
+    },
+    {
+      "name": "cls_escalation",
+      "value": "#F97D7D"
+    },
+    {
+      "name": "cls_escalation_soft",
+      "value": "#6B0505"
+    },
+    {
+      "name": "cls_domain",
+      "value": "#D69615"
+    },
+    {
+      "name": "cls_domain_soft",
+      "value": "#432F07"
+    },
+    {
+      "name": "cls_missing",
+      "value": "#79A2F2"
+    },
+    {
+      "name": "cls_missing_soft",
+      "value": "#0B2E72"
+    },
+    {
+      "name": "cls_xperm",
+      "value": "#31AEDF"
+    },
+    {
+      "name": "cls_xperm_soft",
+      "value": "#0B3747"
+    },
+    {
+      "name": "cls_noise",
+      "value": "#9BA3B0"
+    },
+    {
+      "name": "cls_noise_soft",
+      "value": "#2E333A"
     }
   ]
 }

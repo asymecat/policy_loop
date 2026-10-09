@@ -320,7 +320,7 @@ cmd_demo() {
          "snapshot.req=[$(sh_ "cat $APPDIR/snapshot.req 2>/dev/null" | tr -d ' \r')]  " \
          "采集器 pid=$(sh_ "pidof $SVC" | tr -d ' \r')"
     echo
-    echo "   ★ 现在放下 hdc，用手指点屏幕右上角的开关（720×1280 下约 (632,235)）。"
+    echo "   ★ 现在放下 hdc，用手指点屏幕右上角的开关（720×1280 下约 (635,214)）。"
     echo "     预期 2 秒左右出横幅：pl_collector → data_local:dir / MISSING_RULE / search ×1。"
     echo "   ★ 窗口开着期间**不要再敲 hdc** —— 那些命令跑在 su 域，会被如实记成「工具造成」。"
 }

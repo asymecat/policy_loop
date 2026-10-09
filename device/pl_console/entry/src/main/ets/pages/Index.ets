@@ -65,15 +65,64 @@ const SWITCH_FILE: string = 'guard.on';
 const REQ_FILE: string = 'snapshot.req';
 const SNAP_FILE: string = 'snapshot.jsonl';
 
+/**
+ * 分类的严重度序。**排序用它，不按数量** —— 撞红线的哪怕只有 1 条，
+ * 也必须排在 90 条噪声前面，否则汇总条会把最该被看见的东西埋掉。
+ * 名字来自引擎 pl_converge.cpp 的 classification（NAPI 层以 `cls` 字段透出）。
+ */
+const CLASS_ORDER: string[] = [
+  'POTENTIAL_ESCALATION',
+  'DOMAIN_OR_LABEL_MISMATCH',
+  'MISSING_RULE',
+  'XPERM_GAP',
+  'NOISE_OR_ALREADY_FIXED'
+];
+
 /** 一条判定结果，字段与原生侧 analyze 的 JSON 一一对应。 */
 interface Finding {
   origin: string;   // board | tool —— 板子自带 vs 我们的工具造成的
   src: string;      // 源域，如 render_service
   tgt: string;      // 目标，如 dev_mali:chr_file
   op: string;       // 操作，如 ioctl 0x8014   ×72
-  cls: string;      // 分类，如 XPERM_GAP
+  cls: string;      // 分类，如 XPERM_GAP（引擎字段名是 classification）
   fix: string;      // 最小修复规则
   verdict: string;  // 评审/验证结论
+}
+
+/** 分类 + 条数，给汇总条的分布用。 */
+interface ClassCount {
+  name: string;
+  count: number;
+}
+
+/**
+ * 下面三个是给 @Builder 用的**单对象入参**。
+ *
+ * 这不是风格问题，是 ArkUI 的一条硬规则：@Builder 收多个原始类型参数是
+ * **按值传递**，父组件状态变了 Builder 内部的 UI **不会刷新**；只有收单个对象
+ * 才是按引用传递、才会跟着刷新。
+ *
+ * 真机上撞到过：横幅的标题（直接写的 Text）已经换成新案例了，它下面那行
+ * "最小修复"（走 fixLine）还停在上一轮那条案例的规则上 —— 同一张卡里两个
+ * 案例的内容拼在一起；汇总条更露骨，"4 个唯一案例"下面是"板子自带 0 /
+ * 工具造成 1"，0+1≠4。所以这几个 Builder 一律改成单对象入参。
+ * 反证：findingCard 本来收的就是单个 Finding，它一直是对的。
+ */
+interface FixSpec {
+  text: string;
+  lines: number;
+}
+
+interface ChipSpec {
+  label: string;
+  fg: Resource;
+  bg: Resource;
+}
+
+interface TileSpec {
+  label: string;
+  n: number;
+  tone: Resource;
 }
 
 interface IndexInfo {
@@ -91,6 +140,12 @@ interface AnalyzeResp {
   unique: number;
   board: number;
   tool: number;
+  /**
+   * 引擎按**全量**记录统计的分类分布（不受 MAX_FINDINGS 截断影响）。
+   * 原生侧一直在算它，界面此前从没消费过 —— 见 napi_init.cpp 的
+   * `by_classification`。
+   */
+  by_classification: Record<string, number>;
   findings: Finding[];
 }
 
@@ -129,6 +184,26 @@ function originLabel(origin: string): string {
   return origin === 'board' ? '板子自带' : '工具造成';
 }
 
+/** 分类在严重度序里的位置；未知分类排最后（它的颜色也走"噪声"那档）。 */
+function clsRank(cls: string): number {
+  const i = CLASS_ORDER.indexOf(cls);
+  return i < 0 ? CLASS_ORDER.length : i;
+}
+
+/** 把引擎给的分类分布摊成有序数组。 */
+function classRowsOf(rec: Record<string, number>): ClassCount[] {
+  const out: ClassCount[] = [];
+  if (rec === undefined || rec === null) {
+    return out;
+  }
+  for (const k of Object.keys(rec)) {
+    const row: ClassCount = { name: k, count: rec[k] };
+    out.push(row);
+  }
+  out.sort((a: ClassCount, b: ClassCount) => clsRank(a.name) - clsRank(b.name));
+  return out;
+}
+
 /** 等一小会儿。现读快照要轮询采集器写回的完成信号，而 ArkTS 里没有同步睡眠。 */
 function sleep(ms: number): Promise<void> {
   return new Promise<void>((resolve: () => void) => {
@@ -144,7 +219,6 @@ struct Index {
   @State guardOn: boolean = false;
   @State status: string = '正在加载索引…';
   @State indexName: string = '-';
-  @State summary: string = '';
   @State findings: Finding[] = [];
   @State err: string = '';
   @State busy: boolean = false;
@@ -156,6 +230,20 @@ struct Index {
   /** 实时会话状态。 */
   @State liveLines: number = 0;     // 采集器一共写了多少行（去重后）
   @State newCount: number = 0;      // 本次会话新发现的案例数
+
+  /**
+   * 汇总条的数字。分开存而不是拼一句 summary 字符串：
+   * 界面上它现在是三块（总数 / 来源对比 / 分类分布），拼成字符串就拆不开了。
+   * 口径与引擎一致 —— **全量**统计，不受列表 40 条上限影响。
+   */
+  @State rTotal: number = 0;
+  @State rUnique: number = 0;
+  @State rBoard: number = 0;
+  @State rTool: number = 0;
+  @State rClasses: ClassCount[] = [];
+  /** 出过一次结果没有。它决定汇总条显不显示（不能看 findings.length：0 案例也是结果）。 */
+  @State showStats: boolean = false;
+
   /**
    * 「载入当前快照 / 回放预录样本」这条动线自己的状态。
    *
@@ -166,6 +254,15 @@ struct Index {
   @State snapMode: boolean = false;
   @State snapMsg: string = '';
   @State snapMsgBad: boolean = false;
+  /**
+   * 这次冻结是不是"回放预录样本"造成的。
+   *
+   * 只为了一件事：预录样本那条**常驻标注**在回放结果已经写明同样的信息时
+   * 要收起来，否则屏幕上会出现两行几乎同义的话（一行绿、一行灰），
+   * 看起来像 bug —— 真机上就是这么显示的。
+   */
+  @State snapIsReplay: boolean = false;
+
   /** 最新一条的弹窗内容——应用内那份，通知被系统关掉时它是唯一可见的。 */
   @State popTitle: string = '';
   @State popBody: string = '';
@@ -370,8 +467,7 @@ struct Index {
       }
 
       this.findings = list;
-      this.summary = resp.total + ' 条 denial → ' + resp.unique + ' 个唯一案例' +
-        '（板子自带 ' + resp.board + ' / 工具造成 ' + resp.tool + '）';
+      this.applyStats(resp);
       this.err = '';
       // 两个数测的不是一回事，标签必须分开写，否则看起来像自相矛盾：
       //   liveLines 是**当前这个窗口**的文件长度（每次开窗都会截断重建）
@@ -442,7 +538,7 @@ struct Index {
     this.guardOn = on;
     this.seen = new Set();
     this.findings = [];
-    this.summary = '';
+    this.clearStats();
     this.popTitle = '';
     this.popBody = '';
     this.popFix = '';
@@ -454,6 +550,7 @@ struct Index {
     this.snapMode = false;
     this.snapMsg = '';
     this.snapMsgBad = false;
+    this.snapIsReplay = false;
 
     try {
       this.writeSwitch(on);
@@ -538,8 +635,8 @@ struct Index {
         // 采集器读成功了但一条 denial 都没有 —— 板子此刻是干净的。这是真话，
         // 不是失败，所以给一条不同于"没回应"的文案。
         this.findings = [];
-        this.summary = '';
-        this.freezeSnapshot('当前快照（现读）· 板子此刻没有积压的 denial');
+        this.clearStats();
+        this.freezeSnapshot('当前快照（现读）· 板子此刻没有积压的 denial', false);
         return;
       }
       const resp = await this.analyzeInto(raws);
@@ -549,7 +646,7 @@ struct Index {
         return;
       }
       this.freezeSnapshot('当前快照（现读）· ' + resp.total + ' 条 → ' + resp.unique +
-        ' 个案例 —— 拨一次开关恢复实时');
+        ' 个案例 —— 拨一次开关恢复实时', false);
     } catch (e) {
       this.snapMsg = '读快照异常：' + (e as Error).message;
       this.snapMsgBad = true;
@@ -573,7 +670,7 @@ struct Index {
         return;
       }
       this.freezeSnapshot('预录样本（9/21 采 · 非实时）· ' + resp.total + ' 条 → ' +
-        resp.unique + ' 个案例 —— 拨一次开关恢复实时');
+        resp.unique + ' 个案例 —— 拨一次开关恢复实时', true);
     } catch (e) {
       this.snapMsg = '分析异常：' + (e as Error).message;
       this.snapMsgBad = true;
@@ -585,17 +682,18 @@ struct Index {
   /**
    * 把视图冻在这一次的结果上，并写下按钮下面那行提示。
    *
-   * 必须冻结：tick() 每秒钟都在用**实时窗口**覆盖 findings / summary / status，
+   * 必须冻结：tick() 每秒钟都在用**实时窗口**覆盖 findings / status，
    * 不冻的话这一屏活不过 1 秒 —— 按了按钮、内容闪一下就没了，看起来像没生效。
    * 解冻的唯一入口是拨开关（applyToggle），那本来也是"重新开始看"的动作。
    *
    * 提示写进 snapMsg 而不是 err：err 会被 tick() 每成功一轮清空，写在那里
    * 等于只显示 1 秒。
    */
-  private freezeSnapshot(msg: string): void {
+  private freezeSnapshot(msg: string, fromReplay: boolean): void {
     this.snapMode = true;
     this.snapMsg = msg;
     this.snapMsgBad = false;
+    this.snapIsReplay = fromReplay;
     this.status = '已暂停实时刷新 · 显示的是快照';
   }
 
@@ -608,6 +706,25 @@ struct Index {
       }
     }
     return out;
+  }
+
+  /** 把一次分析的全量数字铺到汇总条上。 */
+  private applyStats(resp: AnalyzeResp): void {
+    this.rTotal = resp.total;
+    this.rUnique = resp.unique;
+    this.rBoard = resp.board;
+    this.rTool = resp.tool;
+    this.rClasses = classRowsOf(resp.by_classification);
+    this.showStats = true;
+  }
+
+  private clearStats(): void {
+    this.rTotal = 0;
+    this.rUnique = 0;
+    this.rBoard = 0;
+    this.rTool = 0;
+    this.rClasses = [];
+    this.showStats = false;
   }
 
   /**
@@ -630,8 +747,7 @@ struct Index {
       this.seen.add(caseKey(f));
     }
     this.findings = list;
-    this.summary = resp.total + ' 条 denial → ' + resp.unique + ' 个唯一案例' +
-      '（板子自带 ' + resp.board + ' / 工具造成 ' + resp.tool + '）';
+    this.applyStats(resp);
     this.err = '';
     return resp;
   }
@@ -642,6 +758,9 @@ struct Index {
   // 原先这里散着 70 多处硬编码十六进制，改一处要全局找；更要紧的是
   // start_window_background 那份**也是**同一个文件 —— 它当时是 #FFFFFF，
   // 于是深色界面启动时要先闪一帧白，见 color.json 里的值。
+  //
+  // 2026-10-09 这一轮：所有色值按 WCAG 对比度**反算**过，不再是肉眼挑的。
+  // 原 text_4 只有 2.41:1（10px 的字，等于没写），text_3 4.14:1 也在 4.5 线下。
 
   /**
    * 状态语义色。顶上那盏灯、开关卡片里的小点、卡片描边三处必须同色，
@@ -675,9 +794,52 @@ struct Index {
    * 要么是 `需人工介入`，要么是 `<评审结论> · <验证结论>`。前者原先和后者一样
    * 渲染成绿色 —— 于是"这条我不敢自动修"在屏幕上看起来跟"已通过"一模一样。
    * 这里按字面判一次；只影响颜色，不动引擎给的任何字段。
+   *
+   * 注意**文字保持引擎原值**（APPROVE · SUCCESS 就是英文），不在这里译中文：
+   * 报告、日志、屏幕三处要能逐字对上，正文口径不能被 UI 改写。
    */
   private verdictTone(v: string): Resource {
     return v.indexOf('需人工') >= 0 ? $r('app.color.warn') : $r('app.color.ok');
+  }
+
+  /**
+   * 分类 → 前景色 / 软底色。
+   *
+   * 原先是"分类 chip 一律琥珀"，于是撞红线的 POTENTIAL_ESCALATION 和
+   * 纯噪声 NOISE_OR_ALREADY_FIXED 在屏幕上一模一样 —— 而这两个恰恰是
+   * 演示里最需要被分开的两类（一个"禁止自动放权"，一个"不用管"）。
+   * 五个分类各给一个色相，严重度越高越暖；未知分类兜到"噪声"那档。
+   */
+  private clsTone(cls: string): Resource {
+    if (cls === 'POTENTIAL_ESCALATION') {
+      return $r('app.color.cls_escalation');
+    }
+    if (cls === 'DOMAIN_OR_LABEL_MISMATCH') {
+      return $r('app.color.cls_domain');
+    }
+    if (cls === 'MISSING_RULE') {
+      return $r('app.color.cls_missing');
+    }
+    if (cls === 'XPERM_GAP') {
+      return $r('app.color.cls_xperm');
+    }
+    return $r('app.color.cls_noise');
+  }
+
+  private clsSoft(cls: string): Resource {
+    if (cls === 'POTENTIAL_ESCALATION') {
+      return $r('app.color.cls_escalation_soft');
+    }
+    if (cls === 'DOMAIN_OR_LABEL_MISMATCH') {
+      return $r('app.color.cls_domain_soft');
+    }
+    if (cls === 'MISSING_RULE') {
+      return $r('app.color.cls_missing_soft');
+    }
+    if (cls === 'XPERM_GAP') {
+      return $r('app.color.cls_xperm_soft');
+    }
+    return $r('app.color.cls_noise_soft');
   }
 
   /** 品牌标：一个圆角方块 + 两个字母，没有图片资源也能立住视觉重心。 */
@@ -699,14 +861,14 @@ struct Index {
     .alignItems(HorizontalAlign.Center)
   }
 
-  /** 小圆角标签。类型名、"新 denial" 都用它，保证同一套圆角与内边距。 */
+  /** 小圆角标签。分类名、"新 denial" 都用它，保证同一套圆角与内边距。 */
   @Builder
-  chip(label: string, fg: Resource, bg: Resource) {
-    Text(label)
+  chip(spec: ChipSpec) {
+    Text(spec.label)
       .fontSize(10)
       .fontWeight(FontWeight.Medium)
-      .fontColor(fg)
-      .backgroundColor(bg)
+      .fontColor(spec.fg)
+      .backgroundColor(spec.bg)
       .padding({ left: 7, right: 7, top: 3, bottom: 3 })
       .borderRadius(6)
       .maxLines(1)
@@ -714,14 +876,14 @@ struct Index {
 
   /** 最小修复那一行：等宽 + 高亮。弹窗与列表卡片共用，两处观感一致。 */
   @Builder
-  fixLine(text: string, lines: number) {
-    Text(text)
+  fixLine(spec: FixSpec) {
+    Text(spec.text)
       .fontSize(11)
       .fontColor($r('app.color.info'))
       .fontFamily('monospace')
       .lineHeight(16)
       .width('100%')
-      .maxLines(lines)
+      .maxLines(spec.lines)
       .textOverflow({ overflow: TextOverflow.Ellipsis })
   }
 
@@ -738,7 +900,7 @@ struct Index {
           .maxLines(1)
         // 索引版本留在首屏：现场被问"你这套规则是哪一版"时，不用翻文档。
         Text('索引 ' + this.indexName)
-          .fontSize(10)
+          .fontSize(11)
           .fontColor($r('app.color.text_3'))
           .margin({ top: 3 })
           .maxLines(1)
@@ -752,7 +914,7 @@ struct Index {
     }
     .width('100%')
     .alignItems(VerticalAlign.Center)
-    .padding({ left: 18, right: 18, top: 14, bottom: 14 })
+    .padding({ left: 18, right: 18, top: 12, bottom: 12 })
   }
 
   /** 首屏右上角那盏灯：一个点 + 两个字。开关开没开不用读整句话。 */
@@ -761,7 +923,7 @@ struct Index {
     Row({ space: 6 }) {
       Circle({ width: 7, height: 7 }).fill(this.statusTone())
       Text(this.statusTag())
-        .fontSize(10)
+        .fontSize(11)
         .fontWeight(FontWeight.Medium)
         .fontColor(this.statusTone())
     }
@@ -835,6 +997,7 @@ struct Index {
           .height(36)
           .backgroundColor($r('app.color.surface_hi'))
           .fontColor($r('app.color.text_2'))
+          .border({ width: 1, color: $r('app.color.line') })
           .onClick(() => {
             // busy 的拦截交给 replaySample 自己（入口已有 guard），
             // 不在这里加 .enabled —— Row 上禁用子控件的点击行为不如入口判断可靠。
@@ -857,13 +1020,19 @@ struct Index {
       //
       // 主按钮指向的永远是**此刻这块板子上的**东西；这份 9/21 的样本是**素材**。
       // 被问"是不是预录的"时，屏幕上这一行就是答案 —— 所以"非实时"三个字必须
-      // 留在明面上。原先是 11px 的文字链压在最暗的灰上（#5C646E on #1A1F26），
-      // 几乎看不见，等于把这条标注藏了起来。
-      Text('预录样本 9/21 采 · 756 行 · 非实时，仅供对照')
-        .fontSize(10)
-        .fontColor($r('app.color.text_4'))
-        .width('100%')
-        .margin({ top: 10 })
+      // 留在明面上。
+      //
+      // 唯一的例外是回放**刚按过**的时候：那时上面那行 snapMsg 已经把
+      // "预录样本（9/21 采 · 非实时）"讲了一遍，两行叠在一起像 bug（真机实测）。
+      // 所以这时把它收起来 —— 它要防的是"看的人不知道这是预录的"，
+      // 而那个时刻信息已经在了。
+      if (!this.snapIsReplay) {
+        Text('预录样本 9/21 采 · 756 行 · 非实时，仅供对照')
+          .fontSize(11)
+          .fontColor($r('app.color.text_3'))
+          .width('100%')
+          .margin({ top: 10 })
+      }
     }
     .width('100%')
     .padding(16)
@@ -872,15 +1041,115 @@ struct Index {
     .borderRadius(14)
   }
 
+  /**
+   * 汇总条。
+   *
+   * 原先这些数字挤在"756 条 denial → 16 个唯一案例（板子自带 3 / 工具造成 13）"
+   * 一句 10px 的灰字里，而**板子自带 vs 工具造成**正是演示最该被看见的对比
+   * —— 前者是这块板子真实的策略缺口，后者是我们自己敲 hdc 制造出来的噪声。
+   * 现在拆成两块并排的数字砖，板子自带那块走 info 色，工具造成的走中性灰。
+   *
+   * 分类分布用的是引擎的 by_classification（全量，不受列表上限影响）：
+   * 一个数据源早就有了，只是没人消费。
+   */
+  @Builder
+  statBar() {
+    Column() {
+      Row() {
+        Text(String(this.rTotal))
+          .fontSize(20)
+          .fontWeight(FontWeight.Bold)
+          .fontColor($r('app.color.text'))
+        Text(' 条 denial')
+          .fontSize(12)
+          .fontColor($r('app.color.text_3'))
+          .margin({ bottom: 2 })
+        Blank()
+        Text(this.rUnique + ' 个唯一案例')
+          .fontSize(12)
+          .fontColor($r('app.color.text_2'))
+          .margin({ bottom: 2 })
+      }
+      .width('100%')
+      .alignItems(VerticalAlign.Bottom)
+
+      Row({ space: 10 }) {
+        this.statTile({ label: '板子自带', n: this.rBoard, tone: $r('app.color.info') })
+        this.statTile({ label: '工具造成', n: this.rTool, tone: $r('app.color.text_3') })
+      }
+      .width('100%')
+      .margin({ top: 10 })
+
+      if (this.rClasses.length > 0) {
+        // 条数写在 chip 里面：写在外面的话，"15" 和它左边那个分类名是不是一对
+        // 全靠位置暗示 —— 一行里有多个 chip 时就说不清了。
+        Flex({ wrap: FlexWrap.Wrap }) {
+          ForEach(this.rClasses, (c: ClassCount) => {
+            // 外面套一层 Row 只是为了让 chip 能有外边距 —— @Builder 调用返回 void，
+            // 不能像内置组件那样在后面链 .margin()。
+            Row() {
+              this.chip({ label: c.name + '  ' + c.count,
+                          fg: this.clsTone(c.name), bg: this.clsSoft(c.name) })
+            }
+            .margin({ right: 8, top: 8 })
+          }, (c: ClassCount) => c.name)
+        }
+        .width('100%')
+      }
+
+      // 列表是截断的、统计是全量的 —— 不说清楚的话，"16 个案例"和屏幕上
+      // 数出来的卡片数对不上，看起来像少渲染了。
+      if (this.findings.length < this.rUnique) {
+        Text('列表只列前 ' + MAX_FINDINGS + ' 条，上面的统计是全部 ' + this.rUnique + ' 个')
+          .fontSize(11)
+          .fontColor($r('app.color.text_3'))
+          .width('100%')
+          .margin({ top: 6 })
+      }
+    }
+    .width('100%')
+    .padding(14)
+    .backgroundColor($r('app.color.surface'))
+    .border({ width: 1, color: $r('app.color.line') })
+    .borderRadius(14)
+    .margin({ top: 12 })
+  }
+
+  /**
+   * 汇总条里的一块数字砖。
+   *
+   * 横排（数字在前、标签在后）而不是竖排堆两行：竖向那版一块就 64px，
+   * 两块并排直接吃掉 90px，屏幕上能同时看到的案例卡片从 3 张掉到 2 张。
+   * 演示时"一屏看见几条"比砖块本身好看更重要。
+   */
+  @Builder
+  statTile(spec: TileSpec) {
+    Row({ space: 8 }) {
+      Text(String(spec.n))
+        .fontSize(17)
+        .fontWeight(FontWeight.Bold)
+        .fontColor(spec.tone)
+      Text(spec.label)
+        .fontSize(11)
+        .fontColor($r('app.color.text_3'))
+    }
+    .layoutWeight(1)
+    .justifyContent(FlexAlign.Center)
+    .alignItems(VerticalAlign.Center)
+    .height(38)
+    .backgroundColor($r('app.color.surface_hi'))
+    .borderRadius(9)
+  }
+
   /** 弹出来的那条。实时演示里它是最该被看见的东西，所以给足视觉权重。 */
   @Builder
   popCard() {
     Column() {
       Row() {
-        this.chip('新 denial', $r('app.color.bg'), $r('app.color.warn'))
+        this.chip({ label: '新 denial', fg: $r('app.color.bg'), bg: $r('app.color.warn') })
         Text(this.popBody)
           .fontSize(11)
-          .fontColor($r('app.color.text_3'))
+          .fontColor($r('app.color.text_2'))
           .layoutWeight(1)
           .margin({ left: 8 })
           .maxLines(1)
@@ -910,11 +1179,11 @@ struct Index {
       if (this.popFix.length > 0) {
         Column() {
           Text('最小修复')
-            .fontSize(10)
-            .fontColor($r('app.color.text_4'))
+            .fontSize(11)
+            .fontColor($r('app.color.text_3'))
             .width('100%')
             .margin({ bottom: 5 })
-          this.fixLine(this.popFix, 4)
+          this.fixLine({ text: this.popFix, lines: 4 })
         }
         .width('100%')
         .padding(10)
@@ -929,8 +1198,8 @@ struct Index {
           .fontColor($r('app.color.ok'))
           .layoutWeight(1)
         Text('板端引擎解读')
-          .fontSize(10)
-          .fontColor($r('app.color.text_4'))
+          .fontSize(11)
+          .fontColor($r('app.color.text_3'))
       }
       .width('100%')
       .alignItems(VerticalAlign.Center)
@@ -964,7 +1233,7 @@ struct Index {
         .maxLines(1)
         .textOverflow({ overflow: TextOverflow.Ellipsis })
 
-        this.chip(f.cls, $r('app.color.warn'), $r('app.color.warn_soft'))
+        this.chip({ label: f.cls, fg: this.clsTone(f.cls), bg: this.clsSoft(f.cls) })
       }
       .width('100%')
       .alignItems(VerticalAlign.Center)
@@ -981,7 +1250,7 @@ struct Index {
 
       if (f.fix.length > 0) {
         Column() {
-          this.fixLine(f.fix, 3)
+          this.fixLine({ text: f.fix, lines: 3 })
         }
         .width('100%')
         .padding(9)
@@ -992,14 +1261,14 @@ struct Index {
 
       Row() {
         Text(f.verdict)
-          .fontSize(10)
+          .fontSize(11)
           .fontColor(this.verdictTone(f.verdict))
           .layoutWeight(1)
           .maxLines(1)
           .textOverflow({ overflow: TextOverflow.Ellipsis })
         Text(originLabel(f.origin))
-          .fontSize(10)
-          .fontColor(f.origin === 'board' ? $r('app.color.text_3') : $r('app.color.text_4'))
+          .fontSize(11)
+          .fontColor(f.origin === 'board' ? $r('app.color.text_2') : $r('app.color.text_4'))
       }
       .width('100%')
       .alignItems(VerticalAlign.Center)
@@ -1023,19 +1292,19 @@ struct Index {
         ? '这一份快照里没有 denial'
         : (this.guardOn ? '监听中，还没有 denial' : '开关关闭，未开始监听'))
         .fontSize(13)
-        .fontColor($r('app.color.text_3'))
+        .fontColor($r('app.color.text_2'))
         .margin({ top: 16 })
 
       Text(this.snapMode
         ? '拨一次开关恢复实时刷新'
         : (this.guardOn ? '一有 denial 就会出现在这里，并弹出通知' : '打开上面的开关，开始实时捕获'))
         .fontSize(11)
-        .fontColor($r('app.color.text_4'))
+        .fontColor($r('app.color.text_3'))
         .margin({ top: 6 })
 
       // 沙箱路径留在屏幕上：现场最容易出错的就是"两边看的不是同一个目录"。
       Text('沙箱 ' + this.sandbox)
-        .fontSize(10)
+        .fontSize(11)
         .fontColor($r('app.color.text_4'))
         .margin({ top: 18 })
         .maxLines(1)
@@ -1078,35 +1347,32 @@ struct Index {
           this.popCard()
         }
 
-        if (this.summary.length > 0) {
-          Column() {
-            Row() {
-              Text('案例明细')
-                .fontSize(12)
-                .fontWeight(FontWeight.Medium)
-                .fontColor($r('app.color.text_2'))
-              Text(this.findings.length + ' 个案例')
-                .fontSize(11)
-                .fontColor($r('app.color.text_4'))
-            }
-            .width('100%')
-            .justifyContent(FlexAlign.SpaceBetween)
-            .alignItems(VerticalAlign.Center)
-
-            Text(this.summary)
-              .fontSize(10)
-              .fontColor($r('app.color.text_4'))
-              .width('100%')
-              .margin({ top: 5 })
-              .maxLines(2)
-          }
-          .width('100%')
-          .margin({ top: 18 })
+        // 汇总条自带"案例明细"的语境，所以标题行只剩一个词，
+        // 不再重复一次案例数（那个数在汇总条里已经有了）。
+        if (this.showStats) {
+          this.statBar()
         }
 
         if (this.findings.length === 0) {
           this.emptyState()
         } else {
+          // 标题行不重复案例数（汇总条里已经有了）。右边那句写的是**引擎的排序口径**
+          // —— 原生侧按"板子自带优先、其次按条数"排（见 napi_init.cpp 的 ordered 排序），
+          // 现场被问"为什么这条在前面"时，屏幕上就有答案。
+          Row() {
+            Text('案例明细')
+              .fontSize(12)
+              .fontWeight(FontWeight.Medium)
+              .fontColor($r('app.color.text_2'))
+            Text('板子自带在前')
+              .fontSize(11)
+              .fontColor($r('app.color.text_3'))
+          }
+          .width('100%')
+          .justifyContent(FlexAlign.SpaceBetween)
+          .alignItems(VerticalAlign.Center)
+          .margin({ top: 16, bottom: 2 })
+
           List({ space: 0 }) {
             ForEach(this.findings, (f: Finding) => {
               ListItem() {

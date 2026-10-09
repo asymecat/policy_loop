@@ -79,14 +79,24 @@ bash install_service.sh demo
 
 ### 第 2 步 · ★ 拨开关（唯一的因果事件）
 
-**放下 hdc，用手指点屏幕右上角的开关**（720×1280 下约 **(632,235)**）。
+**放下 hdc，用手指点屏幕右上角的开关**（720×1280 下约 **(635,214)**）。
 
-> 排练时可以用 `hdc shell "uitest uiInput click 632 235"` 代替，
+> 排练时可以用 `hdc shell "uitest uiInput click 635 214"` 代替，
 > 但**正式演示要用真手指**：物理触摸走 input 子系统，
 > 而 `uitest` 自己是个工具域，会在窗口里留一条「工具造成」的足迹。
+>
+> ⚠️ 这里的坐标是**量出来的、不是推出来的**，界面一动就失效（2026-10-09 的视觉
+> 重做就把当时文档里的 (586,324) 改成了别的按钮 —— 一整天没人发现）。
+> 要重新量：
+> ```bash
+> hdc shell "uitest dumpLayout -p /data/local/tmp/l.json"
+> hdc file recv /data/local/tmp/l.json /tmp/l.json
+> grep -o '"text":"[^"]*"[^}]*"bounds":"[^"]*"' /tmp/l.json | grep -E '载入当前快照|回放预录样本'
+> ```
+> 开关是 `Toggle` 不是 `Button`，按 `"type":"Toggle"` 找。
 
 ```bash
-hdc shell "uitest uiInput click 632 235"
+hdc shell "uitest uiInput click 635 214"
 ```
 
 > 现场讲的时候**用真手指点屏幕**，不要用这条命令 —— 物理触摸走 input 子系统，
@@ -153,9 +163,9 @@ pl_collector → data_local:dir
 
 ```bash
 D=/data/app/el2/100/base/com.policyloop.console/haps/entry/files
-hdc shell "uitest uiInput click 586 324"; sleep 3     # 按「载入当前快照」
+hdc shell "uitest uiInput click 270 352"; sleep 3     # 按「载入当前快照」
 hdc file recv $D/snapshot.jsonl /tmp/s1.jsonl
-hdc shell "uitest uiInput click 586 324"; sleep 3     # 再按一次
+hdc shell "uitest uiInput click 270 352"; sleep 3     # 再按一次
 hdc file recv $D/snapshot.jsonl /tmp/s2.jsonl
 wc -l /tmp/s1.jsonl /tmp/s2.jsonl                     # ★ 两个数不同
 ```
@@ -187,7 +197,7 @@ hdc shell "rm -f $D/live.jsonl";  sleep 1
 hdc shell "wc -c < $D/live.jsonl"                # → 0        ★ 窗口是空的
 hdc shell "cat /proc/uptime"                     # → 记下 T0
 hdc shell "pidof pl_collector"                   # → 记下采集器 pid
-hdc shell "uitest uiInput click 632 235"         # 拨开关
+hdc shell "uitest uiInput click 635 214"         # 拨开关
 sleep 3
 hdc shell "wc -c < $D/live.jsonl"                # → 非 0     ★ 窗口长出来了
 ```
