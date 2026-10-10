@@ -92,7 +92,7 @@ avc: denied { read } for pid=2208 comm="media_service" path="/dev/video0"
 |---|---|---|---|
 | L1 确定性内核 | denial 解析器 + `.te` 策略索引 | `policy_loop/denial`、`policy_loop/policy` | 解析/查询差分逐字节一致 |
 | L2 评测基线 | 从上游真实语料构造 golden 集并回放 | `data/eval/golden.jsonl`、`docs/eval-L2.md` | 覆盖率、可复现命令 |
-| L3 诊断流水线 | 六 Agent 最小权限流水线 + 批量收敛 + 补丁最小化/归因 | `policy_loop/agents`、`converge.py`、`minimize.py`、`attribution.py` | 留一法回归、零过宽、闭环反验 |
+| L3 诊断流水线 | 七 Agent 最小权限流水线 + 批量收敛 + 补丁最小化/归因 | `policy_loop/agents`、`converge.py`、`minimize.py`、`attribution.py` | 留一法回归、零过宽、闭环反验 |
 | L4 设备端 | 系统组件 `denial_check` + 采集服务 + 控制台 | `device/`、板端 HAP | 真机五项门禁 |
 
 四层的关系是**同一份判定逻辑的三次落地**：先在 Python 上把语义做对（L1–L3），再用评测证明它收敛（L2/L3），最后把它变成设备上的原生系统组件并用差分证明两端等价（L4）。
@@ -142,7 +142,7 @@ avc: denied { read } for pid=2208 comm="media_service" path="/dev/video0"
 
 系统分为**主机端（重）**与**设备端（轻）**两侧，中间是一条窄接口：
 
-- **主机端**（Python 标准库，零第三方依赖）：denial 解析器、策略索引、六 Agent 诊断流水线、批量收敛、评测体系。
+- **主机端**（Python 标准库，零第三方依赖）：denial 解析器、策略索引、七 Agent 诊断流水线、批量收敛、评测体系。
 - **设备端**（OpenHarmony 原生 C++，32 位 ARM / musl）：采集服务 `pl_collector`、系统组件 `denial_check`、板端控制台 HAP。
 - **数据契约**：PLI 只读索引（构建期导出、随镜像下发）+ JSON/TSV 判定结果（逐条或批量）。
 
@@ -154,7 +154,7 @@ avc: denied { read } for pid=2208 comm="media_service" path="/dev/video0"
 
 一条 denial 在系统中的完整动线是**六步状态机**：
 
-![六 Agent 诊断流水线](figs/fig2-agent-pipeline.png)
+![七 Agent 诊断流水线](figs/fig2-agent-pipeline.png)
 
 `Orchestrator` 是一个严格状态机：`Log → Policy → Security → Repair → Review → Verify`。每个 Agent 的输入输出都是可打印的结构化字段（`SecurityCase` 记录全程 trace），因此整条链路可复现、可单测。`VerifyAgent` 验证失败或发现安全回归时，会**回退**到 `RepairAgent` 重算，而不是直接放行。
 
@@ -171,7 +171,7 @@ policy_loop/
 │   │   ├── cross_layer.py            应用层 APL 跨层反查
 │   │   ├── cil.py                    板子 policy.31 反编译 CIL 的只读视图
 │   │   └── sehap.py                  sehap_contexts 解析
-│   ├── agents/                       六 Agent 流水线
+│   ├── agents/                       七 Agent 流水线
 │   │   ├── orchestrator.py           严格状态机
 │   │   ├── security_case.py          案件档案 + Agent Trace
 │   │   ├── log_agent.py / policy_agent.py / security_agent.py
@@ -238,7 +238,7 @@ policy_loop/
 
 实测索引规模（上游 1,315 个 `.te`）：**21,790 条规则、1,267 个类型、49 个属性**，其中 `allow` 20,754、`neverallow` 392、`allowxperm` 634、`neverallowxperm` 10，另有 647 条语句因宏/条件块被跳过。
 
-### 2.4.3 六 Agent 诊断流水线（`policy_loop.agents`）
+### 2.4.3 七 Agent 诊断流水线（`policy_loop.agents`）
 
 - **标识**：`policy_loop.agents`
 - **类型**：业务编排模块（确定性，无模型调用）
@@ -250,11 +250,13 @@ policy_loop/
 | LogAgent | 解析、指纹去重 | `DenialRecord` |
 | PolicyAgent | 查索引三问：允许？撞红线？ioctl 白名单？ | 策略裁决 |
 | SecurityAgent | 根因分类 | `MISSING_RULE` / `XPERM_GAP` / `POTENTIAL_ESCALATION` / `NOISE_OR_ALREADY_FIXED` / `DOMAIN_OR_LABEL_MISMATCH` |
+| CrossLayerAgent | 跨层建议（**只读**，advisory） | 该修在 `module.json` 还是 `.te`；只出建议、**不改变结论**（Repair 及其后忽略它） |
 | RepairAgent | 生成最小权限补丁 | 普通 `allow` 只补缺失权限；`allowxperm` 只放行该命令号 |
 | ReviewerAgent | 安全护栏 | 危险模式 / 越权放行 / 通配 / neverallow 冲突 → APPROVE / REJECT |
 | VerifyAgent | 在"补丁已应用"的索引副本上重查 | 消除、无回归、范围最小 → SUCCESS / FAILED / SECURITY_REGRESSION |
 
-- **跨层判定（advisory）**：`CrossLayerAgent` 读取 8 份 `sehap_contexts` 建立 APL 反查，区分"应用域/系统域"，让应用级与系统级的排查链路分开。
+- **跨层判定的实现**：`CrossLayerAgent` 读取 8 份 `sehap_contexts` 建立 APL 反查，区分"应用域/系统域"，让应用级与系统级的排查链路分开。它插在 Security 与 Repair 之间，**读裁决但不写裁决**——加不加它，同一条 denial 的结论都不变（见 `agents/orchestrator.py` 的 `_PIPELINE`）。
+- **流水线不含回路**：`Orchestrator.analyze()` 对 `_PIPELINE` 单向前进，**唯一的提前退出是 log 解析失败**；Reviewer 否决或 Verify 判 `FAILED`/`SECURITY_REGRESSION` 时，该案在 `converge` 里由 `_categorize()` 归入「需人工」，**不回到 Repair 重算**。这是刻意的：允许 Agent 反复重试到"通过"安全门，等于让它迭代出一个更宽的补丁。
 
 ### 2.4.4 批量收敛（`policy_loop.converge`）
 
@@ -420,7 +422,7 @@ allowxperm render_service dev_mali:chr_file ioctl { 0x8014 };
 
 ![批量收敛流程](figs/fig3-converge-flow.png)
 
-**参与对象**：`converge` → `LogAgent`（去重）→ 快路判定 → 六 Agent 流水线 → 报告。
+**参与对象**：`converge` → `LogAgent`（去重）→ 快路判定 → 七 Agent 流水线 → 报告。
 
 **实测（本机，2026-10-05 复跑）**：
 
@@ -599,7 +601,7 @@ real 0m4.161s
 
 | 角色 | 姓名 | 分工 |
 |---|---|---|
-| 队长 | 【待填】 | 总体方案、确定性内核与六 Agent 流水线、设备端组件、真机验证 |
+| 队长 | 【待填】 | 总体方案、确定性内核与七 Agent 流水线、设备端组件、真机验证 |
 | 队员 1 | 【待填】 | 【待填：建议按实际分配填写——评测体系 / 文档与演示] |
 | 队员 2 | 【待填】 | 【待填】 |
 
