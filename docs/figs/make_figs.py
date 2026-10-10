@@ -116,7 +116,7 @@ def fig_architecture():
     labels = [
         ("denial 解析器", "denial/parser.py", BLUE_BG, BLUE),
         ("策略索引", "policy/index.py", BLUE_BG, BLUE),
-        ("六 Agent 闭环", "agents/", BLUE_BG, BLUE),
+        ("七 Agent 流水线", "agents/", BLUE_BG, BLUE),
         ("批量收敛", "converge.py", BLUE_BG, BLUE),
         ("评测体系", "eval/", GREY_BG, MUTED),
     ]
@@ -172,21 +172,23 @@ def fig_architecture():
     im.save(f"{OUT}/fig1-architecture.png")
 
 
-# ------------------------------------------------------------ 图 2 六 Agent 闭环
+# ------------------------------------------------------------ 图 2 七 Agent 流水线
 def fig_agent_pipeline():
     W, H = 1240, 560
     im, d = canvas(W, H)
-    d.text((40, 30), "一条 denial 的诊断闭环:Log → Policy → Security → Repair → Review → Verify",
+    d.text((40, 30), "一条 denial 的诊断流水线:Log → Policy → Security → CrossLayer → Repair → Review → Verify",
            font=FB(20), fill=INK)
-    d.text((40, 62), "每个 Agent 的输入输出都是可打印的结构化字段;整条链路确定性、可复现,不调用任何模型。",
+    d.text((40, 62), "单向前进的状态机,不重试:每个 Agent 的输入输出都是可打印的结构化字段,"
+                     "整条链路确定性、可复现,不调用任何模型。",
            font=F(13), fill=MUTED)
 
     y = 120
-    bw, bh, gap = 168, 132, 32
+    bw, bh, gap = 152, 132, 16
     agents = [
-        ("LogAgent", "解析 + 指纹去重", "denial → DenialRecord", "#E8F0FE", BLUE),
-        ("PolicyAgent", "查索引三问", "允许?撞红线?ioctl 白名单?", "#E8F0FE", BLUE),
-        ("SecurityAgent", "根因分类", "MISSING_RULE\nXPERM_GAP / 域标签不匹配", "#E8F0FE", BLUE),
+        ("LogAgent", "解析 + 指纹去重", "denial →\nDenialRecord", "#E8F0FE", BLUE),
+        ("PolicyAgent", "查索引三问", "允许? 撞红线?\nioctl 白名单?", "#E8F0FE", BLUE),
+        ("SecurityAgent", "根因分类", "MISSING_RULE\nXPERM_GAP\n域标签不匹配", "#E8F0FE", BLUE),
+        ("CrossLayerAgent", "跨层建议(只读)", "该改配置还是\n改策略?只建议", "#F1F3F4", MUTED),
         ("RepairAgent", "生成最小补丁", "只补缺失权限\nxperm 只放该命令号", "#E6F4EA", GREEN),
         ("ReviewerAgent", "安全护栏", "危险模式 / 通配\n/ neverallow 冲突", "#FEF0E3", ORANGE),
         ("VerifyAgent", "数据驱动验证", "在「补丁已应用」的\n索引副本上重查", "#FEF0E3", ORANGE),
@@ -203,16 +205,12 @@ def fig_agent_pipeline():
             arrow(d, x + bw + 3, y + bh / 2, x + bw + gap - 5, y + bh / 2,
                   color="#9AA0A6", width=2, head=8)
 
-    # 回退回路 Verify -> Repair
-    y2 = y + bh + 46
-    d.line([40 + 5 * (bw + gap) + bw / 2, y + bh + 4,
-            40 + 5 * (bw + gap) + bw / 2, y2], fill=RED, width=2)
-    d.line([40 + 5 * (bw + gap) + bw / 2, y2, 40 + 3 * (bw + gap) + bw / 2, y2],
-           fill=RED, width=2)
-    arrow(d, 40 + 3 * (bw + gap) + bw / 2, y2, 40 + 3 * (bw + gap) + bw / 2,
-          y + bh + 5, color=RED, width=2, head=8)
-    ctext(d, 40 + 4 * (bw + gap) + bw / 2, y2 - 14,
-          "FAILED / 安全回归 → 回退重算", F(12), RED)
+    # Verify/Review 未通过不是回路:该案直接归入「需人工」,流水线不重试
+    # (orchestrator.analyze 是单向前进;唯一提前退出是 log 解析失败)
+    y2 = y + bh + 40
+    vx = 40 + 6 * (bw + gap) + bw / 2
+    arrow(d, vx, y + bh + 4, vx, y2, color=RED, width=2, head=8)
+    ctext(d, vx, y2 + 16, "未通过 → 归入「需人工」(不重试)", F(12), RED)
 
     # 守门带
     gy = 400
@@ -264,9 +262,9 @@ def fig_converge():
     arrow(d, 805, 175, 865, 175, color="#9AA0A6", width=3, head=9)
 
     box(d, 870, 120, 230, 110, fill=BLUE_BG, outline=BLUE)
-    ctext(d, 985, 152, "六 Agent 闭环", FB(15), INK)
+    ctext(d, 985, 152, "七 Agent 流水线", FB(15), INK)
     ctext(d, 985, 178, "逐案分类 + 最小补丁", F(13), MUTED)
-    ctext(d, 985, 200, "+ 五道守门", F(13), RED)
+    ctext(d, 985, 200, "+ 六道守门", F(13), RED)
 
     # 三路输出
     outs = [
