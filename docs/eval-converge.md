@@ -26,7 +26,7 @@ python -m policy_loop.converge \
      一个字都没说；按三元组盲匹配会把同一条红线报给每一个请求（见下「权限盲」节）；
    - 已允许 + `permissive=1` → 噪声；
    - 已允许 + enforcing → 域/标签问题转人工；
-   - 其余才进入完整 6-Agent 闭环（Log→Policy→Security→Repair→Review→Verify）。
+   - 其余才进入完整 7-Agent 流水线（Log→Policy→Security→CrossLayer→Repair→Review→Verify）。
    这一层把「逐条跑闭环」的成本降到只在真缺口上花。
    查询前先做 **service 占位符解析**（M3，见下节）：日志里的 `default_service` /
    `default_hdf_service` 是占位符，直接查它等于在问「策略允不允许访问占位符」——

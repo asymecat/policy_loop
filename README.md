@@ -46,7 +46,7 @@ python -m policy_loop.selfcheck
 # 单测（标准库 unittest，无需安装额外依赖）
 python -m unittest discover -s tests -v
 
-# L3 Multi-Agent 演示（内置 3 个场景 + Agent Trace）
+# L3 Agent 流水线演示（内置 3 个场景 + Agent Trace）
 python -m policy_loop.agents.demo
 
 # Web UI（Agent Trace 动画 + 结果卡片；浏览器打开 http://127.0.0.1:8765）

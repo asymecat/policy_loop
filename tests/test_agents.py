@@ -1,4 +1,4 @@
-"""Tests for the L3 Multi-Agent closed loop (deterministic, offline)."""
+"""Tests for the L3 multi-agent pipeline (deterministic, forward-only, offline)."""
 
 import unittest
 from pathlib import Path

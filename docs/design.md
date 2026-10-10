@@ -19,7 +19,7 @@ PolicyLoop 把这条日志链自动化：**读懂 → 定位根因 → 生成最
 
 | 端 | 内容 |
 |---|---|
-| 主机端（重） | `policy_loop/`：denial 解析 + `.te` 策略索引 + 6-Agent 诊断闭环 + 批量收敛 + 评测 |
+| 主机端（重） | `policy_loop/`：denial 解析 + `.te` 策略索引 + 7-Agent 诊断流水线 + 批量收敛 + 评测 |
 | 设备端（轻） | `denial_check`：固定 API 执行层。策略语义在设备上（PLI 索引 + 判定 + 守门），agent 编排在主机上，两者由 JSON/TSV 契约连接 |
 
 ### 确定性核心
@@ -29,28 +29,29 @@ PolicyLoop 把这条日志链自动化：**读懂 → 定位根因 → 生成最
 - `policy_loop/policy/index.py`：`.te` 策略索引。
   支持 `allow`/`allowxperm`/`neverallow`/`neverallowxperm`、attribute 闭包（含 `typeattribute` 空格/逗号两种写法）、`binder_call()` 宏展开、条件块（`debug_only()` 等）、ioctl 白名单/xperm 语义。查询：`has_access`（请求权限是否全部被授予）、`neverallow_rules`（红线）、`ioctl_allowed`（白名单判定）。
 
-### 诊断闭环（`policy_loop/agents/`）
+### 诊断流水线（`policy_loop/agents/`）
 
-单条 denial 走 **Log → Policy → Security → Repair → Review → Verify** 六步（`Orchestrator` 严格状态机，`SecurityCase` 记录全程 Agent Trace）：
+单条 denial 走 **Log → Policy → Security → CrossLayer → Repair → Review → Verify** 七步（`Orchestrator` 严格状态机，`SecurityCase` 记录全程 Agent Trace）。**单向前进、不重试**：唯一的提前退出是 log 解析失败，Review/Verify 不通过只会让该案归入「需人工」。
 
 | Agent | 职责 |
 |---|---|
 | LogAgent | 解析、指纹去重 |
 | PolicyAgent | 查索引：允许？撞 neverallow？ioctl 白名单？ |
 | SecurityAgent | 根因分类：`MISSING_RULE` / `XPERM_GAP` / `POTENTIAL_ESCALATION` / `NOISE_OR_ALREADY_FIXED` / `DOMAIN_OR_LABEL_MISMATCH`；出候选修复与推荐 |
+| CrossLayerAgent | 跨层建议（**只读**）：该修在 `module.json` 还是 `.te`。读裁决但不写裁决，加不加它结论都不变 |
 | RepairAgent | 把推荐转成最小权限补丁（普通 allow 只补缺失权限 / allowxperm 只放行该命令号） |
 | ReviewerAgent | 安全护栏：危险模式、越权放行、通配、neverallow 冲突 → REJECT/APPROVE |
 | VerifyAgent | 在"补丁已应用"的索引副本上重查：消除、无回归、范围最小 → SUCCESS/FAILED/SECURITY_REGRESSION |
 
 ### 批量收敛（本轮新增）
 
-`policy_loop/converge.py`：输入整份 denial 日志 → 按指纹聚类去重 → 每唯一案例跑一遍闭环 → 输出**收敛报告**（去重比、各根因分布、可自动最小修复的补丁集合、需人工项、enforcing 就绪度）。让"permissive → enforcing"从"逐条人工看"变成"一条命令出一份清单"。
+`policy_loop/converge.py`：输入整份 denial 日志 → 按指纹聚类去重 → 每唯一案例跑一遍流水线 → 输出**收敛报告**（去重比、各根因分布、可自动最小修复的补丁集合、需人工项、enforcing 就绪度）。让"permissive → enforcing"从"逐条人工看"变成"一条命令出一份清单"。
 
 ## 评测方法论（可量化、可复现）
 
 - **自证 golden 语料**：上游 `.te` 里 `# avc: denied …` 注释与其紧邻修复规则，按双向邻接配成 `(denial → 真实修复)` 对（`eval/extract.py`），产出 `data/eval/golden.jsonl`（3,367 对）。
 - **回放基线**（`eval/replay.py`）：全量索引下，这些真实 denial 是否已被策略允许 —— 测量索引/属性/宏处理的**召回**。
-- **留一法回归**（`eval/agent_eval.py`）：剔除某 denial 的修复规则使其回到"未修复"，再跑 Agent 闭环，比对生成补丁 vs 缺失权限 —— 测**修复正确性**。永不替 denial 造标签；剔除后仍被其它规则覆盖的记为"冗余修复"，不误导指标。
+- **留一法回归**（`eval/agent_eval.py`）：剔除某 denial 的修复规则使其回到"未修复"，再跑 Agent 流水线，比对生成补丁 vs 缺失权限 —— 测**修复正确性**。永不替 denial 造标签；剔除后仍被其它规则覆盖的记为"冗余修复"，不误导指标。
 - **LLM 护栏量化**（`eval/agent_llm_eval.py`）：同批 denial 上，让 LLM 自由起草补丁，测越权率与 Reviewer 拦截/精修率。
 - **可信度质检（本轮新增）**：`eval/trust.py` 校验每条 golden 对"规则与 denial 是否真的相关"，过滤邻接配对的错配噪声，产出 trusted 口径指标。
 
@@ -70,7 +71,7 @@ PolicyLoop 把这条日志链自动化：**读懂 → 定位根因 → 生成最
 | L0 | 仓库骨架 + selfcheck + CI | ✅ |
 | L1 | Parser + Policy Index（数据仿真） | ✅ |
 | L2 | 真实语料评测基线（coverage 97.2%） | ✅ |
-| L3 | Multi-Agent 闭环 + 最小权限 patch + Verify（规则版，LLM 增强可接） | ✅ |
+| L3 | 确定性 Agent 流水线 + 最小权限 patch + Verify（规则版，LLM 可插拔、默认关闭） | ✅ |
 | L3+ | 批量收敛工作流 + golden 可信度质检 | ✅ |
 | L4 | DAYU200 真机验证（补丁构建 + enforcing 回归） | ✅ |
 | L4 | 设备端固定 API 执行层：`--case` 逐条判定，守门随判定一并返回 | ✅ 本轮 |

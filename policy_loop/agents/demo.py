@@ -1,4 +1,4 @@
-"""L3 demo: denial -> Multi-Agent pipeline -> trace + human explanation +
+"""L3 demo: denial -> multi-agent pipeline -> trace + human explanation +
 least-privilege patch + verification. Fully deterministic / offline.
 
 Usage:
