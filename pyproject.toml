@@ -7,7 +7,11 @@ name = "policy-loop"
 version = "0.1.0"
 description = "PolicyLoop - OpenHarmony SELinux security policy diagnosis & least-privilege repair agent (deterministic core)."
 readme = "README.md"
-requires-python = ">=3.10"
+# Upper bound is deliberate: CPython 3.13+ has an intermittent interpreter-level
+# SIGSEGV on this workload (~1-10% per run, crash site inside
+# _PyEval_EvalFrameDefault). 3.12 is clean over 480 runs. See
+# docs/known-limitations.md section 7 and tools/stability_gate.py.
+requires-python = ">=3.10,<3.13"
 license = { text = "Apache-2.0" }
 authors = [{ name = "PolicyLoop Team" }]
 classifiers = [

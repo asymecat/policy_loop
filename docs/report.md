@@ -586,9 +586,10 @@ real 0m4.161s
 
 | 项 | 值 |
 |---|---|
-| 单元测试 | **301 项**，0 失败（`python -m unittest discover -s tests`；`python -m pytest -q` 收 337 项） |
+| 单元测试 | **338 通过 / 4 跳过 / 0 失败**（`python -m pytest -q` 收 342 项；`python -m unittest discover -s tests` 运行 302 项）。**CPython 3.12 与 3.13 上结果相同** |
 | 自检 | `python -m policy_loop.selfcheck` 全绿 |
 | 第三方运行时依赖 | **0**（主机端纯标准库；设备端仅 libc/libc++/libm） |
+| 稳定性门 | `tools/stability_gate.py`（逐轮全新子进程）。**同一负载、两个解释器**：3.12.14 → 60 轮 **0 崩溃**；3.13.13 → 60 轮 **6 崩溃（10%）** ⇒ 运行环境钉 **CPython 3.12**，原因与 gdb 回溯见 `docs/known-limitations.md` §7 |
 
 ---
 
@@ -703,10 +704,18 @@ M3（占位符逻辑目标解析）接进流水线后，实测差集**恰好 4 �
 
 # 附录 A · 复现命令
 
+> **运行环境：CPython 3.12**（下面的命令请用 `python3.12` 代替 `python`）。
+> CPython 3.13 上核心路径有约 1%–10% 概率的解释器级间歇 SIGSEGV ——
+> 崩溃点在 `_PyEval_EvalFrameDefault` 内部、**与本项目代码无关**，
+> 已定位并附 gdb 回溯于 `docs/known-limitations.md` §7；
+> 门禁工具 `tools/stability_gate.py` 可当场复现这个差异（3.12 零崩 / 3.13 崩）。
+
 ```bash
 # ── 自检与单测 ────────────────────────────────────────────────
-python -m policy_loop.selfcheck          # 环境 + 模块 + 冒烟
-python -m unittest discover -s tests     # 301 项，0 失败
+python3.12 -m policy_loop.selfcheck      # 环境 + 模块 + 冒烟
+python3.12 -m unittest discover -s tests # 302 项，0 失败
+python3.12 -m pytest -q                  # 338 通过 / 4 跳过
+python3.12 tools/stability_gate.py --runs 60   # 稳定性门：零崩溃 = 通过
 
 # ── 拉取上游语料（一次性）────────────────────────────────────
 git clone --depth 1 --sparse \

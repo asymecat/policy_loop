@@ -152,5 +152,121 @@
 | §2.1 放宽三条正则（连带补全 §3 的 neverallow 防线） | 半天 + 重跑五项门禁 | **建议做**：同时修掉一个错判与一个安全盲区 |
 | §3 的答辩口径 | 0 | 无论做不做，都必须能说清 |
 | §5 板子版本二选一 | 0.5 h | 提交前必做 |
+| §7 CPython 3.13 间歇崩溃 | 已做 | **已定位+已处置**：钉 3.12、加 `tools/stability_gate.py`；现场命令一律用 `python3.12` |
 | §4 hisysevent 应用层入口 | 大 | 24 天内不碰，作为「下一步」写 |
 | §2.2 boolean／constraint 诊断、dontaudit 建模 | 大 | 不碰：要动索引模型 + PLI 格式 + C++ 镜像 + 重验逐字节差分 |
+
+## 7. 运行时：CPython 3.13 上的间歇性 SIGSEGV（已定位到解释器内部）
+
+> **一句话**：本项目**支持的运行环境是 CPython 3.12**。3.13 上核心路径会以
+> 0.7%–10% 的概率随机段错误，换 3.12 后 480 轮零崩溃；崩溃点在
+> `_PyEval_EvalFrameDefault` 内部，**改 `key=str`、甚至完全不排序都不解决**，
+> 因此不是本项目某一行的写法问题。
+
+### 7.1 实测数字
+
+| 负载 | 解释器 | 轮数 | 崩溃 | 崩溃率 |
+|---|---|---|---|---|
+| `load_dir` 最小复现器 | 3.13.13（conda-forge） | 200 | 7 | 3.5% |
+| 同上，关 ASLR（`setarch -R`） | 3.13.13 | 200 | 9 | 4.5% |
+| 同上 | 3.13.7（Ubuntu 系统包） | 60 | 2 | 3.3% |
+| 合成负载（不含本项目任何代码） | 3.13.13 | 137 | 1 | 0.7% |
+| 纯 `sorted(rglob("*.te"))`，不 import 本项目 | 3.13.13 | 200 | 0 | 0% |
+| **4 行复现器：`import policy_loop.policy` + 纯 `sorted(rglob)`** | 3.13.13 | 200 | 2 | **1.0%** |
+| 只 `import policy_loop.policy`，不排序 | 3.13.13 | 200 | 0 | 0% |
+| **`tools/stability_gate.py` 现场跑** | 3.13.13 | 60 | 6 | **10.0%** |
+| **同上** | **3.12.14** | **60** | **0** | **0%** |
+| `load_dir` 最小复现器 | 3.12.9 / 3.12.14 | 480 | 0 | 0% |
+
+两个**独立构建**（conda-forge 3.13.13 与 Ubuntu 3.13.7）都崩 ⇒ 不是某个发行版
+打包出来的问题。同一台机器、同一份输入，崩溃率在 0.7%–10% 之间波动 ⇒
+「间歇性」本身也是可观测的量，而不是偶发噪声。
+
+### 7.2 崩溃点
+
+`python -X faulthandler` 拿到的是 Python 层（`tools/stability_gate.py` 会把首次
+崩溃的回溯自动落盘，默认 `/tmp/policyloop-stability-crash.log`）：
+
+```
+Fatal Python error: Segmentation fault
+  File ".../python3.13/pathlib/_local.py", line 202 in _parts_normcase
+  File ".../python3.13/pathlib/_local.py", line 210 in __lt__
+  File ".../policy_loop/policy/index.py", line 692 in load_dir
+  File ".../policy_loop/policy/__init__.py", line 22 in load
+```
+
+gdb 拿到的是 C 层（注意 `set disable-randomization off` —— gdb **默认关 ASLR**，
+不改这一项 40 轮复现不出来）：
+
+```
+#0  _PyEval_EvalFrameDefault     Python/generated_cases.c.h:4312   ← SIGSEGV
+#5  vectorcall_unbound           Objects/typeobject.c:2581
+#6  slot_tp_richcompare          Objects/typeobject.c:9725
+#7  unsafe_object_compare        Objects/listobject.c:2732
+#8  binarysort                   Objects/listobject.c:1834
+#9  list_sort_impl               Objects/listobject.c:3078
+#13 builtin_sorted               Python/bltinmodule.c:2515
+```
+
+即：`sorted()` 的比较回调刚跨进解释器就踩空。
+
+### 7.3 已排除的假设（每条都有对照实验，不是推理）
+
+| 假设 | 证伪方式 | 结论 |
+|---|---|---|
+| 本项目代码有 UB | 合成负载不含本项目任何一行，照样崩 | ❌ 排除 |
+| 内存压力 / OOM | 峰值 RSS 95 MB、机器空闲 18 GB、`journalctl -k` 无 MCE | ❌ 排除 |
+| 堆破坏 | `PYTHONMALLOC=debug` 全程零诊断（仍崩，但无腐败报告） | ❌ 排除 |
+| ASLR | `setarch -R` 4.5% vs 基线 3.5% | ❌ 无差异 |
+| `gc.disable()` 是解药 | 40 轮 0 崩后第 128 轮又崩（换了个错：`SystemError: … METH_METHOD`） | ❌ 只改变失败形态 |
+| `sorted(Path)` 这一行是根因 | ①三个变体各 200 轮：baseline 7 / `key=str` 4 / 完全不排序 3，统计上无差异；②**把这一行单独拎出来、零项目代码跑 200 轮：0 崩** | ❌ 两条独立证据 ⇒ 那是**崩溃落点**，不是触发点 |
+| `ulimit -v` 是测试脚手架伪影 | 带/不带各 12 轮 A/B，均 0 崩 | ❌ 排除 |
+
+**「落点 ≠ 触发点」是这次定位最值钱的一条**：`sorted()` 只是第一个踩到已经坏了的
+解释器状态的地方，把这一行改掉（`key=str`）或删掉（不排序）都不解决，而把它
+单独拎出来又 0/200 不崩 —— 说明损坏发生在它之前，且需要一个**更长的前置过程**
+才攒够。这也是为什么只读代码找不到它：出错的位置和写出错的位置不在一起。
+
+> ⚠️ **统计纪律**：崩溃率在 1%–3% 量级时，n=200 的 95% 置信区间宽达 ±1%–2%
+> （如 7/200 的区间约 [1.4%, 7.1%]，2/200 约 [0.1%, 3.6%]）。因此
+> 「0/200 vs 2/200」**不构成**"import 是必要条件"的结论 —— 本表只用于
+> **排除**那些差异足够大、或有多条独立证据的假设（如 `key=str`、纯排序），
+> 不用来断定某一步"必然"参与。上表中凡是差异落在噪声内的，一律不升格为结论。
+
+最小的自足复现器（4 行，不依赖本仓任何内部数据，只依赖语料目录）：
+
+```python
+from pathlib import Path
+import policy_loop.policy            # noqa: F401
+paths = sorted(Path("data/raw/oh-selinux/sepolicy").rglob("*.te"))
+```
+
+跑法：`for i in $(seq 200); do python -X faulthandler repro.py || echo CRASH; done`。
+
+### 7.4 与上游已知问题的对应
+
+CPython 3.13 有一族已公开的崩溃：gh-131998 / gh-132011（未绑定方法描述符，
+**3.13.3 已修**，我们两个构建都晚于它 ⇒ 不是这两条）、**gh-148450**
+（`tp_flags` 变更不递增 `type_version` ⇒ 特化解释器／JIT 缓存陈旧；上游称会
+backport 到 3.13，**至今未 backport**）、#158031（同一条
+`vectorcall_unbound → slot_tp_richcompare` 路径上的 UAF）。
+
+> ⚠️ **口径**：与上述条目是**形态吻合，不是确证同因**。我们能确证的是
+> 「崩溃在解释器内部、只在 3.13 出现、3.12 干净」；**不能**断言"就是 gh-148450"。
+
+### 7.5 处置
+
+- `pyproject.toml` 钉 `requires-python = ">=3.10,<3.13"`；
+- 新增稳定性门 `tools/stability_gate.py`：**逐轮拉全新子进程**（崩溃是直接杀进程，
+  Python 层的 try/except 根本捕不到），`python3.12 tools/stability_gate.py --runs 200`，
+  零崩溃 exit 0、出现崩溃 exit 1、首次崩溃的 faulthandler 回溯自动落盘，
+  `--json` 出机器可读结果；
+- **现场所有 PC 侧命令一律用 `python3.12` 跑**（附录 A 的复现命令、视频里的终端片段）；
+- **板端不受影响**：板子上跑的是交叉编译的 C++（`denial_check` / `pl_collector`），
+  与宿主解释器无关 —— 这也是为什么演示台上的实时闭环路径不在此风险的暴露面内。
+
+**改成 3.12 会不会让已录的门禁数字失效？不会，已实测**：同一份语料、同一份索引，
+`converge --json` 在 3.12.14 与 3.13.13 上的输出**逐字节相同**
+（sha256 均为 `8f91d5b7cf2bc1fa…`），`selfcheck` 两侧都是 9/9 PASS，
+单元测试两侧都是 338 通过 / 4 跳过。即：**换解释器只消除崩溃，不改变任何结论** ——
+这也是敢把「运行环境钉 3.12」写进复现附录的前提。
