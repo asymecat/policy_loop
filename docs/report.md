@@ -92,7 +92,7 @@ avc: denied { read } for pid=2208 comm="media_service" path="/dev/video0"
 |---|---|---|---|
 | L1 确定性内核 | denial 解析器 + `.te` 策略索引 | `policy_loop/denial`、`policy_loop/policy` | 解析/查询差分逐字节一致 |
 | L2 评测基线 | 从上游真实语料构造 golden 集并回放 | `data/eval/golden.jsonl`、`docs/eval-L2.md` | 覆盖率、可复现命令 |
-| L3 诊断闭环 | 六 Agent 最小权限闭环 + 批量收敛 + 补丁最小化/归因 | `policy_loop/agents`、`converge.py`、`minimize.py`、`attribution.py` | 留一法回归、零过宽、闭环反验 |
+| L3 诊断流水线 | 六 Agent 最小权限流水线 + 批量收敛 + 补丁最小化/归因 | `policy_loop/agents`、`converge.py`、`minimize.py`、`attribution.py` | 留一法回归、零过宽、闭环反验 |
 | L4 设备端 | 系统组件 `denial_check` + 采集服务 + 控制台 | `device/`、板端 HAP | 真机五项门禁 |
 
 四层的关系是**同一份判定逻辑的三次落地**：先在 Python 上把语义做对（L1–L3），再用评测证明它收敛（L2/L3），最后把它变成设备上的原生系统组件并用差分证明两端等价（L4）。
@@ -142,7 +142,7 @@ avc: denied { read } for pid=2208 comm="media_service" path="/dev/video0"
 
 系统分为**主机端（重）**与**设备端（轻）**两侧，中间是一条窄接口：
 
-- **主机端**（Python 标准库，零第三方依赖）：denial 解析器、策略索引、六 Agent 诊断闭环、批量收敛、评测体系。
+- **主机端**（Python 标准库，零第三方依赖）：denial 解析器、策略索引、六 Agent 诊断流水线、批量收敛、评测体系。
 - **设备端**（OpenHarmony 原生 C++，32 位 ARM / musl）：采集服务 `pl_collector`、系统组件 `denial_check`、板端控制台 HAP。
 - **数据契约**：PLI 只读索引（构建期导出、随镜像下发）+ JSON/TSV 判定结果（逐条或批量）。
 
@@ -154,7 +154,7 @@ avc: denied { read } for pid=2208 comm="media_service" path="/dev/video0"
 
 一条 denial 在系统中的完整动线是**六步状态机**：
 
-![六 Agent 诊断闭环](figs/fig2-agent-pipeline.png)
+![六 Agent 诊断流水线](figs/fig2-agent-pipeline.png)
 
 `Orchestrator` 是一个严格状态机：`Log → Policy → Security → Repair → Review → Verify`。每个 Agent 的输入输出都是可打印的结构化字段（`SecurityCase` 记录全程 trace），因此整条链路可复现、可单测。`VerifyAgent` 验证失败或发现安全回归时，会**回退**到 `RepairAgent` 重算，而不是直接放行。
 
@@ -171,7 +171,7 @@ policy_loop/
 │   │   ├── cross_layer.py            应用层 APL 跨层反查
 │   │   ├── cil.py                    板子 policy.31 反编译 CIL 的只读视图
 │   │   └── sehap.py                  sehap_contexts 解析
-│   ├── agents/                       六 Agent 闭环
+│   ├── agents/                       六 Agent 流水线
 │   │   ├── orchestrator.py           严格状态机
 │   │   ├── security_case.py          案件档案 + Agent Trace
 │   │   ├── log_agent.py / policy_agent.py / security_agent.py
@@ -238,7 +238,7 @@ policy_loop/
 
 实测索引规模（上游 1,315 个 `.te`）：**21,790 条规则、1,267 个类型、49 个属性**，其中 `allow` 20,754、`neverallow` 392、`allowxperm` 634、`neverallowxperm` 10，另有 647 条语句因宏/条件块被跳过。
 
-### 2.4.3 六 Agent 诊断闭环（`policy_loop.agents`）
+### 2.4.3 六 Agent 诊断流水线（`policy_loop.agents`）
 
 - **标识**：`policy_loop.agents`
 - **类型**：业务编排模块（确定性，无模型调用）
@@ -261,7 +261,7 @@ policy_loop/
 - **标识**：`policy_loop.converge`
 - **类型**：批处理工作流
 - **目的**：把"permissive → enforcing"从逐条人工看，变成一条命令出一份清单。
-- **功能列表**：整份日志 → 指纹聚类去重 → 快路判定（策略已允许？撞 neverallow？）→ 每唯一案例跑一遍闭环 → 输出**收敛报告**（去重比、根因分布、可自动最小修复的补丁集、需人工项、enforcing 就绪度）。
+- **功能列表**：整份日志 → 指纹聚类去重 → 快路判定（策略已允许？撞 neverallow？）→ 每唯一案例跑一遍 Agent 流水线 → 输出**收敛报告**（去重比、根因分布、可自动最小修复的补丁集、需人工项、enforcing 就绪度）。
 - **处理 —— 五道守门**（防"照抄可疑日志"式误修复）：
 
 | # | 守门 | 作用 |
@@ -273,7 +273,7 @@ policy_loop/
 | 5 | 补丁须在索引副本上 Verify 成功 | 必须真的消除且无回归 |
 
 > ⚠️ **别把这张表与代码里的 `apply_guards` 混为一谈**，它们是两套分法、数也不同：
-> 这里是**闭环里的 5 个拒绝点**（含 Reviewer / Verify），代码里的 `apply_guards`
+> 这里是**流水线里的 5 个拒绝点**（含 Reviewer / Verify），代码里的 `apply_guards`
 > 是**另一组 6 个分支**（MLS 级目标 / `default_*` 占位符 / 主体或目标不在语料 /
 > 对象类不在语料 / 权限位含非权限名 / 空权限补丁）。后者才是 converge 与 `--explain`
 > **共用的那一份**——同一份实现、两个调用点，同一条记录从哪个入口问都必须拿到同一句话
@@ -350,7 +350,7 @@ policy_loop/
   - `extract`：从上游 `.te` 的 `# avc: denied …` 注释与其紧邻修复规则，按邻接配成 `(denial → 真实修复)` 对，产出 golden 集（3,367 对）；
   - `replay`：全量索引下这些真实 denial 是否已被允许——测索引/属性/宏处理的**召回**；
   - `trust`：逐对校验"规则与 denial 是否真的相关"，过滤邻接配对的错配噪声，产出 trusted 干净子集；
-  - `agent_eval`：**留一法**回归——剔除某 denial 的修复规则使其回到"未修复"，再跑闭环，比对生成补丁；
+  - `agent_eval`：**留一法**回归——剔除某 denial 的修复规则使其回到"未修复"，再跑 Agent 流水线，比对生成补丁；
   - `agent_llm_eval`：同批 denial 上让 LLM 自由起草补丁，量化越权率与护栏拦截率。
 
 ### 2.4.8 设备端组件 `denial_check`（`device/`）
@@ -396,7 +396,7 @@ policy_loop/
 
 ## 2.5 业务/实现流程说明
 
-### 2.5.1 用例 1：单条 denial 的诊断闭环
+### 2.5.1 用例 1：单条 denial 的诊断流水线
 
 **参与对象**：`Orchestrator`（状态机）→ 六个 Agent → `PolicyIndex`。
 
@@ -420,7 +420,7 @@ allowxperm render_service dev_mali:chr_file ioctl { 0x8014 };
 
 ![批量收敛流程](figs/fig3-converge-flow.png)
 
-**参与对象**：`converge` → `LogAgent`（去重）→ 快路判定 → 六 Agent 闭环 → 报告。
+**参与对象**：`converge` → `LogAgent`（去重）→ 快路判定 → 六 Agent 流水线 → 报告。
 
 **实测（本机，2026-10-05 复跑）**：
 
@@ -476,7 +476,7 @@ real 0m4.161s
 
 作品有两处界面：
 
-1. **主机端 Web UI**（`webui/server.py`，标准库 HTTP server）：单页展示 Agent Trace 动画与结果卡片，输入一条 denial 即可看到六步闭环的可视化过程。
+1. **主机端 Web UI**（`webui/server.py`，标准库 HTTP server）：单页展示 Agent Trace 动画与结果卡片，输入一条 denial 即可看到六步流水线的可视化过程。
 2. **板端控制台 HAP**：顶部开关（切换采集会话）、状态行（`本次窗口 N 行 / 累计 M 个案例`）、案例卡片区（分类 / 最小修复 / `APPROVE · SUCCESS` / 来源标注）、主按钮「载入当前快照」与预录回放链。
 
 **设计原则**：界面必须**如实区分数据来源**——工具造成的 denial 会明确标注「工具造成」，不冒充分析结果；"累计案例"与"本次窗口行数"分开计数，因为它们测的不是一回事。
@@ -501,7 +501,7 @@ real 0m4.161s
 
 ### 2.8.2 最小权限修复正确性（L3 留一法）
 
-方法：剔除 golden 中该 denial 的真实修复规则，使它回到"未修复"状态，再跑闭环并比对生成的补丁。
+方法：剔除 golden 中该 denial 的真实修复规则，使它回到"未修复"状态，再跑 Agent 流水线并比对生成的补丁。
 
 前置发现：**真实上游策略高度冗余**——剔除单条修复后，多数访问仍被其它规则覆盖。因此只有 **1,915 个 informative 样本**（剔除后确实变为不允许）能真正检验修复能力。
 
@@ -599,7 +599,7 @@ real 0m4.161s
 
 | 角色 | 姓名 | 分工 |
 |---|---|---|
-| 队长 | 【待填】 | 总体方案、确定性内核与六 Agent 闭环、设备端组件、真机验证 |
+| 队长 | 【待填】 | 总体方案、确定性内核与六 Agent 流水线、设备端组件、真机验证 |
 | 队员 1 | 【待填】 | 【待填：建议按实际分配填写——评测体系 / 文档与演示] |
 | 队员 2 | 【待填】 | 【待填】 |
 
@@ -732,7 +732,7 @@ python -m policy_loop.eval.replay --golden data/eval/golden.trusted.jsonl \
 python -m policy_loop.eval.replay --golden data/eval/golden.trusted.jsonl \
     --resolve --out data/reports/replay-report.trusted-resolved.json     # 99.94%
 
-# ── L3 闭环评测 ──────────────────────────────────────────────
+# ── L3 流水线评测 ──────────────────────────────────────────────
 python -m policy_loop.eval.agent_eval --limit 400 --seed 0
 python -m policy_loop.eval.agent_llm_eval --limit 60 --seed 0
 
