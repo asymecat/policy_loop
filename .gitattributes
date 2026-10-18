@@ -1,0 +1,8 @@
+# report.docx 与配图是**派生产物**（docx 由 tools/build_report_docx.py 从 report.md 生成，
+# PNG 由 docs/figs/make_figs.py 生成）。二进制进 git 的唯一实际用途是"这一版长什么样"，
+# 逐行 diff 没有意义，合并冲突更不该手工解 —— 一律**重新生成**。
+#
+# 标注 binary 之后 git 不再尝试文本合并与 diff，冲突时保留 ours+theirs 两份，
+# 处理方式固定为：跑生成脚本，谁都不手工改。
+docs/report.docx  binary -diff -merge -text
+docs/figs/*.png   binary -diff -merge -text

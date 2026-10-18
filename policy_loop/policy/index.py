@@ -148,7 +148,7 @@ class PolicyIndex:
         index the patch is allowed to touch (:mod:`policy_loop.agents`).
 
         ``copy.deepcopy`` is the obvious way to get one and was what this
-        replaced, but on the rk3568 sepolicy tree -- 21,790 rules -- it is both
+        replaced, but on the rk3568 sepolicy tree -- 21,824 rules -- it is both
         ruinously slow (once per case, thousands of cases) and intermittently
         fatal: deepcopy recurses through ``_reconstruct`` per object, and the
         ~50% of runs that segfaulted did so inside it, at 8MB stack and at

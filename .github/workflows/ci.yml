@@ -1,0 +1,65 @@
+name: CI
+
+# 三道作业各自回答一个不同的问题：
+#   unit     —— 代码还对吗（unittest 与 pytest 两个口径都要跑，见下）
+#   docgate  —— 文稿说的还是真的吗（配图/数字/占位符/一致性）
+#   docx     —— report.docx 与 report.md 还对得上吗（要固定 pandoc 版本才判得准）
+#
+# 语料（data/raw）不入库，所以这里不跑 --live；那一条由 docgate-live.yml 每周兜。
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  unit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      # tests/test_attribution.py 是 pytest 风格（模块级函数，没有 TestCase 子类），
+      # unittest discover 收不到它。少了 pytest，它会以 ImportError 记账成一个
+      # "失败的测试"，于是同一棵树在两种环境下报出 306 与 307 两个数。
+      # 两个口径都跑，才谈得上"报告里那个数是可复现的"。
+      - run: python -m pip install --upgrade pip pytest
+      - name: selfcheck
+        run: python -m policy_loop.selfcheck
+      - name: unittest
+        run: python -m unittest discover -s tests -v
+      - name: pytest
+        run: python -m pytest -q
+
+  docgate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      # data/raw 不在仓库里 —— docgate 自己会说"这些活探针跳过"，而不是装作通过。
+      # 真失败（值不符 / 锚点没了 / 未登记的声明）一律 exit 1。
+      - name: docgate（文稿 ↔ 真值清单 ↔ 能验到的产物）
+        run: python tools/docgate.py
+      - name: 门禁本身的反控测试
+        run: python -m unittest tests.test_docgate -v
+
+  docx:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: pandoc/setup-pandoc@v2
+        with:
+          # 与 docs/facts.json 的 provenance_env 对齐（比对只看前三位）。
+          pandoc-version: "3.1.11"
+      - run: python -m pip install --upgrade pip "python-docx==1.2.0"
+      - name: report.docx 必须与 report.md 一致
+        run: python tools/docgate.py --only docx --strict-env

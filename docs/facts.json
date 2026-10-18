@@ -1,0 +1,153 @@
+{
+  "schema": 1,
+  "updated": "2026-10-16",
+  "why": [
+    "真值清单：文稿里每一句可以被机器验证的『当前口径』声明都登记在这里。",
+    "facts = 事实本身（值 + 归一化方式 + 活探针）；sites = 这句话出现在哪（文件 + 语义锚点 + 抓数模式）。",
+    "sites 用**语义锚点**（context 子串）定位、不用行号：行号会在任何一次加行时失效，锚点随内容走。",
+    "一个 site 覆盖**所有**含该锚点、且真的抓到了数的文本单元 —— 同一句话在图里和正文里各说一遍，两处都得对。压根没提到数的单元（句尾顺嘴带个 Agent）跳过不算声明。",
+    "exempt = 口径豁免：那句话里也有个数字，但说的不是这件事（例如同一句里既说『五道守门』又说『六个 Agent』，后者不该被当成本条的声明）。**只在真有两套口径时才加**，且要写清为什么；口径一旦统一，必须回来把它删掉 —— 留着一条没人再触发的豁免，等于那句话以后写错了也过门禁。",
+    "改这里之前先读 tools/docgate.py 顶部的『怎么才能让门禁变绿』。"
+  ],
+
+  "facts": {
+    "index.rules": {
+      "value": 21824,
+      "norm": "int_thousands",
+      "probe": "index.rules",
+      "scope": "当前",
+      "note": "上游 security_selinux_adapter/sepolicy 活树索引。口径=『当前』，所以必须等于活树；带日期/rev 的历史测量不受此约束，不要拿它去改 eval-*.md。"
+    },
+    "index.types": {"value": 1267, "norm": "int_thousands", "probe": "index.types", "scope": "当前"},
+    "index.attributes": {"value": 49, "norm": "int_thousands", "probe": "index.attributes", "scope": "当前"},
+    "index.sources": {
+      "value": 1315,
+      "norm": "int_thousands",
+      "probe": "index.sources",
+      "scope": "当前",
+      "note": "被索引的 .te 源文件数。"
+    },
+
+    "guards.apply_guards_branches": {
+      "value": 6,
+      "norm": "cn_or_int",
+      "probe": "guards.py_branches",
+      "scope": "当前",
+      "note": "converge.apply_guards 里返回具体理由的分支数，AST 数出来（尾部的 return None 不算一道守门）。设备端 pl_converge.cpp::ApplyGuards 必须与它相等 —— 见 mirrors。"
+    },
+    "guards.pipeline_rejection_points": {
+      "value": 5,
+      "norm": "cn_or_int",
+      "probe": null,
+      "scope": "当前",
+      "note": "流水线里的拒绝点（含 Reviewer / Verify）—— 这是**另一套分法**，代码里没有对应集合，故无活探针，只做文稿内一致性。它和 apply_guards 的 6 不同是设计、不是漂移；门禁若把两者混为一谈就会在正确内容上误报。"
+    },
+    "pipeline.agents": {
+      "value": 7,
+      "norm": "cn_or_int",
+      "probe": "pipeline.agents",
+      "scope": "当前",
+      "note": "七个 Agent，在流水线里依次执行（其中 CrossLayerAgent 只读、不改变结论）；真源是 orchestrator.py 的 _PIPELINE。"
+    }
+  },
+
+  "sites": [
+    {"fact": "index.sources", "file": "docs/figs/make_figs.py", "context": "security_selinux_adapter/sepolicy", "pattern": "([0-9,]+)\\s*个\\s*`?\\.te"},
+    {"fact": "index.rules", "file": "docs/figs/make_figs.py", "context": "编译为 PLI 只读索引", "pattern": "([0-9,]+)\\s*条规则"},
+    {"fact": "index.types", "file": "docs/figs/make_figs.py", "context": "编译为 PLI 只读索引", "pattern": "([0-9,]+)\\s*类型"},
+    {"fact": "index.attributes", "file": "docs/figs/make_figs.py", "context": "编译为 PLI 只读索引", "pattern": "([0-9,]+)\\s*属性"},
+
+    {"fact": "pipeline.agents", "file": "docs/figs/make_figs.py", "context": "Agent 流水线", "pattern": "([一二三四五六七八九十0-9]+)\\s*Agent"},
+    {"fact": "guards.pipeline_rejection_points", "file": "docs/figs/make_figs.py", "context": "五道守门", "pattern": "([一二三四五六七八九十0-9]+)\\s*道守门"},
+    {"fact": "guards.apply_guards_branches", "file": "docs/figs/make_figs.py", "context": "六道守门", "pattern": "([一二三四五六七八九十0-9]+)\\s*道守门"},
+
+    {"fact": "index.sources", "file": "README.md", "context": "L2 实测基线", "pattern": "([0-9,]+)\\s*个\\s*`?\\.te"},
+    {"fact": "index.rules", "file": "README.md", "context": "对 denial→修复 golden", "pattern": "([0-9,]+)\\s*条规则"},
+
+    {"fact": "index.sources", "file": "docs/report.md", "context": "实测索引规模", "pattern": "([0-9,]+)\\s*个\\s*`?\\.te"},
+    {"fact": "index.rules", "file": "docs/report.md", "context": "实测索引规模", "pattern": "([0-9,]+)\\s*条规则"},
+    {"fact": "index.types", "file": "docs/report.md", "context": "实测索引规模", "pattern": "([0-9,]+)\\s*个类型"},
+    {"fact": "index.attributes", "file": "docs/report.md", "context": "实测索引规模", "pattern": "([0-9,]+)\\s*个属性"},
+    {"fact": "pipeline.agents", "file": "docs/report.md", "context": "Agent", "pattern": "([一二三四五六七八九十0-9]+)\\s*Agent"},
+    {"fact": "guards.pipeline_rejection_points", "file": "docs/report.md", "context": "五道守门", "pattern": "([一二三四五六七八九十0-9]+)\\s*道守门"},
+    {"fact": "guards.apply_guards_branches", "file": "docs/report.md", "context": "六道守门", "pattern": "([一二三四五六七八九十0-9]+)\\s*道守门"},
+
+    {"fact": "index.rules", "file": "policy_loop/policy/index.py", "context": "sepolicy tree -- ", "pattern": "([0-9,]+)\\s*rules"}
+  ],
+
+  "wait_for": {
+    "why": "反向扫描：文稿里出现这些句式的地方**必须**已经被某个 site 覆盖。图脚本里命中=红（图是给评委看的门面），散文里命中=黄（可能是新声明，也可能只是措辞撞车）。exempt 同样适用。",
+    "grammars": [
+      {"file": "docs/figs/make_figs.py", "pattern": "([0-9,]+)\\s*条规则", "severity": "fail"},
+      {"file": "docs/figs/make_figs.py", "pattern": "([一二三四五六七八九十0-9]+)\\s*道守门", "severity": "fail"},
+      {"file": "docs/figs/make_figs.py", "pattern": "([一二三四五六七八九十0-9]+)\\s*Agent", "severity": "fail"},
+      {"file": "docs/report.md", "pattern": "([0-9,]+)\\s*条规则", "severity": "warn",
+       "exempt": ["11 条规则的小策略"]},
+      {"file": "docs/report.md", "pattern": "([一二三四五六七八九十0-9]+)\\s*道守门", "severity": "warn",
+       "exempt": ["最关键的一道守门"]},
+      {"file": "README.md", "pattern": "([0-9,]+)\\s*条规则", "severity": "warn"}
+    ]
+  },
+
+  "mirrors": [
+    {
+      "id": "guards.py_vs_cpp",
+      "why": "同一条记录从主机侧入口问、还是从板端问，必须拿到同一句话。两份实现在两个进程里，谁改了另一份不会跟着变。",
+      "py": {"file": "policy_loop/converge.py", "func": "apply_guards"},
+      "cpp": {"file": "device/selinux_adapter/framework/policycoreutils/src/pl_converge.cpp", "func": "ApplyGuards"},
+      "signatures": [
+        "目标上下文可疑",
+        "占位符（service 需映射到具体",
+        "不在当前策略语料中",
+        "不在策略任何规则中出现",
+        "非权限名「",
+        "空权限"
+      ],
+      "note": "signatures 每一条都必须在两侧各**恰好出现一次**，且两侧守门分支数相等。"
+    },
+    {
+      "id": "pipeline.agents_vs_fig2",
+      "why": "图 2 画了几个 Agent 必须等于流水线真实长度 —— 曾经图上写 6、代码是 7，5 天没人发现。",
+      "fig": {"file": "docs/figs/make_figs.py", "context": "Agent 流水线", "pattern": "([一二三四五六七八九十0-9]+)\\s*Agent"},
+      "probe": "pipeline.agents"
+    }
+  ],
+
+  "placeholders": {
+    "why": "占位符只许变少不许变多。少了=黄（记得同步 baseline），多了=红，过期且仍>0=红。",
+    "entries": [
+      {"file": "docs/report.md", "pattern": "【待填】", "count": 9, "expires": "2026-11-01",
+       "why": "封面信息表 5 处 + 3.1 成员分工表 4 处（:604 一行两处）——需用户本人提供"},
+      {"file": "docs/report.md", "pattern": "待补截图", "count": 0, "expires": "2026-11-01",
+       "why": "§2.7 三张截图已补齐（2026-10-17）：Web UI Agent Trace + 板端实时卡片 + 快照状态行"}
+    ]
+  },
+
+  "docx": {
+    "why": "report.docx 是 report.md 的派生物，不一致就等于两份材料各说各话。",
+    "md": "docs/report.md",
+    "builder": "tools/build_report_docx.py",
+    "artifact": "docs/report.docx",
+    "provenance_env": {"pandoc": "3.1.11", "python_docx": "1.2.0"},
+    "note": "工具链版本与 provenance_env 不符时记 SKIP(env) 并打印两个版本，**不判红** —— pandoc/python-docx 的版本会改变正文 XML 的细节，那是环境差异不是文档缺陷。"
+  },
+
+  "figures": {
+    "why": "改脚本不出图 = 图还是老的。判据是 git 谱系（脚本的内容变更提交是否晚于 PNG 的最近提交）；工作区对脚本是脏的时候退化为 mtime 比较。",
+    "script": "docs/figs/make_figs.py",
+    "outputs": [
+      "docs/figs/fig1-architecture.png",
+      "docs/figs/fig2-agent-pipeline.png",
+      "docs/figs/fig3-converge-flow.png",
+      "docs/figs/fig4-board-runtime.png"
+    ],
+    "consumers": ["docs/report.md"]
+  },
+
+  "managed": [
+    "docs/figs/make_figs.py",
+    "docs/report.md",
+    "README.md",
+    "policy_loop/policy/index.py"
+  ]
+}

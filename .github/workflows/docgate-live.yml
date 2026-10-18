@@ -1,0 +1,42 @@
+name: DocGate (live)
+
+# 每周兜一次「清单 ↔ 真实产物」那一层。
+#
+# 为什么单独一个 workflow：CI 上拿不到上游语料（data/raw 不入库），
+# 于是 `index.rules` 这类事实的**活探针**平时是跳过的。跳过久了，
+# 清单就会被当成"已经验过" —— 这里就是不让它发生的那一步。
+#
+# 判据：语料树实测的规则数/类型数/属性数/源文件数，必须等于 docs/facts.json 里登记的值。
+# 上游动了、而文稿和清单没跟着动 → 这里红。
+
+on:
+  schedule:
+    # 每周一 03:17 UTC（避开整点，别和全世界的定时任务撞在一起）
+    - cron: "17 3 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  live:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: 拉上游策略语料（稀疏克隆，只取 sepolicy/）
+        run: |
+          git clone --depth 1 --sparse \
+            https://gitee.com/openharmony/security_selinux_adapter.git \
+            data/raw/oh-selinux
+          cd data/raw/oh-selinux && git sparse-checkout set sepolicy
+
+      # 只跑 facts：这一条作业要回答的是「清单 ↔ 上游真实产物还对得上吗」。
+      # docx / figures 那两项在 push 触发的 ci.yml 里已经验过，而它们在这里**必然会**
+      # 因环境而跳过（这个 job 不装 pandoc，也不该装）——带着 --strict-env 跑全量，
+      # 每周都会以一个与内容无关的理由变红，然后就没人看了。
+      - name: docgate --only facts --live
+        run: python tools/docgate.py --only facts --live --strict-env

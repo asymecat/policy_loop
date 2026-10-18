@@ -21,7 +21,7 @@
 - `policy_loop.selfcheck`：环境 + 模块 + 冒烟自检
 
 **L2 实测基线**（真实上游 `security_selinux_adapter` 语料，1315 个 `.te`）：
-- 索引 21,790 条规则；抽取 **3,367 对 denial→修复 golden、5,161 条真实 denial**
+- 索引 21,824 条规则；抽取 **3,367 对 denial→修复 golden、5,161 条真实 denial**
 - 回放 **coverage_all 97.2%**（5,117 条可评测中 4,973 条判定正确），见 [`docs/eval-L2.md`](docs/eval-L2.md)
 - **质检后（trusted 子集 2,154 对/3,522 条）coverage_all 99.8%**；再做 service 占位逻辑解析后 **99.94%、未覆盖仅 2**（见 [`docs/eval-trust.md`](docs/eval-trust.md)）
 
@@ -85,7 +85,11 @@ policy_loop/
   converge.py         # 批量收敛：整份日志 → 去重收敛报告（含补丁守门）
   selfcheck.py        # 自检入口
 tools/
-  apply_converge.py   # 落地桥：收敛报告 → 板子策略过门 → CIL → secilc 编译 → 回验
+  apply_converge.py     # 落地桥：收敛报告 → 板子策略过门 → CIL → secilc 编译 → 回验
+  docgate.py            # 文档生产门禁：文稿 ↔ docs/facts.json ↔ 真实产物（配图/数字/占位符/docx）
+  docfacts.py           # 上面那道门的探针：AST 派生真值，不 import 被检查的脚本
+  stability_gate.py     # 稳定性门：逐轮全新子进程，把解释器级间歇崩溃变成可重复的数字
+  build_report_docx.py  # docs/report.md → docs/report.docx（pandoc + python-docx，支持 --check）
 webui/                # Web UI：stdlib HTTP server + /api/analyze + Agent Trace 前端
 data/
   fixtures/           # 测试/演示样例（含上游真实格式 denial）
@@ -94,7 +98,7 @@ data/
   reports/            # corpus/replay/trust/agent-eval/converge 评测报告（已入库）
   raw/                # 上游语料（稀疏克隆，不入库，需自行拉取）
 docs/                 # 方案与路线文档
-tests/                # 单测（306 个，`python -m unittest discover -s tests`，0 失败）
+tests/                # 单测（341 个，`python -m unittest discover -s tests`，0 失败）
 ```
 
 ## L2/L3 评测命令
@@ -140,7 +144,9 @@ OPENAI_MODEL=deepseek-chat
 
 | 级 | 内容 | 状态 |
 |---|---|---|
-| L0 | 仓库骨架 + selfcheck + CI | ✅ |
+| L0 | 仓库骨架 + selfcheck + CI（[`.github/workflows/ci.yml`](.github/workflows/ci.yml)：单测 + 文档门禁 + docx 一致性） | ✅ |
+| L0 | 文档生产门禁 `tools/docgate.py`（文稿 ↔ 真值清单 ↔ 真实产物；配图/数字/占位符/docx 六项） | ✅ |
+| L0 | 语料活树复验 [`docgate-live.yml`](.github/workflows/docgate-live.yml)（每周 + 手动触发，拉语料后跑 `--live`） | ✅ |
 | L1 | Parser + Policy Index（数据仿真） | ✅ |
 | L2 | 真实语料评测基线（coverage 97.2%） | ✅ |
 | L3 | 确定性 Agent 流水线（分工判定 + 否决权 + 否决转人工） + 最小权限 patch + Verify | ✅（规则版；LLM 可插拔，默认关闭） |

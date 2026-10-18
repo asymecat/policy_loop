@@ -33,10 +33,10 @@
     "init_relabel(": 26,
     "chipset_init_daemon_domain(": 1
   },
-  "rules_indexed": 21790,
+  "rules_indexed": 21824,
   "types": 1267,
   "attributes": 49,
-  "skipped_statements": 647,
+  "skipped_statements": 524,
   "class_counts": {
     "file": 7306,
     "dir": 3410,

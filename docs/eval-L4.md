@@ -274,7 +274,7 @@ rc=3）；`--explain --cross-layer` 复用同一张表复现宿主的跨层视�
 | 侧 | 改动前 | 改动后 | 倍数 |
 |---|---|---|---|
 | 设备查询路径（同一份 27912 条查询，两个二进制都输出 2984884 B） | 2.755 s / 0.0987 ms·条⁻¹ | 0.081 s / 0.0029 ms·条⁻¹ | **34×** |
-| 宿主判定路径（语料 4911 唯一案例 × has_access+neverallow+ioctl） | 8.842 s / 1.800 ms·案⁻¹ | 0.037 s / 0.008 ms·案⁻¹ | **238×** |
+| 宿主判定路径（语料 4911 唯一案例 × has_access+neverallow+ioctl） | 8.842 s / 1.800 ms·案⁻¹ | 0.037 s / 0.0076 ms·案⁻¹ | **238×** |
 
 > 「改动前」的设备侧是**从 `HEAD` 的 `device/` 源码重新编译出来的真二进制**
 > （`git archive HEAD … && ADAPTER=/tmp/head_adapter ./tools/devbuild.sh release`），

@@ -31,7 +31,7 @@ PolicyLoop 把这条日志链自动化：**读懂 → 定位根因 → 生成最
 
 ### 诊断流水线（`policy_loop/agents/`）
 
-单条 denial 走 **Log → Policy → Security → CrossLayer → Repair → Review → Verify** 七步（`Orchestrator` 严格状态机，`SecurityCase` 记录全程 Agent Trace）。**单向前进、不重试**：唯一的提前退出是 log 解析失败，Review/Verify 不通过只会让该案归入「需人工」。
+单条 denial 走 **Log → Policy → Security → CrossLayer → Repair → Reviewer → Verify** 七步（`Orchestrator` 严格状态机，`SecurityCase` 记录全程 Agent Trace）。**单向前进、不重试**：唯一的提前退出是 log 解析失败，Reviewer/Verify 不通过只会让该案归入「需人工」。
 
 | Agent | 职责 |
 |---|---|
