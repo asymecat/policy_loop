@@ -53,7 +53,17 @@ TOOL_DOMAINS = {"snapshot_display", "su", "uitest", "shell", "sh", "dmesg",
                 # it reads at startup are our footprint, not defects in the
                 # firmware under test. Without this the probe line is counted
                 # against the board.
-                "pl_collector"}
+                "pl_collector",
+                # The on-board fixer, and here the reason is stronger than
+                # "our footprint". This domain is the one that loads policy, so
+                # its own denials are *feedback into the thing that fixes
+                # denials*: classify them as board defects and the fixer gets
+                # handed a candidate list containing itself, i.e. it would be
+                # asked to grant itself the permissions it just failed to hold.
+                # That loop is not a demo wart, it is a privilege-escalation
+                # path. Same set must appear in the console's kToolDomains --
+                # tests/test_tool_domains_sync.py enforces the two are equal.
+                "pl_fixer"}
 
 _AVC = re.compile(r"avc:\s+denied\s+\{([^}]*)\}")
 _FIELD = re.compile(r'(\w+)=("[^"]*"|\S+)')

@@ -31,6 +31,23 @@
 # probe / clean 不碰策略、不碰二进制，只推一份 init cfg 再重启服务，
 # 所以现场切换只要几秒，且两种形态用的是**同一份**二进制。
 #
+# ---------------------------------------------------------------
+# 这份脚本现在管**两个**服务：pl_collector（采集）与 pl_fixer（板端修复）。
+#
+# 上面所有子命令（status / demo / stop / start / uninstall / rollback）对两者
+# 一起生效；probe / clean 只管采集器的 cfg（修复器没有 debug 形态）。
+#
+# 修复器要多推两样东西：
+#   /system/bin/pl_fixer            与采集器同源码、不同 argv 的第二份拷贝
+#   /system/etc/init/policyloop_fixer.cfg
+#   /system/etc/policyloop/{base.cil,na_all.cil}   ← 修复时现场编译的输入
+#
+# ★ 那两份 .cil 是**必须**的，不是可选缓存：base.cil 是每次修复的编译底座，
+#   它含 pl_fixer 域本身；少了它，第一次修复装载就会把修复器从内核策略里抹掉，
+#   而且现象是「装载成功、板子一切正常、但这个功能从此哑掉」。
+#
+# ★ 这两份资产按 134 KB + 1.6 MB 算，/ 上还有 651 MB 空闲，放得下。
+#
 # cfg 里带一个 init job，开机时写 /proc/sys/kernel/printk_ratelimit=0。
 # 不是可选项：采集走 /dev/kmsg，那是 audit 记录在 printk 里的镜像副本，
 # 板子默认「每 5 秒只放 10 条」且**超出直接丢**，突发时 dmesg 和采集器
@@ -57,6 +74,29 @@ SVC=pl_collector
 APP=com.policyloop.console
 APPDIR=/data/app/el2/100/base/$APP/haps/entry/files
 
+# ---- 板端修复服务 pl_fixer -------------------------------------------
+# 与采集器**同一份源码**（denial_check，靠 argv 的 --fix 进不同模式），但落成
+# **两份真实拷贝**而不是一条软链：
+#   ① 软链在 /system/bin 下没有 file_contexts 条目，标签要靠回退猜，而
+#      lnk_file 与 file 是两套检查 —— 白添一个不可控变量。
+#   ② 推二进制前必须先停服务（运行中的可执行文件是 busy text file，覆盖返回
+#      ETXTBSY，而 hdc file send **照样返回 0**）。两份独立文件时停一个不影响
+#      另一个，先后顺序就无所谓了。
+BIN_FIXER=/system/bin/pl_fixer
+CFG_FIXER=/system/etc/init/policyloop_fixer.cfg
+SVC_FIXER=pl_fixer
+
+# ---- 修复器的板端资产 -------------------------------------------------
+# 都在 /system/etc/policyloop/ 下，**root 拥有、应用不可写**（这正是不能放
+# 应用沙箱的原因：沙箱可写 = 应用能改编译输入）。
+#   base.cil   每次修复的编译底座，必须含 pl_fixer 域（见文件头 ★）
+#   na_all.cil 710 条红线断言。**只用在"检查那一次"编译里**；真要加载的那份
+#              绝不能带 —— 带上会把产物从 ~408 KB 撑到 494 KB。
+# 这两份由 device/selinux_policy/build_pl_collector.sh 产出（它顺手 cp 过来）。
+ASSETDIR=/system/etc/policyloop
+ASSET_BASE=$HERE/out/base.cil
+ASSET_NA=$HERE/out/na_all.cil
+
 sh_() { hdc shell "$1"; }
 
 # 把内核此刻真正生效的策略拉回来，数我们的类型。这是唯一可信的判据：
@@ -76,38 +116,66 @@ verify_live() {
     python3 - "$tmp" << 'PY' || rc=$?
 import sys
 d = open(sys.argv[1], 'rb').read()
-n = d.count(b'pl_collector')
-print(f"   内核策略 {len(d)} 字节, pl_collector 出现 {n} 次")
-sys.exit(0 if n else 1)
+n, f = d.count(b'pl_collector'), d.count(b'pl_fixer')
+print(f"   内核策略 {len(d)} 字节, pl_collector 出现 {n} 次, pl_fixer 出现 {f} 次")
+# 两个都要在。只数采集器的话，一份「没有修复器」的策略照样报绿灯 —— 而那正是
+# 回滚基线陷阱的症状：拿磁盘那份 policy.31 当基线回滚，板子看起来一切正常
+# （采集器还在跑），只是修复器域当场从内核策略里消失、这个功能永久哑掉。
+sys.exit(0 if (n and f) else 1)
 PY
     rm -f "$tmp"
     return $rc
 }
 
-cmd_status() {
-    echo "== 服务进程 =="
-    local pid
-    pid=$(sh_ "pidof $SVC" 2>/dev/null | tr -d '\r' || true)
+# 一个服务的进程/域/AVC 缺口。抽成函数而不是照抄一遍，理由和上面那条一样：
+# 现在有两个服务，「两份要同步改」这种纪律光靠记性没有用。
+svc_block() {
+    local svc="$1" pid
+    pid=$(sh_ "pidof $svc" 2>/dev/null | tr -d '\r' || true)
     if [ -z "$pid" ]; then
-        echo "   ✗ 没在跑"
+        echo "   ✗ $svc 没在跑"
     else
-        echo "   ✓ pid=$pid"
-        echo "   ps -Z:"; sh_ "ps -Z | grep -E '$SVC' " || true
-        echo "   域 (/proc/$pid/attr/current):"
+        echo "   ✓ $svc pid=$pid"
+        echo "   ps -Z:"; sh_ "ps -Z | grep -E '$svc' " || true
         # 读别的进程的 attr/current 要 ptrace 权限，拿不到不是故障，是策略在管事。
+        echo -n "   域 (/proc/$pid/attr/current): "
         sh_ "cat /proc/$pid/attr/current 2>&1" || true
     fi
+}
+
+cmd_status() {
+    echo "== 服务进程 =="
+    svc_block "$SVC"
+    svc_block "$SVC_FIXER"
     echo
-    echo "== 内核策略里有没有 pl_collector =="
-    if verify_live; then echo "   ✓ 在" ; else echo "   ✗ 不在（策略没加载或已被还原）"; fi
+    echo "== 内核策略里有没有我们的两个域 =="
+    if verify_live; then
+        echo "   ✓ 两个都在"
+    else
+        echo "   ✗ 缺一个或都不在 —— 可能是策略没加载、被还原，"
+        echo "     或者回滚时拿磁盘那份 policy.31 当了基线（它不含 pl_fixer）"
+    fi
     echo
     echo "== 共享文件 =="
-    sh_ "ls -la $APPDIR 2>&1 | grep -E 'guard.on|live.jsonl|snapshot.req|snapshot.jsonl|总用量|total' " || true
+    sh_ "ls -la $APPDIR 2>&1 | grep -E 'guard.on|live.jsonl|snapshot.req|snapshot.jsonl|fix.req|fix.sel|fix.out|fix.rollback|总用量|total' " || true
     echo "   live.jsonl 行数: $(sh_ "wc -l < $APPDIR/live.jsonl 2>/dev/null" | tr -d '\r' || echo '?')"
     # 快照信道。req 空 = 文件压根不存在 = 采集器的守护循环没跑过（服务没起），
     # 这是「按钮没反应」最可能的根因，所以并排打出来。
     echo "   快照信道: snapshot.req=[$(sh_ "cat $APPDIR/snapshot.req 2>/dev/null" | tr -d ' \r')] "\
 "snapshot.jsonl=$(sh_ "wc -l < $APPDIR/snapshot.jsonl 2>/dev/null" | tr -d ' \r') 行"
+    # 修复信道。与快照信道同形，所以"没反应"的判法也一样：fix.req 空 = 修复器
+    # 的守护循环没跑过 = 服务没起。fix.out 的字节数则告诉我们上一轮修复的结论
+    # 有没有落下来。
+    echo "   修复信道: fix.req=[$(sh_ "cat $APPDIR/fix.req 2>/dev/null" | tr -d ' \r')] "\
+"fix.rollback=[$(sh_ "cat $APPDIR/fix.rollback 2>/dev/null" | tr -d ' \r')] "\
+"fix.sel=$(sh_ "grep -c . $APPDIR/fix.sel 2>/dev/null" | tr -d '\r') 行 "\
+"fix.out=$(sh_ "wc -c < $APPDIR/fix.out 2>/dev/null" | tr -d ' \r') 字节"
+    echo
+    echo "== 修复器的板端资产（缺了它只能现场编译一次，之后累积不了）=="
+    # 标签必须是 system_etc_file —— pl_fixer 的读权限正是挂在这个标签上的
+    # （file 读由 (allow domain system_etc_file …) 白拿）。标签不对的话，
+    # 症状是修复器活着、什么都不报，只是永远读不到底座。
+    sh_ "ls -laZ $ASSETDIR 2>&1" || true
     echo
     echo "== --kmsg 的前提：printk 限流（不关会静默丢 audit 记录）=="
     # 板上现值 vs cfg 里那个 job 的意图。不一致 = 这次开机没跑到 job
@@ -130,8 +198,34 @@ for p, g in zip(['/proc/sys/kernel/printk_ratelimit',
           f'{p.split("/")[-1]:22s} 板上={g or "?":10s} cfg 期望={w}')
 PY
     echo
-    echo "== 我们这个域的 AVC 缺口（有就是权限没给够）=="
-    sh_ "dmesg | grep 'u:r:$SVC:s0' | tail -15" || true
+    echo "== 我们这两个域的 AVC 缺口（有就是权限没给够）=="
+    for d in $SVC $SVC_FIXER; do
+        echo "   --- u:r:$d:s0 ---"
+        sh_ "dmesg | grep 'u:r:$d:s0' | tail -10" || true
+    done
+}
+
+# 推一份二进制并证明它真的上去了。
+# 三步缺一不可：先停服务（运行中的可执行文件是 busy text file，覆盖返回
+# ETXTBSY，而 hdc file send **照样返回 0**，把输出丢掉就更看不见了）、再推、
+# 再按 md5 比对。实测踩过：脚本一路打印 ✓、服务照常起来、域也对，只有板上那份
+# 还是旧件（167636 vs 168320），靠 md5 才发现。
+push_bin() {
+    local src="$1" dst="$2" want got
+    if ! hdc file send "$src" "$dst" >/dev/null 2>&1; then
+        echo "   ✗ 推不到 $dst：/ 是 rw 吗？(mount -o remount,rw /)" >&2
+        exit 1
+    fi
+    sh_ "chmod 755 $dst"
+    want=$(md5sum "$src" | cut -d' ' -f1)
+    got=$(sh_ "md5sum $dst" | tr -d '\r' | cut -d' ' -f1)
+    if [ "$want" != "$got" ]; then
+        echo "   ✗ $dst 与宿主不一致 —— 板上 $got / 宿主 $want" >&2
+        echo "   ✗ 多半是推的时候服务还在跑（ETXTBSY），而 hdc 不报这个错。" >&2
+        exit 1
+    fi
+    echo "   ✓ $dst  md5=$want"
+    sh_ "ls -laZ $dst"
 }
 
 cmd_install() {
@@ -166,27 +260,13 @@ cmd_install() {
 
     echo
     echo "== 5. 放二进制（不改标签：init 对 system_bin_file 本来就有 execute）=="
-    # 先停服务，再推，再按 md5 比对 —— 三步缺一不可。
-    # 运行中的可执行文件是 busy text file，覆盖它返回 ETXTBSY；而 hdc file send
-    # **照样返回 0**，把输出丢掉就更看不见了。实测踩过：脚本一路打印 ✓、服务照常
-    # 起来、域也对，只有板上那份还是旧件（167636 vs 168320），靠 md5 才发现。
+    # 两份都推同一个 $FRESHBIN：pl_fixer 与 pl_collector 是同一份源码，
+    # 靠 argv 的 --fix / --guard 分流。推之前两个服务都得停。
     sh_ "begetctl service_control stop $SVC" >/dev/null 2>&1 || true
+    sh_ "begetctl service_control stop $SVC_FIXER" >/dev/null 2>&1 || true
     sleep 1
-    if ! hdc file send "$FRESHBIN" "$BIN" >/dev/null 2>&1; then
-        echo "   ✗ 推不进去：/ 是 rw 吗？(mount -o remount,rw /)" >&2
-        exit 1
-    fi
-    sh_ "chmod 755 $BIN"
-    local want got
-    want=$(md5sum "$FRESHBIN" | cut -d' ' -f1)
-    got=$(sh_ "md5sum $BIN" | tr -d '\r' | cut -d' ' -f1)
-    if [ "$want" != "$got" ]; then
-        echo "   ✗ 板上二进制与宿主不一致 —— 板上 $got / 宿主 $want" >&2
-        echo "   ✗ 多半是推的时候服务还在跑（ETXTBSY），而 hdc 不报这个错。" >&2
-        exit 1
-    fi
-    echo "   ✓ md5 一致: $want"
-    sh_ "ls -laZ $BIN"
+    push_bin "$FRESHBIN" "$BIN"
+    push_bin "$FRESHBIN" "$BIN_FIXER"
 
     echo
     echo "== 6. 放 init cfg =="
@@ -195,11 +275,48 @@ cmd_install() {
     # 但 cp 覆盖已有 inode 是可以的。
     sh_ "cp $STAGE/policyloop.cfg $CFG"
     sh_ "ls -laZ $CFG"
+    hdc file send "$HERE/../board/policyloop_fixer.cfg" "$STAGE/policyloop_fixer.cfg" >/dev/null
+    sh_ "cp $STAGE/policyloop_fixer.cfg $CFG_FIXER"
+    sh_ "ls -laZ $CFG_FIXER"
 
     echo
-    echo "== 7. 拉起服务 =="
-    sh_ "begetctl service_control stop $SVC" >/dev/null 2>&1 || true
-    sh_ "begetctl service_control start $SVC" || true
+    echo "== 7. 放修复器的编译底座（base.cil + na_all.cil）=="
+    # 这两份是**修复时的编译输入**，必须 root 拥有且应用不可写 —— 放应用沙箱
+    # 等于让应用能改编译输入。放 /system/etc 的好处在方案里：该目录已被标成
+    # system_etc_file，是现成标签，不需要新增类型、不需要改 file_contexts。
+    for f in "$ASSET_BASE" "$ASSET_NA"; do
+        [ -e "$f" ] || { echo "   ✗ 缺 $f —— 先跑 device/selinux_policy/build_pl_collector.sh" >&2; exit 1; }
+    done
+    sh_ "mkdir -p $ASSETDIR"
+    for f in "$ASSET_BASE" "$ASSET_NA"; do
+        local b; b=$(basename "$f")
+        hdc file send "$f" "$STAGE/$b" >/dev/null
+        sh_ "cp $STAGE/$b $ASSETDIR/$b"
+        echo "   ✓ $ASSETDIR/$b  $(stat -c%s "$f") B"
+    done
+    # mkdir 出来的新目录**通常**继承父目录类型，但那是继承不是保证（取决于有没有
+    # type_transition 命中），而 pl_fixer 读 base.cil 的权限正是挂在 system_etc_file
+    # 这个标签上的。标签错了不会有任何报错，症状是「服务活着、什么都不报、只是
+    # 永远读不到底座」——所以当场 chcon 并硬验。
+    sh_ "chcon u:object_r:system_etc_file:s0 $ASSETDIR $ASSETDIR/base.cil $ASSETDIR/na_all.cil 2>/dev/null || true"
+    if sh_ "ls -laZ $ASSETDIR/base.cil" | grep -q 'system_etc_file'; then
+        echo "   ✓ 标签 system_etc_file"
+    else
+        echo "   ✗ base.cil 的标签不是 system_etc_file —— pl_fixer 读不到它，修复功能会哑掉" >&2
+        echo "     （chcon 没生效？/ 是 rw 吗？）当前：" >&2
+        sh_ "ls -laZ $ASSETDIR" >&2
+        exit 1
+    fi
+    sh_ "ls -laZ $ASSETDIR"
+
+    echo
+    echo "== 8. 拉起服务 =="
+    for s in $SVC $SVC_FIXER; do
+        sh_ "begetctl service_control stop $s" >/dev/null 2>&1 || true
+    done
+    for s in $SVC $SVC_FIXER; do
+        sh_ "begetctl service_control start $s" || true
+    done
     sleep 2
 
     echo
@@ -287,6 +404,15 @@ cmd_demo() {
     sh_ "rm -f $APPDIR/snapshot.jsonl"
     echo "   1b. 快照信道归零（req=0, snapshot.jsonl 清空）"
 
+    # 修复信道同理，而且危害更大：留一个 fix.req='1' 的话，修复器一启动就拿
+    # 上一轮的**选择**去编译装载 —— 演示还没开始，板子已经在改自己的策略了。
+    # fix.sel 是"选择"本身，必须一并清掉（只清 req 的话，下一次 req=1 会立刻
+    # 复用上一轮那份列表，屏上出现的是旧案例，比没反应更难查）。
+    sh_ "echo 0 > $APPDIR/fix.req"
+    sh_ "echo 0 > $APPDIR/fix.rollback"
+    sh_ "rm -f $APPDIR/fix.sel $APPDIR/fix.out"
+    echo "   1c. 修复信道归零（fix.req=0, fix.rollback=0, fix.sel/fix.out 清空）"
+
     # 等采集器退出会话。不等的话它还会写最后一批，清完立刻被补回来。
     local a b i
     for i in 1 2 3 4 5 6; do
@@ -318,7 +444,8 @@ cmd_demo() {
     echo "   板端现状：guard.on=[$(sh_ "cat $APPDIR/guard.on" | tr -d ' \r')]  " \
          "live.jsonl=$(sh_ "wc -c < $APPDIR/live.jsonl" | tr -d ' \r') 字节  " \
          "snapshot.req=[$(sh_ "cat $APPDIR/snapshot.req 2>/dev/null" | tr -d ' \r')]  " \
-         "采集器 pid=$(sh_ "pidof $SVC" | tr -d ' \r')"
+         "采集器 pid=$(sh_ "pidof $SVC" | tr -d ' \r')  " \
+         "修复器 pid=$(sh_ "pidof $SVC_FIXER" | tr -d ' \r')"
     echo
     echo "   ★ 现在放下 hdc，用手指点屏幕右上角的开关（720×1280 下约 (635,214)）。"
     echo "     预期 2 秒左右出横幅：pl_collector → data_local:dir / MISSING_RULE / search ×1。"
@@ -330,18 +457,27 @@ status)    cmd_status; exit 0 ;;
 demo)      cmd_demo; exit 0 ;;
 probe)     cmd_cfg probe; exit 0 ;;
 clean)     cmd_cfg base; exit 0 ;;
-stop)      sh_ "begetctl service_control stop $SVC"; exit 0 ;;
-start)     sh_ "begetctl service_control start $SVC"; sleep 2; cmd_status; exit 0 ;;
+stop)      for s in $SVC $SVC_FIXER; do sh_ "begetctl service_control stop $s" || true; done; exit 0 ;;
+start)     for s in $SVC $SVC_FIXER; do sh_ "begetctl service_control start $s" || true; done
+           sleep 2; cmd_status; exit 0 ;;
 uninstall)
-    sh_ "begetctl service_control stop $SVC" >/dev/null 2>&1 || true
-    sh_ "rm -f $CFG $BIN"
-    echo "已删除 $CFG 与 $BIN（策略未动）"
+    for s in $SVC $SVC_FIXER; do sh_ "begetctl service_control stop $s" >/dev/null 2>&1 || true; done
+    sh_ "rm -f $CFG $CFG_FIXER $BIN $BIN_FIXER"
+    # 资产目录也一起拆：base.cil / na_all.cil 只在修复器活着时有意义，
+    # 留着 1.7 MB 在 /system 里没有好处（而且 base.cil 是一份完整的策略源）。
+    # applied.cil 不在那儿 —— 它在 /data/local/tmp/policyloop/。
+    sh_ "rm -rf $ASSETDIR"
+    echo "已删除 $CFG / $CFG_FIXER / $BIN / $BIN_FIXER / $ASSETDIR（策略未动）"
     exit 0 ;;
 rollback)
-    sh_ "begetctl service_control stop $SVC" >/dev/null 2>&1 || true
-    sh_ "rm -f $CFG $BIN"
+    for s in $SVC $SVC_FIXER; do sh_ "begetctl service_control stop $s" >/dev/null 2>&1 || true; done
+    sh_ "rm -f $CFG $CFG_FIXER $BIN $BIN_FIXER"
+    sh_ "rm -rf $ASSETDIR"
+    # 累积的补丁也清掉。它是**编译输入**，留着的话下次修复会把它叠回去 ——
+    # 而那时内核里早没有那些规则了，结果是"回滚了，但下次一点又全回来了"。
+    sh_ "rm -rf /data/local/tmp/policyloop"
     sh_ "test -f $STAGE/policy.31.orig && cp $STAGE/policy.31.orig $POLICY"
-    echo "服务已拆，磁盘策略已还原。⚠️ 若跑过 persist，必须重启才彻底回到原策略。"
+    echo "服务与板端资产已拆，磁盘策略已还原。⚠️ 若跑过 persist，必须重启才彻底回到原策略。"
     exit 0 ;;
 esac
 
@@ -349,10 +485,15 @@ cmd_install
 
 echo
 if [ "${1:-install}" = persist ]; then
-    echo "== 8. persist：让磁盘也是新策略（★ 重启后仍生效）=="
+    echo "== 9. persist：让磁盘也是新策略（★ 重启后仍生效）=="
     sh_ "cp $STAGE/policy.31 $POLICY; ls -la $POLICY"
-    echo "   ⚠️ 已落盘。要回原状：bash $0 rollback 并重启。"
+    # ⚠️ 落盘的是**整份策略**，里面因此永久带着两条域：pl_collector 与 pl_fixer。
+    #    也就是说 load_policy 这笔权限从此写在磁盘上。这和"修复结果落盘"是
+    #    两件事，必须分开讲：修复结果只活在内存、重启即消失；这里持久化的是
+    #    **修复器这个组件**。混成一句"我们不落盘"就是不老实。
+    echo "   ⚠️ 已落盘（含 pl_collector 与 pl_fixer 两个域 —— load_policy 从此写在盘上）。"
+    echo "      要回原状：bash $0 rollback 并重启。"
 else
-    echo "   磁盘仍是原策略 ⇒ **重启会丢掉服务**（二进制与 cfg 还在，但域没了）。"
+    echo "   磁盘仍是原策略 ⇒ **重启会丢掉两个域的策略**（二进制与 cfg 还在，但域没了）。"
     echo "   要让开机自启真正生效：bash $0 persist  然后重启。"
 fi

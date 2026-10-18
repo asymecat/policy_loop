@@ -1,0 +1,164 @@
+;; =====================================================================
+;; PolicyLoop 板端修复服务域 pl_fixer
+;;
+;; 这个域存在的唯一理由：让板子**自己**把最小修复加载进内核。
+;; 它跟 pl_collector 是刻意分开的两个域 —— 采集器一条特权都不要，
+;; 特权全部收在这一个域里，好让它能被单独审计、单独质疑。
+;;
+;; ---------------------------------------------------------------------
+;; ★★★ 本域最要紧的一件事：load_policy 的目标类型是 security，不是 kernel
+;;
+;; 板子策略里 (board-policy.cil:26562-26563)：
+;;     (sidcontext kernel   (u r      kernel   ((s0) (s0))))
+;;     (sidcontext security (u object_r security ((s0) (s0))))
+;; 而内核 selinuxfs.c:625-627 检查的是：
+;;     avc_has_perm(current_sid(), SECINITSID_SECURITY, SECCLASS_SECURITY,
+;;                  SECURITY__LOAD_POLICY, NULL)
+;;                                                        ^^^^^^^^^^^^^^^^^^
+;; SECINITSID_SECURITY 映射到上面那个 **security** 类型。
+;;
+;; 红线集 na_all.cil:736 写的是：
+;;     (neverallow pl_na_set_57 kernel (security (load_policy setbool setenforce)))
+;; 它点名的目标类型是 **kernel**，而我们要给的目标类型是 **security** ——
+;; 两者不是同一个类型，所以这条 neverallow **不被触发**。
+;;
+;; 实测（宿主 secilc，原样未改的 na_all.cil）：
+;;     (allow pl_collector kernel   (security (load_policy)))  ⇒ 在第 736 行报错
+;;     (allow pl_collector security (security (load_policy)))  ⇒ rc=0
+;; ⇒ 本功能**不需要对门禁做任何豁免**，710 条断言全部原功率生效。
+;;   （这条第一版方案里判断错了，写的是"必须具名豁免一条"，已更正。）
+;;
+;; ---------------------------------------------------------------------
+;; ★★ exec 板载 secilc 走的是 execute_no_trans，不是 entrypoint
+;;
+;; pl_collector 那次栽在漏 grep 了 process:transition（见 pl_collector.cil:19-29）。
+;; 这次反过来：本域 exec 的是**同域**（内核里没有 type_transition 规则命中，
+;; security_compute_sid() 对 process 类的默认类型取源类型，services.c:1831-1833
+;; ⇒ 子进程仍是 pl_fixer）。于是 bprm 路上走的是这个分支
+;; （hooks.c:2356-2361）：
+;;     if (new_tsec->sid == old_tsec->sid)
+;;         avc_has_perm(old, file, SECCLASS_FILE, FILE__EXECUTE_NO_TRANS)   ← 我们走这条
+;;     else
+;;         avc_has_perm(old, new,  SECCLASS_PROCESS, PROCESS__TRANSITION);
+;;         avc_has_perm(new, file, SECCLASS_FILE,    FILE__ENTRYPOINT);
+;;
+;; ⇒ 照抄 pl_collector 的 `execute entrypoint` 会**恰好漏掉唯一被查的那一位**，
+;;   表现是 execve 返回 EACCES、secilc 起不来、修不了任何东西。
+;;   所以这里给的是 execute_no_trans（entrypoint 不留：本域没有类型转换）。
+;;   hdcd 给 entrypoint 是因为它**有** type_transition，不能照抄。
+;; =====================================================================
+
+(type pl_fixer)
+(roletype r pl_fixer)                     ;; u:r:pl_fixer:s0 要成立必须有这条
+(typeattributeset domain (pl_fixer))
+
+;; 进域的两条硬门（与 pl_collector 同形，缺一不可）
+(allow init pl_fixer (process (transition siginh rlimitinh)))
+
+;; ---------------------------------------------------------------------
+;; 1. 自己：进程基本盘 + 绕过 DAC 的两个能力
+;;
+;;    dac_override 必需：应用沙箱是 0700、属主是应用 uid，本服务以 root 跑，
+;;    要穿进去就得真的能覆盖 DAC。SELinux 对 capability 的检查独立于 uid 0。
+;;    （注意：不加 process:transition —— 同域 exec 不走那条检查，见文件头 ★★）
+;; ---------------------------------------------------------------------
+(allow pl_fixer self (process (fork sigchld sigkill sigstop signull signal getsched setsched getsession getpgid setpgid getcap setcap getattr setrlimit)))
+(allow pl_fixer self (fd (use)))
+(allow pl_fixer self (dir (ioctl read getattr lock open watch watch_reads search)))
+(allow pl_fixer self (file (ioctl read write getattr lock append map open watch watch_reads)))
+(allow pl_fixer self (lnk_file (ioctl read getattr lock map open watch watch_reads)))
+(allow pl_fixer self (fifo_file (ioctl read write getattr lock append map open watch watch_reads)))
+(allow pl_fixer self (capability (dac_override dac_read_search)))
+(allow pl_fixer self (capability2 (syslog)))
+(allow pl_fixer self (lockdown (confidentiality)))
+
+;; ---------------------------------------------------------------------
+;; 1b. hilog 客户端 —— 不是为了打日志，是为了别崩
+;;
+;;    不加这三条，libc 的构造函数建不了 socket（Errno 13），日志走
+;;    /dev/console 兜底、兜底也被拒之后直接 SIGSEGV —— 连 --version 都跑不起来，
+;;    看起来像二进制坏了。实测教训，详见 pl_collector.cil:61-89。
+;; ---------------------------------------------------------------------
+(allow pl_fixer self (unix_dgram_socket (write create connect)))
+(allow pl_fixer hilogd (unix_dgram_socket (sendto)))
+(allow pl_fixer hilog_input_socket (sock_file (write)))
+
+;; ---------------------------------------------------------------------
+;; 2. 把 secilc 跑起来：二进制 + musl 加载器
+;;
+;;    /bin/secilc 板上实测 u:object_r:system_bin_file:s0（38008 B，32 位 ARM
+;;    musl ELF），天然标签，不用改、不用 restorecon。
+;;    路径解析要穿过 /(rootfs) → /system(system_file) → /system/bin，三层 dir search。
+;;    /lib 是指向 /system/lib 的符号链接，标签 system_lib_file。
+;; ---------------------------------------------------------------------
+(allow pl_fixer rootfs (dir (search)))
+(allow pl_fixer system_file (dir (search getattr open read)))
+(allow pl_fixer system_bin_file (dir (search getattr open read)))
+(allow pl_fixer system_bin_file (file (read getattr open map execute execute_no_trans)))
+(allow pl_fixer system_lib_file (dir (search getattr open read)))
+(allow pl_fixer system_lib_file (file (read getattr open map execute)))
+(allow pl_fixer lib_file (lnk_file (read getattr)))
+
+;; ---------------------------------------------------------------------
+;; 3. 编译暂存：/data/local/tmp
+;;
+;;    刻意不放应用沙箱：沙箱应用可写，而 data_local_tmp 在应用侧**没有任何域
+;;    持有授权**（新的类型自然也没有），所以待加载的策略二进制放这里防篡改。
+;;    形状照抄 hdcd（board-policy.cil:9635-9636）。
+;;    red line 那边只点名 init(:997) 与 system_core_hap_attr(:1088)，本域不撞。
+;; ---------------------------------------------------------------------
+(allow pl_fixer data_local_tmp (dir (read write create getattr setattr open add_name remove_name search)))
+(allow pl_fixer data_local_tmp (file (read write create getattr setattr append unlink open)))
+
+;; ---------------------------------------------------------------------
+;; 4. 与应用之间的唯一一条通道：应用自己的沙箱
+;;
+;;    读 live.jsonl（案例来源）、读 fix.req/fix.sel（应用写的选择）、
+;;    写 fix.out（结果）。形状照抄 pl_collector.cil:141-145。
+;;    ★ 通道里只走"选择"，从不走规则文本 —— 规则一律由本域自己重算。
+;; ---------------------------------------------------------------------
+(allow pl_fixer data_file (dir (search)))
+(allow pl_fixer data_app_file (dir (read getattr open search)))
+(allow pl_fixer data_app_el2_file (dir (read getattr open search)))
+(allow pl_fixer debug_hap_data_file (dir (read write create getattr setattr open add_name remove_name search)))
+(allow pl_fixer debug_hap_data_file (file (ioctl read write create getattr setattr lock append map unlink open)))
+
+;; ---------------------------------------------------------------------
+;; 5. selinuxfs —— 三个节点，各有各的用处
+;;
+;;    load   写：装载新策略（rw------- root）。这是本域存在的理由。
+;;    access 读写：闭环判据（写 scon tcon 类号 → 读回 allowed 位图）
+;;    policy 读：验活 canary（回读确认新符号在、pl_collector 还在）
+;;    形状照抄 appspawn（board-policy.cil 里 7 个域同形）。
+;;    ★ 注意 access 节点用的是 security_compute_av_user ⇒ **看不见 ioctl xperm 白名单**。
+;;      所以 xperm 类修复不能拿它当判据，只能靠"该 denial 不再复发"这条行为判据。
+;;      实测：render_service→dev_mali:chr_file 读回 ioctl 位是置位的，
+;;      而 0x8014 实际被 allowx 白名单拒掉。
+;; ---------------------------------------------------------------------
+(allow pl_fixer selinuxfs (file (read write open)))
+
+;; ---------------------------------------------------------------------
+;; 6. ★★★ 本域的唯一特权，也是全策略唯一一份
+;;
+;;    load_policy  : sel_write_load() 要它，目标类型 security（见文件头）
+;;    compute_av   : sel_write_access() 要它，目标类型同样是 security
+;;                   （板子上只有 hdf_devmgr / init / samgr 有，**没有 domain 兜底**）
+;;    这两条的受检目标都是 SECINITSID_SECURITY ⇒ 目标类型写 security 才对。
+;;    这个域就是 PolicyLoop 自己的工具会判"权限过大"的那种组件 —— 诚实口径是：
+;;    它必须被信任，且只有它被信任；单独开一个域正是为了让它可被单独审计。
+;; ---------------------------------------------------------------------
+(allow pl_fixer security (security (load_policy)))
+(allow pl_fixer security (security (compute_av)))
+
+;; 读 /proc/self 之类要用到这个（pl_collector.cil:104 同形）
+(allow pl_fixer kernel (fd (use)))
+
+;; ---------------------------------------------------------------------
+;; 7. 让板子自己的服务能看见我们（hiview 每 10 秒遍历各进程 /proc/<pid>）
+;;
+;;    这两条不是给我们用的。不给的话会源源不断产生**我们自己造成的** denial，
+;;    而且会被我们自己的采集器收进可修复列表 —— 变成自指噪声。
+;;    板子的写法是逐个域成对出现，没有通用规则（pl_collector.cil:147-174）。
+;; ---------------------------------------------------------------------
+(allow hiview pl_fixer (dir (search)))
+(allow hiview pl_fixer (file (read getattr open)))

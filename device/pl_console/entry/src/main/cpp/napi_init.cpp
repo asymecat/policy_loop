@@ -64,6 +64,12 @@ const std::set<std::string> kToolDomains = {
     // 摸的 /proc 与 /dev/console，都是我们这个组件的足迹，不是被测固件的缺陷。
     // 漏了它，探针那条会在窗口里冒充「板子自带」。
     "pl_collector",
+    // 板端修复服务。这里的理由比"我们自己的足迹"更硬：它**就是**装载策略的那个
+    // 域，所以它自己的 denial 是"喂回给修复器的反馈"——一旦被判成板子自带，
+    // 修复器拿到的可修复清单里就包含它自己，等于要它给自己补上刚刚没拿到的权限。
+    // 那不是演示瑕疵，是一条提权路径。
+    // 与 PC 侧 tools/board_bridge.py 的 TOOL_DOMAINS 必须一致（有测试强制）。
+    "pl_fixer",
 };
 
 std::string json_string(const std::string &s) {
