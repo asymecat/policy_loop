@@ -355,9 +355,67 @@ def fig_board_runtime():
     im.save(f"{OUT}/fig4-board-runtime.png")
 
 
+# ------------------------------------------------------------ 图 8 结果成绩单
+def fig_results():
+    W, H = 1240, 560
+    im, d = canvas(W, H)
+    d.text((40, 24), "实测成绩单：5,161 条上游真实 denial 上的三个零",
+           font=FB(22), fill=INK)
+    d.text((40, 60), "全部数字可用附录 A 的命令复现；口径与出处见报告 2.8–2.9。",
+           font=F(13), fill=MUTED)
+
+    tiles = [
+        ("0", "误报", ["自动补丁项", "5,161 条真实 denial 全量"], GREEN, GREEN_BG),
+        ("0%", "过宽", ["179/179 条补丁", "精确最小、验证通过"], GREEN, GREEN_BG),
+        ("0 条", "真正待补权限", ["1,580 条转人工", "逐条归因后"], GREEN, GREEN_BG),
+        ("2.98 MB", "逐字节相同", ["27,912 条查询", "主机 Python ↔ 设备 C++"], BLUE, BLUE_BG),
+    ]
+    x0, y0, tw, th, gap = 40, 96, 275, 178, 20
+    for i, (big, label, subs, fg, bg) in enumerate(tiles):
+        x = x0 + i * (tw + gap)
+        d.rounded_rectangle([x, y0, x + tw, y0 + th], radius=12, fill=bg,
+                            outline=fg, width=3)
+        ctext(d, x + tw / 2, y0 + 62, big, FB(54), fg)
+        ctext(d, x + tw / 2, y0 + 112, label, FB(19), INK)
+        for k, line in enumerate(subs):
+            ctext(d, x + tw / 2, y0 + 142 + k * 19, line, F(13), MUTED)
+
+    # 同一份语料的输出量对比
+    d.text((40, 300), "同一份语料，两种输出", font=FB(17), fill=INK)
+    d.text((40, 328), "条形按条数等比；灰色 = 当前策略本来就允许的 no-op 建议，"
+                      "橙色 = 其余 146 条（含撞红线 34 条、类名错误 4 条）",
+           font=F(12), fill=MUTED)
+    bx, bw_max, maxv = 210, 990, 2833
+    # 行 1：audit2allow
+    y1 = 372
+    mtext(d, 40, y1 + 22, "audit2allow", FB(16), MUTED)
+    noop_w = bw_max * 2687 / maxv
+    d.rounded_rectangle([bx, y1, bx + noop_w, y1 + 44], radius=6,
+                        fill="#DADCE0", outline="#9AA0A6", width=2)
+    d.rounded_rectangle([bx + noop_w, y1, bx + bw_max, y1 + 44], radius=6,
+                        fill=ORANGE_BG, outline=ORANGE, width=2)
+    ctext(d, bx + noop_w / 2, y1 + 22,
+          "2,687 条（94.8%）本已允许", FB(15), "#3C4043")
+    # 行 2：PolicyLoop
+    y2 = 448
+    mtext(d, 40, y2 + 22, "PolicyLoop", FB(16), INK)
+    loop_w = max(10, bw_max * 69 / maxv)
+    d.rounded_rectangle([bx, y2, bx + loop_w, y2 + 44], radius=6,
+                        fill=GREEN_BG, outline=GREEN, width=2)
+    arrow(d, bx + loop_w + 40, y2 + 22, bx + loop_w + 4, y2 + 22,
+          color=GREEN, width=2, head=7)
+    mtext(d, bx + loop_w + 50, y2 + 22, "69 条 · 本已允许 0 条 · 撞红线 0 条",
+          FB(15), GREEN)
+
+    mtext(d, 40, 522, "结论：同样的输入，本作品给出 69 条可执行补丁，"
+                      "没有一条是「当前策略本来就允许」的噪声。", F(13), INK)
+    im.save(f"{OUT}/fig8-results.png")
+
+
 if __name__ == "__main__":
     fig_architecture()
     fig_agent_pipeline()
     fig_converge()
     fig_board_runtime()
+    fig_results()
     print("done ->", OUT)

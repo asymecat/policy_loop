@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "updated": "2026-10-16",
+  "updated": "2026-10-20",
   "why": [
     "真值清单：文稿里每一句可以被机器验证的『当前口径』声明都登记在这里。",
     "facts = 事实本身（值 + 归一化方式 + 活探针）；sites = 这句话出现在哪（文件 + 语义锚点 + 抓数模式）。",
@@ -65,6 +65,7 @@
     {"fact": "index.rules", "file": "README.md", "context": "对 denial→修复 golden", "pattern": "([0-9,]+)\\s*条规则"},
 
     {"fact": "index.sources", "file": "docs/report.md", "context": "实测索引规模", "pattern": "([0-9,]+)\\s*个\\s*`?\\.te"},
+    {"fact": "index.sources", "file": "docs/report.md", "context": "策略规则写在上千个", "pattern": "([0-9,]+)\\s*个"},
     {"fact": "index.rules", "file": "docs/report.md", "context": "实测索引规模", "pattern": "([0-9,]+)\\s*条规则"},
     {"fact": "index.types", "file": "docs/report.md", "context": "实测索引规模", "pattern": "([0-9,]+)\\s*个类型"},
     {"fact": "index.attributes", "file": "docs/report.md", "context": "实测索引规模", "pattern": "([0-9,]+)\\s*个属性"},
@@ -116,8 +117,8 @@
   "placeholders": {
     "why": "占位符只许变少不许变多。少了=黄（记得同步 baseline），多了=红，过期且仍>0=红。",
     "entries": [
-      {"file": "docs/report.md", "pattern": "【待填】", "count": 9, "expires": "2026-11-01",
-       "why": "封面信息表 5 处 + 3.1 成员分工表 4 处（:604 一行两处）——需用户本人提供"},
+      {"file": "docs/report.md", "pattern": "【待填】", "count": 0, "expires": "2026-11-01",
+       "why": "3.1 成员分工表 4 处 —— 封面 5 处已于 2026-10-20 填好"},
       {"file": "docs/report.md", "pattern": "待补截图", "count": 0, "expires": "2026-11-01",
        "why": "§2.7 三张截图已补齐（2026-10-17）：Web UI Agent Trace + 板端实时卡片 + 快照状态行"}
     ]
@@ -139,7 +140,8 @@
       "docs/figs/fig1-architecture.png",
       "docs/figs/fig2-agent-pipeline.png",
       "docs/figs/fig3-converge-flow.png",
-      "docs/figs/fig4-board-runtime.png"
+      "docs/figs/fig4-board-runtime.png",
+      "docs/figs/fig8-results.png"
     ],
     "consumers": ["docs/report.md"]
   },
