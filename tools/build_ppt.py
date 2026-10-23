@@ -2,7 +2,8 @@
 """生成 PolicyLoop 答辩 PPT。
 
 版式：沿用 2026 开源鸿蒙大学生创新大赛 赛道一 答辩模板（16:9 / 微软雅黑 / 蓝色强调）。
-内容：`docs/report.md` 的主干，按 ~20 页 / 10-12 分钟答辩节奏取舍。
+内容取舍：一页只说一件事；正文最小 16 pt（`fmt()` 会拒绝更小的字号）；
+数字页用大字号统计，不用密表。
 
 用法：
     python3 tools/build_ppt.py                    # 输出 docs/policy_loop-答辩.pptx
@@ -12,7 +13,6 @@
 from __future__ import annotations
 
 import argparse
-import math
 from pathlib import Path
 
 from pptx import Presentation
@@ -46,6 +46,9 @@ BODY_LEFT = 0.55
 BODY_W = SLIDE_W - 2 * BODY_LEFT
 BODY_H = 5.45
 
+# 正文最小字号：评审在投影上要能直接读，任何更小的字号都算版式缺陷。
+MIN_PT = 16
+
 
 # ── 基础工具 ──────────────────────────────────────────────────
 def set_ea(run, face: str = FONT) -> None:
@@ -62,6 +65,8 @@ def set_ea(run, face: str = FONT) -> None:
 
 
 def fmt(run, size: float, bold: bool = False, color: RGBColor = INK) -> None:
+    if size < MIN_PT:
+        raise ValueError(f"字号 {size} 小于下限 {MIN_PT} pt")
     run.font.size = Pt(size)
     run.font.bold = bold
     run.font.color.rgb = color
@@ -93,34 +98,6 @@ def write(p, text, size, bold=False, color=INK, before=0, after=0,
     p.line_spacing = line
     p.alignment = align
     return r
-
-
-def bullets(slide, items, x, y, w, h, size=17, gap=10, marker="▍",
-            marker_color=ACCENT, line=1.25, color=INK):
-    """带彩色竖标记的列表 —— 比项目符号更贴近模板的简洁风。"""
-    box = textbox(slide, x, y, w, h)
-    tf = box.text_frame
-    for i, item in enumerate(items):
-        p = para(tf, first=(i == 0))
-        m = p.add_run()
-        m.text = marker + " "
-        fmt(m, size, True, marker_color)
-        if isinstance(item, tuple):          # (主句, 补充说明)
-            head, tail = item
-            write_head = p.add_run()
-            write_head.text = head
-            fmt(write_head, size, True, color)
-            r = p.add_run()
-            r.text = "  " + tail
-            fmt(r, size - 2, False, GRAY)
-        else:
-            r = p.add_run()
-            r.text = item
-            fmt(r, size, False, color)
-        p.space_before = Pt(0 if i == 0 else gap)
-        p.space_after = Pt(0)
-        p.line_spacing = line
-    return box
 
 
 def card(slide, x, y, w, h, fill=TINT2, line_color=None, radius=0.06):
@@ -155,8 +132,8 @@ def write_multiline(tf, text, size, bold=False, color=INK, gap=0, line=1.3,
     return tf
 
 
-def card_text(shape, head, body=None, head_size=16, body_size=13.5,
-              head_color=INK, body_color=GRAY, gap=6, line=1.3):
+def card_text(shape, head, body=None, head_size=19, body_size=16,
+              head_color=INK, body_color=GRAY, gap=8, line=1.3):
     tf = shape.text_frame
     p = tf.paragraphs[0]
     write(p, head, head_size, True, head_color, after=gap, line=line)
@@ -165,16 +142,16 @@ def card_text(shape, head, body=None, head_size=16, body_size=13.5,
     return tf
 
 
-def stat(slide, x, y, w, h, number, label, num_size=34, label_size=12.5,
+def stat(slide, x, y, w, h, number, label, num_size=32, label_size=16,
          color=ACCENT_DARK):
     shape = card(slide, x, y, w, h, fill=WHITE, line_color=TINT)
     tf = shape.text_frame
     tf.vertical_anchor = MSO_ANCHOR.MIDDLE
     tf.margin_left = tf.margin_right = Inches(0.10)
     p = tf.paragraphs[0]
-    write(p, number, num_size, True, color, align=PP_ALIGN.CENTER, after=2, line=1.0)
+    write(p, number, num_size, True, color, align=PP_ALIGN.CENTER, after=4, line=1.0)
     p2 = tf.add_paragraph()
-    write(p2, label, label_size, False, GRAY, align=PP_ALIGN.CENTER, line=1.15)
+    write(p2, label, label_size, False, GRAY, align=PP_ALIGN.CENTER, line=1.2)
 
 
 def picture_fit(slide, path: Path, x, y, w, h, align="center"):
@@ -189,7 +166,7 @@ def picture_fit(slide, path: Path, x, y, w, h, align="center"):
                                     Inches(dw), Inches(dh))
 
 
-def band(slide, y, text, size=15, height=0.72, fill=INK,
+def band(slide, y, text, size=18, height=0.75, fill=INK,
          color=WHITE, bold=False, x=BODY_LEFT, w=BODY_W):
     shape = card(slide, x, y, w, height, fill=fill)
     tf = shape.text_frame
@@ -197,48 +174,6 @@ def band(slide, y, text, size=15, height=0.72, fill=INK,
     tf.margin_left = Inches(0.28)
     p = tf.paragraphs[0]
     write(p, text, size, bold, color, line=1.25)
-    return shape
-
-
-def table(slide, x, y, w, rows, col_w, row_h=0.5, head_size=14,
-          body_size=13, head_fill=ACCENT_DARK, zebra=True):
-    """rows[0] 是表头；col_w 为相对权重。"""
-    n_r, n_c = len(rows), len(rows[0])
-    shape = slide.shapes.add_table(n_r, n_c, Inches(x), Inches(y),
-                                   Inches(w), Inches(row_h * n_r))
-    tbl = shape.table
-    # 去掉默认表格样式（否则会自带边框与条纹，和模板冲突）
-    tblPr = tbl._tbl.tblPr
-    for el in tblPr.findall(qn("a:tableStyleId")):
-        tblPr.remove(el)
-    style = tblPr.makeelement(qn("a:tableStyleId"), {})
-    style.text = "{2D5ABB26-0587-4C30-8999-92F81FD0307C}"  # No Style, No Grid
-    tblPr.append(style)
-
-    total = sum(col_w)
-    for i, wt in enumerate(col_w):
-        tbl.columns[i].width = Emu(int(Inches(w) * wt / total))
-    for r in range(n_r):
-        tbl.rows[r].height = Inches(row_h)
-
-    for r, row in enumerate(rows):
-        for c, text in enumerate(row):
-            cell = tbl.cell(r, c)
-            cell.margin_left = cell.margin_right = Inches(0.10)
-            cell.margin_top = cell.margin_bottom = Inches(0.04)
-            cell.vertical_anchor = MSO_ANCHOR.MIDDLE
-            cell.fill.solid()
-            if r == 0:
-                cell.fill.fore_color.rgb = head_fill
-            else:
-                cell.fill.fore_color.rgb = (
-                    WHITE if (not zebra or r % 2 == 1) else TINT2)
-            tf = cell.text_frame
-            tf.word_wrap = True
-            p = tf.paragraphs[0]
-            write(p, text,
-                  head_size if r == 0 else body_size,
-                  bold=(r == 0), color=WHITE if r == 0 else INK, line=1.1)
     return shape
 
 
@@ -259,7 +194,7 @@ def content_slide(prs, layout, title, kicker=None):
     if kicker:
         tb = textbox(slide, BODY_LEFT + 0.02, 0.86, BODY_W, 0.3)
         p = tb.text_frame.paragraphs[0]
-        write(p, kicker, 12.5, False, MUTED, line=1.0)
+        write(p, kicker, 16, False, MUTED, line=1.0)
     return slide
 
 
@@ -289,17 +224,16 @@ def cover(prs):
         texts = [r.text for p in shp.text_frame.paragraphs for r in p.runs]
         joined = "".join(texts)
         if "赛题名称" in joined:
-            p = shp.text_frame.paragraphs[0]
             runs = [r for pp in shp.text_frame.paragraphs for r in pp.runs]
             runs[0].text = "PolicyLoop"
             runs[1].text = "：SELinux 拒绝日志的最小权限自收敛"
         elif "团队名称" in joined:
             runs = [r for pp in shp.text_frame.paragraphs for r in pp.runs]
-            runs[0].text = "【团队名称】"
+            runs[0].text = "PolicyLoop 门禁团队"
             runs[1].text = ""
             runs[2].text = "2026"
             runs[4].text = "10"
-            runs[6].text = "18"
+            runs[6].text = "20"
         elif "开源鸿蒙大学生创新大赛" in joined:
             pass
     return s
@@ -319,351 +253,401 @@ def toc(prs):
             runs[0].text = item
             for r in runs[1:]:
                 r.text = ""
+    # 目录下方留白太多，用一句主线把三部分串起来
+    band(s, 5.45, "denial → 七个 Agent → 最小补丁 → 真机闭环",
+         size=17, height=0.7, fill=TINT, color=ACCENT_DARK, bold=True,
+         x=3.95, w=7.55)
     return s
 
 
 def s_problem(prs, lay):
     s = content_slide(prs, lay, "一条 denial，卡住三件事")
     heads = [
-        ("读不懂", "scontext / tcontext / tclass / 权限位自成一套词汇；\n现场通常只看到「功能失败」，看不到「为什么」。"),
-        ("不知道在哪补", "规则散在 1,315 个 .te 文件里，按子系统分目录；\n一条 denial 该落在 system/ 还是 vendor/，靠经验。"),
-        ("补不对", "最省事的做法是「看到 denial 就加 allow」——\n把一次越权尝试固化成永久授权。"),
+        ("读不懂", "scontext / tcontext / tclass\n是一套自成体系的词汇。"),
+        ("找不准", "1,315 个 .te 文件按子系统分目录，\n该落在哪靠经验。"),
+        ("补不对", "见 denial 就加 allow，\n把越权固化成永久授权。"),
     ]
-    w, gap = 3.95, 0.22
+    w, gap = 3.93, 0.22
     for i, (h, b) in enumerate(heads):
         x = BODY_LEFT + i * (w + gap)
         c = card(s, x, 1.45, w, 2.15)
-        card_text(c, h, b, head_size=19, body_size=13.5, gap=10)
-    band(s, 3.88, "现实中的应对：把门禁关成 permissive —— 系统看起来正常了，实际处于无强制拦截状态。",
-         size=16)
-    # 上游实测
-    tb = textbox(s, BODY_LEFT, 4.78, BODY_W, 0.32)
-    write(tb.text_frame.paragraphs[0], "上游策略仓库一次全量统计", 13, True, ACCENT_DARK)
+        card_text(c, h, b, head_size=21, body_size=16, gap=10)
+    band(s, 3.9, "常见应对：把门禁关成 permissive —— 系统正常了，门没有了。", size=18)
+    tb = textbox(s, BODY_LEFT, 4.85, BODY_W, 0.3)
+    write(tb.text_frame.paragraphs[0], "上游策略仓库一次全量统计", 16, True, ACCENT_DARK)
     stats = [
-        ("1,315", "个 .te 策略文件"),
+        ("1,315", "个 .te 文件"),
         ("51,427", "行策略源码"),
-        ("5,230", "条历史 denial 注释"),
-        ("21,824", "条索引出的规则"),
+        ("5,230", "条历史 denial"),
+        ("21,824", "条索引规则"),
     ]
-    w2, gap2 = 2.85, 0.19
+    w2, gap2 = 2.9, 0.19
     for i, (n, l) in enumerate(stats):
-        stat(s, BODY_LEFT + i * (w2 + gap2), 5.18, w2, 1.15, n, l, num_size=28)
+        stat(s, BODY_LEFT + i * (w2 + gap2), 5.25, w2, 1.3, n, l, num_size=30)
+    return s
+
+
+def s_differentiators(prs, lay):
+    s = content_slide(prs, lay, "记住这三件事", "别的方案给不出这三个数")
+    data = [
+        ("0 误报", "5,161 条真实日志", "自动补丁零误报", ACCENT_DARK),
+        ("2.98 MB", "27,912 条查询", "两端输出逐字节相同", ACCENT_DARK),
+        ("0 条", "1,580 条转人工", "真正要补权限 0 条", GREEN),
+    ]
+    w, gap = 3.93, 0.22
+    for i, (n, l1, l2, col) in enumerate(data):
+        c = card(s, BODY_LEFT + i * (w + gap), 1.5, w, 3.0,
+                 fill=WHITE, line_color=TINT)
+        tf = c.text_frame
+        tf.vertical_anchor = MSO_ANCHOR.MIDDLE
+        p = tf.paragraphs[0]
+        write(p, n, 54, True, col, align=PP_ALIGN.CENTER, after=12, line=1.0)
+        p2 = tf.add_paragraph()
+        write(p2, l1, 18, True, INK, align=PP_ALIGN.CENTER, after=4, line=1.2)
+        p3 = tf.add_paragraph()
+        write(p3, l2, 16, False, GRAY, align=PP_ALIGN.CENTER, line=1.2)
+    band(s, 5.0, "难点不在写规则，而在敢让它自动写 —— 守门把「敢」变成可验证。",
+         size=19, height=0.8, bold=True)
     return s
 
 
 def s_goal(prs, lay):
-    s = content_slide(prs, lay, "从「放行」到「该不该放行」",
-                      "同一件事的更严格版本")
+    s = content_slide(prs, lay, "只回答一个问题：该不该放行",
+                      "和「看到 denial 就放行」的区别")
     rows = [
-        ("常见做法", "本作品的目标"),
-        ("这条访问要放行吗？", "这条访问该不该放行？撞系统红线的一律拒绝自动放权"),
-        ("加哪条规则？", "最小的那条是什么？多一个权限位都算失败"),
-        ("加完就行了吗？", "denial 消失了吗？有没有引入新的越权？"),
-        ("一条一条看", "整份日志一次收敛成可执行清单"),
-        ("拿不准的就写「转人工」", "转人工之后逐条归因「该谁修」—— 实测真正要打补丁的只有 0 条"),
+        ("看到 denial 就加 allow", "先问：撞不撞系统红线"),
+        ("加一条能通的规则", "再问：最小的那条是什么"),
+        ("denial 消失就算修好", "最后：真消除，且无回归"),
     ]
-    table(s, BODY_LEFT, 1.52, BODY_W, rows, [1, 1.85], row_h=0.72,
-          head_size=15, body_size=14)
-    band(s, 6.02, "验收可量化：策略覆盖率 · 补丁最小性 · 零越权（撞 neverallow 一律拒绝）· 真机端到端一致",
-         size=15, height=0.66, fill=TINT, color=ACCENT_DARK, bold=True)
+    for i, (a, b) in enumerate(rows):
+        c = card(s, BODY_LEFT, 1.5 + i * 1.35, BODY_W, 1.15,
+                 fill=WHITE, line_color=TINT)
+        tf = c.text_frame
+        tf.vertical_anchor = MSO_ANCHOR.MIDDLE
+        p = tf.paragraphs[0]
+        r = p.add_run(); r.text = a; fmt(r, 18, False, GRAY)
+        r = p.add_run(); r.text = "   →   "; fmt(r, 18, True, MUTED)
+        r = p.add_run(); r.text = b; fmt(r, 19, True, ACCENT_DARK)
+    band(s, 5.75, "验收可量化：覆盖率 · 最小性 · 零越权 · 两端逐字节一致",
+         size=18, height=0.75, fill=TINT, color=ACCENT_DARK, bold=True)
     return s
 
 
 def s_arch(prs, lay):
     s = content_slide(prs, lay, "总体架构：主机端重、设备端轻",
-                      "LAYERED  ·  L1 确定性内核 → L2 评测基线 → L3 诊断流水线 → L4 设备端")
+                      "L1 内核  →  L2 评测  →  L3 流水线  →  L4 设备端")
     picture_fit(s, DOCS / "figs" / "fig1-architecture.png",
-                BODY_LEFT, 1.35, BODY_W, 4.55)
-    band(s, 6.08, "两侧之间只有一条窄接口：PLI 只读索引（构建期导出、随镜像下发）+ JSON / TSV 判定结果",
-         size=15, height=0.66, fill=TINT, color=ACCENT_DARK, bold=True)
+                BODY_LEFT, 1.38, BODY_W, 4.35)
+    band(s, 5.95, "两侧只通过一条窄接口相连：PLI 只读索引 + JSON / TSV 判定结果",
+         size=17, height=0.7, fill=TINT, color=ACCENT_DARK, bold=True)
     return s
 
 
 def s_principles(prs, lay):
-    s = content_slide(prs, lay, "四条设计原则", "模块划分与流程设计都是它们的展开")
+    s = content_slide(prs, lay, "四条原则，一条底线", "所有安全决策都由规则做")
     data = [
-        ("① 确定性内核优先", "解析、索引、根因、补丁、评审、验证全部是纯规则、纯标准库；\nLLM 只在配置了 key 时写「人话解释」，不参与任何安全决策。"),
-        ("② 绝不自动写盘", "只产出「建议补丁 + 落点提示」；\n是否写入 .te、是否重建策略、是否上 enforcing，由人决定。"),
-        ("③ 先仿真、后真机", "先用上游真实语料做数据仿真与量化评测（成本低、可反复），\n再上真机取独立证据。"),
-        ("④ 设备端只搬「属于设备的那一段」", "需要读内核日志、需要脱离 PC 运行的才下沉；\n多智能体编排与评测工具留在主机。"),
+        ("① 确定性内核优先", "安全决策全是规则，LLM 只写解释。"),
+        ("② 绝不自动写盘", "只出建议补丁，写盘由人决定。"),
+        ("③ 先仿真，后真机", "上游语料量化，再上板取独立证据。"),
+        ("④ 设备端只搬一段", "要读 kmsg、要脱离 PC 的才下沉。"),
     ]
-    w, h, gap = 5.85, 2.35, 0.28
+    w, h, gap = 5.85, 2.0, 0.28
     for i, (hd, bd) in enumerate(data):
         x = BODY_LEFT + (i % 2) * (w + gap)
         y = 1.45 + (i // 2) * (h + 0.2)
         c = card(s, x, y, w, h)
-        card_text(c, hd, bd, head_size=17.5, body_size=13.5, gap=9)
+        c.text_frame.vertical_anchor = MSO_ANCHOR.MIDDLE
+        card_text(c, hd, bd, head_size=21, body_size=17, gap=12)
+    band(s, 5.9, "底线：安全决策永不交给模型。", size=18, height=0.68,
+         fill=INK, bold=True)
     return s
 
 
 def s_neverallow(prs, lay):
-    s = content_slide(prs, lay, "为什么设备端只搬「属于设备的那一段」",
-                      "一个被实测逼出来的架构约束")
+    s = content_slide(prs, lay, "设备端为什么不能「自己推策略」",
+                      "两个实测事实，逼出一条架构约束")
     left = [
-        ("设备上没有策略源码", "find /system /vendor -name \"*.te\" 为空；\nSELinux 的全部家当只有 config、\n编译后的 policy.31（424,699 B）与 *_contexts。"),
-        ("neverallow 不在二进制策略里", "它是编译期断言：libsepol 的 expand.c:2736\n写明不写进产出的策略。设备上拿不到红线。"),
+        ("设备上没有 .te 源码",
+         "只剩 policy.31（424,699 B）\n与 *_contexts。"),
+        ("红线不在二进制策略里",
+         "neverallow 是编译期断言，\n不写进产物。"),
     ]
     for i, (hd, bd) in enumerate(left):
-        c = card(s, BODY_LEFT, 1.45 + i * 2.35, 6.0, 2.15)
-        card_text(c, hd, bd, head_size=17, body_size=13.5, gap=9)
-    # 右侧推演
+        c = card(s, BODY_LEFT, 1.45 + i * 2.15, 5.95, 1.95)
+        c.text_frame.vertical_anchor = MSO_ANCHOR.MIDDLE
+        card_text(c, hd, bd, head_size=19, body_size=16, gap=10)
     x = BODY_LEFT + 6.3
     flow = [
         ("拿不到红线", RED),
-        ("工具退化成「看到 denial 就建议放权」", RED),
-        ("正是它最该避免的行为", RED),
-        ("结论：索引必须构建期导出、随镜像下发", ACCENT_DARK),
-        ("设备端用语义，不构建语义", GREEN),
+        ("只能「见 denial 就放行」", RED),
+        ("正是最该避免的行为", RED),
+        ("索引必须构建期导出", ACCENT_DARK),
     ]
     y = 1.45
     for i, (t, col) in enumerate(flow):
-        c = card(s, x, y, BODY_W - 6.3, 0.78, fill=WHITE,
-                 line_color=TINT if col != ACCENT_DARK else ACCENT)
+        c = card(s, x, y, BODY_W - 6.3, 0.85, fill=WHITE,
+                 line_color=ACCENT if i == len(flow) - 1 else TINT)
         tf = c.text_frame
         tf.vertical_anchor = MSO_ANCHOR.MIDDLE
         p = tf.paragraphs[0]
-        write(p, ("→ " if i else "") + t, 14.5, i >= 3, col, line=1.15)
-        y += 0.9
-    band(s, 6.02, "上游 570 条红线，索引看得见 430 条（419 neverallow + 11 neverallowxperm）；可见性缺口由部署期 secilc 断言补第二道",
-         size=14.5, height=0.68, fill=INK)
+        write(p, ("→ " if i else "") + t, 17, i == len(flow) - 1, col, line=1.15)
+        y += 1.0
+    band(s, 5.95, "570 条红线索引可见 430 条；缺口由部署期 secilc 断言补第二道",
+         size=16, height=0.7, fill=INK)
     return s
 
 
 def s_pipeline(prs, lay):
-    s = content_slide(prs, lay, "七 Agent 诊断流水线：一条单向链",
-                      "Orchestrator 是严格状态机，每步输入输出都是可打印的结构化字段")
+    s = content_slide(prs, lay, "七个 Agent，一条单向链",
+                      "每步输入输出都是可打印的结构化字段")
     picture_fit(s, DOCS / "figs" / "fig2-agent-pipeline.png",
-                BODY_LEFT, 1.3, BODY_W, 4.3)
-    tb = textbox(s, BODY_LEFT, 5.72, BODY_W, 0.9)
+                BODY_LEFT, 1.32, BODY_W, 4.25)
+    tb = textbox(s, BODY_LEFT, 5.72, BODY_W, 0.85)
     tf = tb.text_frame
     p = tf.paragraphs[0]
-    write(p, "两个刻意的设计：", 14, True, INK, after=4)
+    write(p, "CrossLayerAgent 只读：加不加它，结论不变。", 17, False, INK, line=1.3)
     p2 = tf.add_paragraph()
-    r = p2.add_run(); r.text = "CrossLayerAgent 只读"; fmt(r, 14, True, ACCENT_DARK)
-    r = p2.add_run(); r.text = "（只出跨层建议，加不加它结论都不变）；"; fmt(r, 14, False, GRAY)
-    r = p2.add_run(); r.text = "流水线不含回路"; fmt(r, 14, True, ACCENT_DARK)
-    r = p2.add_run(); r.text = "——Verify 失败或 Reviewer 否决即归「需人工」，不回 Repair 重算，否则等于迭代出一个更宽的补丁。"; fmt(r, 14, False, GRAY)
-    p2.line_spacing = 1.25
+    write(p2, "流水线没有回路：Verify 失败直接转人工。", 17, False, INK, line=1.3)
     return s
 
 
 def s_guards(prs, lay):
-    s = content_slide(prs, lay, "守门：不猜、不宽、不放行红线",
-                      "五道拒绝点（流水线） + 六道 apply_guards（converge 与 --explain 共用同一份实现）")
-    tb = textbox(s, BODY_LEFT, 1.45, 6.1, 4.2)
+    s = content_slide(prs, lay, "五道拒绝点：不猜、不宽、不放红线",
+                      "与设备端共用同一份守门实现")
+    tb = textbox(s, BODY_LEFT, 1.45, 6.0, 3.9)
     tf = tb.text_frame
     gates = [
-        ("撞 neverallow", "直接转人工，拒绝自动放权"),
-        ("解析出的目标仍不许访问", "拒发补丁"),
-        ("占位符目标未解析", "转人工，不猜"),
-        ("补丁须过 Reviewer 评审", "过宽 / 危险模式拦截"),
-        ("补丁须在索引副本上 Verify 成功", "必须真消除且无回归"),
+        ("撞 neverallow", "转人工"),
+        ("解析后仍不许", "拒发补丁"),
+        ("占位符未解析", "不猜"),
+        ("过宽 / 危险模式", "拦截"),
+        ("未验证消除与回归", "不通过"),
     ]
     for i, (h, b) in enumerate(gates):
         p = para(tf, first=(i == 0))
-        m = p.add_run(); m.text = f"{i + 1}  "; fmt(m, 20, True, ACCENT)
-        r = p.add_run(); r.text = h; fmt(r, 15.5, True, INK)
-        r = p.add_run(); r.text = "　" + b; fmt(r, 13.5, False, GRAY)
-        p.space_before = Pt(0 if i == 0 else 13)
+        m = p.add_run(); m.text = f"{i + 1}  "; fmt(m, 22, True, ACCENT)
+        r = p.add_run(); r.text = h; fmt(r, 17, True, INK)
+        r = p.add_run(); r.text = "  →  "; fmt(r, 16, True, MUTED)
+        r = p.add_run(); r.text = b; fmt(r, 17, False, GRAY)
+        p.space_before = Pt(0 if i == 0 else 14)
         p.line_spacing = 1.15
+    tb2 = textbox(s, BODY_LEFT, 4.75, 6.0, 0.5)
+    write(tb2.text_frame.paragraphs[0], "五道各堵一类失败。", 16, False, MUTED)
 
-    x = BODY_LEFT + 6.4
-    c = card(s, x, 1.42, BODY_W - 6.4, 4.35, fill=WHITE, line_color=ACCENT)
+    x = BODY_LEFT + 6.45
+    c = card(s, x, 1.42, BODY_W - 6.45, 3.9, fill=WHITE, line_color=ACCENT)
     tf = c.text_frame
+    tf.vertical_anchor = MSO_ANCHOR.MIDDLE
     p = tf.paragraphs[0]
-    write(p, "典型反例：只差一个命令号", 16.5, True, INK, after=8)
-    write_multiline(tf, "render_service → dev_mali:chr_file ioctl 0x8014\n"
-                        "策略已允许 ioctl 大类，缺的只是 allowxperm 白名单里的一个命令号。",
-                    13.5, False, GRAY, gap=4, line=1.35, before=10)
+    write(p, "典型反例：只差一个命令号", 18, True, INK, after=10)
+    write_multiline(tf, "ioctl 大类已允许，缺的只是 0x8014。",
+                    16, False, GRAY, gap=8, line=1.35)
     p = tf.add_paragraph()
-    write(p, "「看到 denial 就加 allow」会写一条已经存在的规则 —— 写了等于没写。",
-          13.5, False, RED, after=10, line=1.35)
+    write(p, "allowxperm render_service", 16, True, ACCENT_DARK, line=1.2, before=8)
     p = tf.add_paragraph()
-    write(p, "本作品给出：", 13.5, True, INK, after=4)
+    write(p, "dev_mali:chr_file ioctl { 0x8014 };", 16, True, ACCENT_DARK, line=1.2)
     p = tf.add_paragraph()
-    r = p.add_run()
-    r.text = "allowxperm render_service dev_mali:chr_file ioctl { 0x8014 };"
-    fmt(r, 13, True, ACCENT_DARK)
-    p.line_spacing = 1.15
-    band(s, 6.02, "apply_guards 的六个分支（MLS 级目标 / 占位符 / 主体目标不在语料 / 对象类不在语料 / 非权限名 / 空权限）两端逐字一致",
-         size=14.5, height=0.68, fill=TINT, color=ACCENT_DARK, bold=True)
+    write(p, "上游后来真的加了这一行。", 16, False, MUTED, line=1.3, before=8)
+    band(s, 5.8, "六道 apply_guards：MLS 级目标 / 占位符 / 目标不在语料 / 类不在语料 / 非权限名 / 空权限",
+         size=16, height=0.72, fill=TINT, color=ACCENT_DARK, bold=True)
     return s
 
 
 def s_converge(prs, lay):
-    s = content_slide(prs, lay, "批量收敛：一份日志 → 一张清单",
-                      "python -m policy_loop.converge  ·  本机实测 4.161 s")
+    s = content_slide(prs, lay, "一份日志，4.16 秒出清单",
+                      "python -m policy_loop.converge")
     picture_fit(s, DOCS / "figs" / "fig3-converge-flow.png",
-                BODY_LEFT, 1.4, 7.5, 4.4)
+                BODY_LEFT, 1.45, 7.4, 4.15)
     x = BODY_LEFT + 7.85
     stats = [
         ("5,161 → 4,911", "日志行 → 唯一案例", ACCENT_DARK),
         ("3,261", "噪声 / 已被允许", MUTED),
-        ("70", "可自动出最小权限补丁", GREEN),
-        ("1,580", "需人工决策（约 32%）", ORANGE),
+        ("70", "可自动补丁", GREEN),
+        ("1,580", "转人工", ORANGE),
     ]
     y = 1.45
     for n, l, col in stats:
-        c = card(s, x, y, BODY_W - 7.85, 0.92, fill=WHITE, line_color=TINT)
+        c = card(s, x, y, BODY_W - 7.85, 0.95, fill=WHITE, line_color=TINT)
         tf = c.text_frame
         tf.vertical_anchor = MSO_ANCHOR.MIDDLE
         p = tf.paragraphs[0]
-        r = p.add_run(); r.text = n + "  "; fmt(r, 21, True, col)
-        r = p.add_run(); r.text = l; fmt(r, 12, False, GRAY)
+        r = p.add_run(); r.text = n + "  "; fmt(r, 22, True, col)
+        r = p.add_run(); r.text = l; fmt(r, 16, False, GRAY)
         p.line_spacing = 1.1
-        y += 1.04
-    band(s, 6.08, "全量 5,161 条里零误报进入自动项：1,580 类「需人工」是工具主动拒绝越权的结果，不是它做不到",
-         size=14.5, height=0.66, fill=INK)
+        y += 1.1
+    band(s, 5.95, "全量零误报进入自动项；转人工是主动拒绝越权",
+         size=17, height=0.7, fill=INK)
     return s
 
 
 def s_minimize(prs, lay):
-    s = content_slide(prs, lay, "补丁最小化：69 行 → 54 条根因规则",
-                      "同一 (src, tgt, cls) 的补丁行并成一条根因规则，再套回索引副本反验")
+    s = content_slide(prs, lay, "补丁 69 行 → 54 条根因规则",
+                      "先最小化，再套回索引反验")
     cards = [
-        ("69 → 54", "补丁行数（归并 10 组、省 15 行）", ACCENT_DARK),
-        ("10 组", "根因归并（26 条折叠进已有规则，25 条新增）", ACCENT_DARK),
-        ("70 → 0", "闭环反验：补丁前未解决 → 套回后全部解决", GREEN),
-        ("0 残留", "1,580 条人工案例的归因结果", GREEN),
+        ("69 → 54", "补丁行数", ACCENT_DARK),
+        ("10 组", "根因归并", ACCENT_DARK),
+        ("70 → 0", "闭环反验", GREEN),
+        ("0 残留", "归因", GREEN),
     ]
-    w, gap = 2.95, 0.17
+    w, gap = 2.9, 0.19
     for i, (n, l, col) in enumerate(cards):
         stat(s, BODY_LEFT + i * (w + gap), 1.5, w, 1.55, n, l,
-             num_size=28, label_size=12, color=col)
-    band(s, 3.35, "闭环反验多证了什么：converge 只断言「补丁编译得过」且名字级匹配；minimize 要求「补丁前确实未解决、套回后全部解决」——缺了前半句，本来就允许的案例会被算成补丁的功劳。",
-         size=14.5, height=1.0, fill=TINT, color=INK)
-    c = card(s, BODY_LEFT, 4.62, BODY_W, 1.25, fill=WHITE, line_color=ACCENT)
+             num_size=32, label_size=16, color=col)
+    band(s, 3.35, "反验要求：补丁前确实没解决，套回后全部解决。",
+         size=17, height=0.72, fill=TINT, color=INK)
+    c = card(s, BODY_LEFT, 4.45, BODY_W, 1.55, fill=WHITE, line_color=ACCENT)
     tf = c.text_frame
+    tf.vertical_anchor = MSO_ANCHOR.MIDDLE
     p = tf.paragraphs[0]
-    write(p, "判定「最窄规则」必须按展开后的影响面，不能按 token 数", 16, True, INK, after=6)
+    write(p, "最窄规则按影响面判，不按 token 数", 19, True, INK, after=8)
     p = tf.add_paragraph()
-    write(p, "{domain} 只占 1 个 token，却覆盖 235 个类型 —— 按 token 数会把最宽的规则判成最窄。",
-          13.5, False, GRAY, line=1.3)
+    write(p, "{domain} 1 个 token 覆盖 235 个类型。", 16, False, GRAY, line=1.3)
     return s
 
 
 def s_attribution(prs, lay):
-    s = content_slide(prs, lay, "1,580 条「转人工」，真正要补权限的是 0 条",
-                      "attribution：对每一个拒绝自动放权的案例，答「该谁修」")
+    s = content_slide(prs, lay, "1,580 条转人工，真正要补权限 0 条",
+                      "每条都回答了「该谁修」")
     items = [
-        ("1,147", "语料的历史噪声", MUTED),
-        ("342", "工具侧要对齐的（索引 / 版本）", ACCENT_DARK),
-        ("53", "日志质量问题", ORANGE),
-        ("38", "架构决策（撞 neverallow 红线）", RED),
+        ("1,147", "历史噪声", MUTED),
+        ("342", "工具对齐", ACCENT_DARK),
+        ("53", "日志质量", ORANGE),
+        ("38", "撞红线", RED),
     ]
-    w, gap = 2.95, 0.17
+    w, gap = 2.9, 0.19
     for i, (n, l, col) in enumerate(items):
-        c = card(s, BODY_LEFT + i * (w + gap), 1.5, w, 1.35, fill=WHITE, line_color=TINT)
+        c = card(s, BODY_LEFT + i * (w + gap), 1.5, w, 1.25,
+                 fill=WHITE, line_color=TINT)
         tf = c.text_frame
         tf.vertical_anchor = MSO_ANCHOR.MIDDLE
         p = tf.paragraphs[0]
-        write(p, n, 30, True, col, align=PP_ALIGN.CENTER, after=2, line=1.0)
+        write(p, n, 32, True, col, align=PP_ALIGN.CENTER, after=3, line=1.0)
         p2 = tf.add_paragraph()
-        write(p2, l, 11.5, False, GRAY, align=PP_ALIGN.CENTER, line=1.2)
-    c = card(s, BODY_LEFT, 3.15, 4.2, 2.2, fill=TINT, line_color=ACCENT)
+        write(p2, l, 16, False, GRAY, align=PP_ALIGN.CENTER, line=1.2)
+    c = card(s, BODY_LEFT, 3.15, 4.0, 2.2, fill=TINT, line_color=ACCENT)
     tf = c.text_frame
     tf.vertical_anchor = MSO_ANCHOR.MIDDLE
     p = tf.paragraphs[0]
-    write(p, "0", 66, True, GREEN, align=PP_ALIGN.CENTER, line=1.0, after=2)
+    write(p, "0", 66, True, GREEN, align=PP_ALIGN.CENTER, line=1.0, after=4)
     p2 = tf.add_paragraph()
-    write(p2, "owner = DEVICE：真正需要给设备补权限的条数", 13, False, GRAY,
-          align=PP_ALIGN.CENTER, line=1.2)
-    tb = textbox(s, BODY_LEFT + 4.55, 3.15, BODY_W - 4.55, 2.6)
+    write(p2, "真正需要给设备补权限", 16, False, GRAY, align=PP_ALIGN.CENTER, line=1.2)
+    tb = textbox(s, BODY_LEFT + 4.45, 3.2, BODY_W - 4.45, 2.2)
     tf = tb.text_frame
     p = tf.paragraphs[0]
-    write(p, "归因完备性：1,580 → 归因 1,580，残留 0（退出码 0 即判据）", 14, True, INK, after=8)
+    write(p, "1,580 → 1,580，残留 0。", 19, True, INK, after=10)
     p = tf.add_paragraph()
-    write(p, "跨树稳定的是「DEVICE 档为 0」这个结论；原因码的数量随所选上游树变化——换成与设备对应版本的源码树，符号缺失会变多、版本差会变少。",
-          13, False, GRAY, line=1.35, after=8)
+    write(p, "退出码 0 就是判据。", 16, False, GRAY, line=1.3, after=8)
     p = tf.add_paragraph()
-    write(p, "所以「需人工 1,580」不等于「还有 1,580 个洞」：它是工具主动拒绝越权的证据。",
-          13, True, ACCENT_DARK, line=1.35)
+    write(p, "「需人工」不是洞，是主动拒绝越权。", 17, True, ACCENT_DARK, line=1.3)
+    band(s, 5.65, "跨树稳定的是 DEVICE = 0；原因码数量随所选上游树变化",
+         size=16, height=0.7, fill=TINT, color=INK)
     return s
 
 
 def s_parity(prs, lay):
-    s = content_slide(prs, lay, "同一份判定，两个进程，逐字节相同",
-                      "设备端是独立实现（C++ / musl），喂完全相同的输入")
-    rows = [
-        ("#", "门禁", "做法", "结果"),
-        ("1", "--selftest", "内嵌固定向量，比对宿主生成并冻结的 digest 表", "PASS：sha1 13 + converge 24 + explain 11 组，0 失败"),
-        ("2", "--index-info", "两端加载同一 PLI，比计数器", "rules=21824 types=1267 attrs=49 skipped=524，与宿主一致"),
-        ("3", "报告差分", "同一份语料两端各出完整 JSON，比 sha256", "逐字节相同"),
-        ("4", "真机采样", "真读本机 kmsg", "suppressed≈107 非零，量化 printk 丢帧"),
-        ("5", "查询差分", "27,912 条查询，比整个输出体的 sha256", "2,984,884 B 逐字节相同"),
+    s = content_slide(prs, lay, "两端独立实现，输出逐字节相同",
+                      "Python 与 C++ 喂同一份输入")
+    cards = [
+        ("5 / 5", "门禁全绿", "自检 48 组，0 失败"),
+        ("27,912", "条查询", "覆盖 5 个字段"),
+        ("2.98 MB", "逐字节相同", "输出体 sha256 一致"),
     ]
-    table(s, BODY_LEFT, 1.45, BODY_W, rows, [0.35, 1.35, 3.4, 3.6],
-          row_h=0.72, head_size=14, body_size=12.5)
-    band(s, 5.85, "四个真实存在的语义陷阱：空 perms 是通配而非空集 / xperm 命令大小写敏感 / permissive=2 是三态 / 通配命中时未知 perm 原样带上 —— 错一个哈希当场炸掉。",
-         size=14, height=0.86, fill=INK)
+    w, gap = 3.93, 0.22
+    for i, (n, l1, l2) in enumerate(cards):
+        c = card(s, BODY_LEFT + i * (w + gap), 1.55, w, 2.45,
+                 fill=WHITE, line_color=TINT)
+        tf = c.text_frame
+        tf.vertical_anchor = MSO_ANCHOR.MIDDLE
+        p = tf.paragraphs[0]
+        write(p, n, 46, True, ACCENT_DARK, align=PP_ALIGN.CENTER, after=8, line=1.0)
+        p2 = tf.add_paragraph()
+        write(p2, l1, 19, True, INK, align=PP_ALIGN.CENTER, after=4)
+        p3 = tf.add_paragraph()
+        write(p3, l2, 16, False, GRAY, align=PP_ALIGN.CENTER, line=1.2)
+    band(s, 4.45, "四个语义陷阱：空 perms 通配 / xperm 大小写 / permissive 三态 / 未知 perm 名 —— 错一个哈希就炸。",
+         size=16, height=0.85, fill=INK)
+    tb = textbox(s, BODY_LEFT, 5.55, BODY_W, 0.8)
+    write(tb.text_frame.paragraphs[0],
+          "设备端是独立实现（C++ / musl），不是宿主程序的移植。", 17, False, GRAY)
     return s
 
 
 def s_perf(prs, lay):
     s = content_slide(prs, lay, "倒排索引：设备 34×，宿主 238×",
-                      "按对象类线性扫描 → 类型对倒排索引（postings 由 clone 继承，每棵树只建一次）")
+                      "从扫 21,824 条规则，变成查一个 (src, tgt, cls) 桶")
     data = [
-        ("34×", "设备查询路径", "0.0987 → 0.0029 ms/条（27,912 条查询）"),
-        ("238×", "宿主判定路径", "8.842 s → 0.037 s（4,911 个唯一案例）"),
-        ("151 → 1", "索引建表", "否则一次 converge 要重建 151 次"),
+        ("34×", "设备查询", "0.0987 → 0.0029 ms/条"),
+        ("238×", "宿主判定", "8.842 s → 0.037 s"),
+        ("151 → 1", "索引建表", "每棵树只建一次"),
     ]
-    w, gap = 3.95, 0.22
+    w, gap = 3.93, 0.22
     for i, (n, t, l) in enumerate(data):
-        c = card(s, BODY_LEFT + i * (w + gap), 1.45, w, 2.55, fill=WHITE, line_color=TINT)
+        c = card(s, BODY_LEFT + i * (w + gap), 1.5, w, 2.5,
+                 fill=WHITE, line_color=TINT)
         tf = c.text_frame
         tf.vertical_anchor = MSO_ANCHOR.MIDDLE
         p = tf.paragraphs[0]
-        write(p, n, 42, True, ACCENT_DARK, align=PP_ALIGN.CENTER, after=6, line=1.0)
+        write(p, n, 46, True, ACCENT_DARK, align=PP_ALIGN.CENTER, after=8, line=1.0)
         p2 = tf.add_paragraph()
-        write(p2, t, 14.5, True, INK, align=PP_ALIGN.CENTER, after=5)
+        write(p2, t, 19, True, INK, align=PP_ALIGN.CENTER, after=4)
         p3 = tf.add_paragraph()
-        write(p3, l, 12, False, GRAY, align=PP_ALIGN.CENTER, line=1.25)
-    band(s, 5.45, "口径：两侧各用真实实现跑同一负载，输出逐字节相同。板端 71.25 s 是旧代码在 RK3568 上的实测；"
-                  "「约 2 s」是按 34× 的倍数外推而非测量，上板后须复测。",
-         size=14, height=0.95, fill=TINT, color=INK)
+        write(p3, l, 16, False, GRAY, align=PP_ALIGN.CENTER, line=1.2)
+    band(s, 4.45, "板端 71.25 s 是旧代码实测；约 2 s 是 34× 外推，上板需复测。",
+         size=17, height=0.8, fill=TINT, color=INK)
     return s
 
 
 def s_llm(prs, lay):
-    s = content_slide(prs, lay, "LLM 的默认行为是过宽，护栏把它按回最小",
-                      "docs/eval-llm-guardrail.md 同批真实 denial 三档对照")
-    rows = [
-        ("方案", "样本", "过宽（越权加权限）率"),
-        ("未受约束的「AI 直接放权」（naive 档）", "120", "100%"),
-        ("真实 LLM（明确最小权限指令，deepseek-v4-flash）", "54 有效补丁", "0%（54/54 通过评审）"),
-        ("PolicyLoop：最小权限指令 + 规则护栏 + 确定性精修", "120", "0%（120/120 被拦截并精修回最小）"),
-    ]
-    table(s, BODY_LEFT, 1.5, BODY_W, rows, [4.2, 1.2, 2.6], row_h=0.7,
-          head_size=15, body_size=13)
-    band(s, 4.55, "越权倾向是 LLM 的默认行为，提示词消除不掉，只能靠确定性护栏兜住。",
-         size=19, height=0.9, fill=INK, bold=True)
-    tb = textbox(s, BODY_LEFT, 5.72, BODY_W, 0.9)
-    p = tb.text_frame.paragraphs[0]
-    write(p, "因此架构上把「生成候选」和「批准授权」拆成两个角色 —— 后者永远是规则，绝不用模型。",
-          14, False, GRAY, line=1.3)
+    s = content_slide(prs, lay, "LLM 默认过宽，护栏按回最小",
+                      "同批真实 denial 的三档对照")
+    c = card(s, BODY_LEFT, 1.6, 4.9, 2.8, fill=WHITE, line_color=RED)
+    tf = c.text_frame
+    tf.vertical_anchor = MSO_ANCHOR.MIDDLE
+    p = tf.paragraphs[0]
+    write(p, "100%", 66, True, RED, align=PP_ALIGN.CENTER, after=6, line=1.0)
+    p2 = tf.add_paragraph()
+    write(p2, "无约束 AI 直接放权", 19, True, INK, align=PP_ALIGN.CENTER, after=3)
+    p3 = tf.add_paragraph()
+    write(p3, "120/120 过宽", 16, False, GRAY, align=PP_ALIGN.CENTER)
+
+    tb = textbox(s, BODY_LEFT + 5.15, 2.5, 1.3, 0.9)
+    write(tb.text_frame.paragraphs[0], "→", 44, True, MUTED, align=PP_ALIGN.CENTER)
+
+    c = card(s, BODY_LEFT + 6.7, 1.6, 4.9, 2.8, fill=WHITE, line_color=GREEN)
+    tf = c.text_frame
+    tf.vertical_anchor = MSO_ANCHOR.MIDDLE
+    p = tf.paragraphs[0]
+    write(p, "0%", 66, True, GREEN, align=PP_ALIGN.CENTER, after=6, line=1.0)
+    p2 = tf.add_paragraph()
+    write(p2, "加确定性守门", 19, True, INK, align=PP_ALIGN.CENTER, after=3)
+    p3 = tf.add_paragraph()
+    write(p3, "120/120 拦回最小", 16, False, GRAY, align=PP_ALIGN.CENTER)
+
+    tb = textbox(s, BODY_LEFT, 4.65, BODY_W, 0.7)
+    write(tb.text_frame.paragraphs[0],
+          "越权倾向消不掉，只能靠规则兜住。", 21, True, INK, align=PP_ALIGN.CENTER)
+    band(s, 5.5, "真实 LLM 在最小权限指令下 54/54 精确最小 —— 模型不是问题，无约束才是。",
+         size=16, height=0.75, fill=TINT, color=INK)
     return s
 
 
 def s_ui(prs, lay):
     s = content_slide(prs, lay, "界面：如实区分数据来源",
-                      "主机端 Agent Trace  ·  板端控制台实时卡片  ·  快照现读")
+                      "主机端 Agent Trace  ·  板端实时卡片  ·  快照现读")
     pics = [
-        (DOCS / "screenshots" / "fig5-agent-trace.png", 2.95,
-         "主机端 Web UI · Agent Trace"),
-        (DOCS / "screenshots" / "fig6-board-live-cards.png", 2.80,
-         "板端控制台 · 拨开关后的实时卡片"),
-        (DOCS / "screenshots" / "fig7-board-snapshot.png", 2.80,
-         "板端控制台 · 载入当前快照"),
+        (DOCS / "screenshots" / "fig5-agent-trace.png", 2.95, "主机端 Agent Trace"),
+        (DOCS / "screenshots" / "fig6-board-live-cards.png", 2.80, "板端实时卡片"),
+        (DOCS / "screenshots" / "fig7-board-snapshot.png", 2.80, "板端快照"),
     ]
     x = 1.95
     for path, w, cap in pics:
-        picture_fit(s, path, x, 1.30, w, 4.30)
-        tb = textbox(s, x - 0.15, 5.72, w + 0.3, 0.3)
-        write(tb.text_frame.paragraphs[0], cap, 11.5, False, MUTED,
+        picture_fit(s, path, x, 1.35, w, 4.2)
+        tb = textbox(s, x - 0.3, 5.65, w + 0.6, 0.35)
+        write(tb.text_frame.paragraphs[0], cap, 16, False, MUTED,
               align=PP_ALIGN.CENTER)
         x += w + 0.55
-    band(s, 6.12, "工具造成的 denial 明确标注「工具造成」，不冒充分析结果；「累计案例」与「本次窗口行数」分开计数 —— 它们测的不是一回事。",
-         size=14, height=0.62, fill=INK)
+    band(s, 6.1, "工具造成的 denial 明确标注，不冒充分析结果。",
+         size=16, height=0.62, fill=INK)
     return s
 
 
@@ -671,196 +655,182 @@ def s_board(prs, lay):
     s = content_slide(prs, lay, "真机：拨一次开关，1~2 秒出结论",
                       "RK3568  ·  OpenHarmony 5.0.3.135  ·  enforcing")
     picture_fit(s, DOCS / "figs" / "fig4-board-runtime.png",
-                BODY_LEFT, 1.32, 8.55, 4.35)
-    x = BODY_LEFT + 8.75
-    cw = BODY_W - 8.75
+                BODY_LEFT, 1.35, 8.4, 4.3)
+    x = BODY_LEFT + 8.65
+    cw = BODY_W - 8.65
     items = [
-        ("正规 init service", "开机自启、自有 enforcing 域，\n不需要 PC / su / begetctl"),
-        ("冷启动即采集", "up 0 min 时服务已在域内采集，\n本域 denial = 0 条"),
-        ("端到端时延", "两个 1 秒轮询叠加：拨开关 →\n采集 → 分析 → 横幅 + 系统通知"),
+        ("正规 init service", "开机自启，自有 enforcing 域。"),
+        ("冷启动即采集", "up 0 min 已在采集，本域 denial 0。"),
+        ("端到端 1~2 秒", "拨开关 → 采集 → 分析 → 通知。"),
     ]
-    y = 1.38
+    y = 1.45
     for hd, bd in items:
-        c = card(s, x, y, cw, 1.36, fill=WHITE, line_color=TINT)
-        card_text(c, hd, bd, head_size=13.5, body_size=11.5, gap=4, line=1.25)
-        y += 1.46
-    band(s, 6.05, "部署依赖 PC ≠ 运行依赖 PC：采集路径上没有任何一环需要 PC",
-         size=15.5, height=0.64, fill=INK, bold=True)
+        c = card(s, x, y, cw, 1.3, fill=WHITE, line_color=TINT)
+        card_text(c, hd, bd, head_size=17, body_size=16, gap=5, line=1.25)
+        y += 1.45
+    band(s, 5.95, "部署依赖 PC，运行不依赖 PC。",
+         size=19, height=0.7, bold=True)
     return s
 
 
 def s_numbers(prs, lay):
-    s = content_slide(prs, lay, "关键数字", "每一个都能用附录 A 的命令复现")
+    s = content_slide(prs, lay, "最强的结果", "每个数字都能用附录 A 复现")
     data = [
-        ("21,824", "条索引规则\n1,267 类型 / 49 属性"),
-        ("99.94%", "索引召回率\n（质检 + 占位解析）"),
-        ("100%", "补丁精确最小\n179/179 · 过宽 0%"),
-        ("2.98 MB", "两端查询输出\n逐字节相同"),
+        ("0 误报", "5,161 条真实日志\n自动项零误报"),
+        ("99.94%", "索引召回率\n未覆盖仅 2 条"),
+        ("100%", "补丁精确最小\n179/179"),
+        ("2.98 MB", "两端输出\n逐字节相同"),
         ("34×", "设备查询加速\n宿主 238×"),
-        ("0 条", "真正需要给设备\n补权限（owner=DEVICE）"),
+        ("0 条", "1,580 条转人工\n要补权限 0 条"),
     ]
-    w, h, gap = 3.95, 2.2, 0.22
+    w, h, gap = 3.93, 2.05, 0.22
     for i, (n, l) in enumerate(data):
         x = BODY_LEFT + (i % 3) * (w + gap)
-        y = 1.5 + (i // 3) * (h + 0.25)
+        y = 1.45 + (i // 3) * (h + 0.22)
         c = card(s, x, y, w, h, fill=WHITE, line_color=TINT)
         tf = c.text_frame
         tf.vertical_anchor = MSO_ANCHOR.MIDDLE
         p = tf.paragraphs[0]
-        write(p, n, 36, True, ACCENT_DARK, align=PP_ALIGN.CENTER, after=6, line=1.0)
-        p2 = tf.add_paragraph()
-        write(p2, l, 12.5, False, GRAY, align=PP_ALIGN.CENTER, line=1.3)
+        write(p, n, 44, True, ACCENT_DARK, align=PP_ALIGN.CENTER, after=8, line=1.0)
+        for ln in l.split("\n"):
+            write(tf.add_paragraph(), ln, 16, False, GRAY,
+                  align=PP_ALIGN.CENTER, line=1.25)
+    band(s, 5.95, "三个零：零误报 · 零过宽 · 零待补权限。",
+         size=18, height=0.65, fill=TINT, color=ACCENT_DARK, bold=True)
     return s
 
 
 def s_pitfalls(prs, lay):
-    s = content_slide(prs, lay, "四个改变了设计的坑",
-                      "每一个都推翻了动手前的假设")
+    s = content_slide(prs, lay, "四个坑，每一个都改了设计",
+                      "共同点：都是「看起来正常」的假象")
     data = [
-        ("neverallow 不在二进制策略里", "「让设备自己反推全部策略语义」原理上不通 —— 从设想变成架构约束。"),
-        ("printk 限流会静默丢弃 denial", "每 5 秒只放 10 条，超出直接丢，dmesg 与采集器一起失明。修法：init job 写 printk_ratelimit=0；验收改用 unique_cases。"),
-        ("init 的 caps 是整套替换", "「只有 CAP_SYSLOG」连 uid 0 也失去 DAC_OVERRIDE，而 DAC 失败不出 AVC —— 判活用 wchan + fd，定根用 chmod 0777。"),
-        ("差分语料证明不了分支覆盖", "4,911 簇真实语料没抓到的偏差，固定向量首跑就抓出 2 个 —— 最终取「固定向量 + 差分」两条腿。"),
+        ("neverallow 不在二进制里", "设备端不能自建语义。"),
+        ("printk 会静默丢 denial", "日志和采集器一起失明。"),
+        ("init 的 caps 是整套替换", "只有 SYSLOG，就没了 DAC_OVERRIDE。"),
+        ("差分语料证不了分支", "固定向量首跑抓出 2 个偏差。"),
     ]
-    w, h, gap = 5.85, 1.88, 0.28
+    w, h, gap = 5.85, 1.9, 0.28
     for i, (hd, bd) in enumerate(data):
         x = BODY_LEFT + (i % 2) * (w + gap)
-        y = 1.42 + (i // 2) * (h + 0.18)
+        y = 1.45 + (i // 2) * (h + 0.2)
         c = card(s, x, y, w, h, fill=WHITE, line_color=TINT)
-        tf = c.text_frame
-        p = tf.paragraphs[0]
-        write(p, f"{i + 1}  {hd}", 16, True, INK, after=7, line=1.2)
-        p2 = tf.add_paragraph()
-        write(p2, bd, 13, False, GRAY, line=1.35)
-    band(s, 5.62, "共同点：都是「看起来正常」的假象 —— 服务活着、日志干净、策略也对，缺陷藏在看不见的地方。",
-         size=15, height=0.62, fill=INK)
+        card_text(c, hd, bd, head_size=18, body_size=16, gap=8)
+    band(s, 5.75, "服务活着、日志干净、策略也对 —— 缺陷藏在看不见的地方。",
+         size=16, height=0.7, fill=INK)
     return s
 
 
 def s_limits(prs, lay):
-    s = content_slide(prs, lay, "口径与边界：每个数字能证明什么",
-                      "安全工具的可信度来自说清边界，而不是把数字说大")
-    left = [
-        ("语料来自上游，不是本设备采集", "5,230 条注释每一行都以 # 开头，96.8% 逐字来自上游 .te；说明的是工具在真实历史 denial 上的表现。"),
-        ("构造内自洽 ≠ 独立金标准", "exact_min=100% 是「剔除规则 → 补回来」的自洽性验证；独立证据只有上游人工修复对照与真机回归。"),
+    s = content_slide(prs, lay, "每个数字能证明什么",
+                      "安全工具的可信度来自说清边界")
+    data = [
+        ("语料来自上游", "96.8% 逐字来自 .te 注释。"),
+        ("自洽不等于金标准", "100% 是留一法自洽验证。"),
+        ("外推值必须标注", "板端约 2 s 是外推。"),
+        ("证伪也写进结论", "boolean / constrain 在本平台不存在。"),
     ]
-    right = [
-        ("外推值一律标注", "板端 71.25 s → 约 2 s 是外推；「39% 比上游更窄」只在单条 denial 视角下成立。"),
-        ("未做但已证伪的，写证伪", "boolean / constrain / MLS 三类根因在本平台原理上无从发生，不列进「已检查项」。"),
-    ]
-    for col, items in enumerate([left, right]):
-        x = BODY_LEFT + col * (6.0 + 0.3)
-        y = 1.45
-        for hd, bd in items:
-            c = card(s, x, y, 6.0, 1.35, fill=WHITE, line_color=TINT)
-            card_text(c, hd, bd, head_size=14.5, body_size=12, gap=5, line=1.3)
-            y += 1.5
-    # 已知边界
-    tb = textbox(s, BODY_LEFT, 4.55, BODY_W, 0.3)
-    write(tb.text_frame.paragraphs[0], "仍然存在的边界", 13, True, ACCENT_DARK)
-    band(s, 4.9, "索引须与目标策略树对齐（上游活树 21,824 ≠ 板端 HAP 内置 19,800）　·　"
-                 "红线两条防线各有洞　　板子 5.0.3.135 ≠ 编译树 6.1.0.31　·　"
-                 "printk 限流只减少不消除",
-         size=13.5, height=0.95, fill=INK)
+    w, h, gap = 5.85, 1.55, 0.28
+    for i, (hd, bd) in enumerate(data):
+        x = BODY_LEFT + (i % 2) * (w + gap)
+        y = 1.45 + (i // 2) * (h + 0.2)
+        c = card(s, x, y, w, h, fill=WHITE, line_color=TINT)
+        card_text(c, hd, bd, head_size=18, body_size=16, gap=7)
+    band(s, 4.95, "索引须与策略树对齐：板子 5.0.3.135 ≠ 编译树 6.1.0.31。",
+         size=17, height=0.8, fill=INK)
     return s
 
 
 def s_next(prs, lay):
     s = content_slide(prs, lay, "不足与下一步")
-    c1 = card(s, BODY_LEFT, 1.55, 5.85, 3.95)
+    c1 = card(s, BODY_LEFT, 1.5, 5.85, 3.1)
     tf = c1.text_frame
     p = tf.paragraphs[0]
-    write(p, "交付前必补", 18, True, ACCENT_DARK, after=12)
+    write(p, "交付前必补", 19, True, ACCENT_DARK, after=14)
     for t in [
-        "--cross-layer 与 hap 计数器只有宿主侧结果，尚未在真机上跑过",
-        "板端控制台 HAP 不会开机自启，需要手动点一次图标",
-        "封面信息与截图占位由 docgate 的 placeholders 门禁盯着，到期未清即判红",
+        "板端 34× 与 explain 向量待真机复测",
+        "HAP 开机不自启，需手点一次",
+        "cross-layer / hap 计数仍待真机证据",
     ]:
         p = tf.add_paragraph()
-        m = p.add_run(); m.text = "▍ "; fmt(m, 13, True, ACCENT)
-        r = p.add_run(); r.text = t; fmt(r, 13, False, INK)
-        p.space_before = Pt(10); p.line_spacing = 1.3
+        m = p.add_run(); m.text = "▍ "; fmt(m, 16, True, ACCENT)
+        r = p.add_run(); r.text = t; fmt(r, 16, False, INK)
+        p.space_before = Pt(12); p.line_spacing = 1.3
 
-    c2 = card(s, BODY_LEFT + 6.15, 1.55, BODY_W - 6.15, 3.95, fill=WHITE, line_color=TINT)
+    c2 = card(s, BODY_LEFT + 6.15, 1.5, BODY_W - 6.15, 3.1,
+              fill=WHITE, line_color=TINT)
     tf = c2.text_frame
     p = tf.paragraphs[0]
-    write(p, "下一步", 18, True, ACCENT_DARK, after=12)
+    write(p, "下一步", 19, True, ACCENT_DARK, after=14)
     for t in [
-        ("改走 audit netlink", "取无损通道，摆脱 printk 限流；现在只做到把限流关掉"),
-        ("索引降到与板子一致的 5.0.3", "量化版本漂移对召回率的影响"),
-        ("板内触发", "实时闭环目前只有「捕获」这一半不需要 PC"),
+        "改审计 netlink，取无损通道",
+        "索引降到板子版本 5.0.3",
+        "板内触发，闭环不依赖 PC",
     ]:
         p = tf.add_paragraph()
-        m = p.add_run(); m.text = "▍ "; fmt(m, 13, True, ACCENT)
-        r = p.add_run(); r.text = t[0]; fmt(r, 13, True, INK)
-        r = p.add_run(); r.text = "　" + t[1]; fmt(r, 12, False, GRAY)
-        p.space_before = Pt(10); p.line_spacing = 1.3
+        m = p.add_run(); m.text = "▍ "; fmt(m, 16, True, ACCENT)
+        r = p.add_run(); r.text = t; fmt(r, 16, False, INK)
+        p.space_before = Pt(12); p.line_spacing = 1.3
+    band(s, 5.05, "先把演示链上的断言都补成真机证据。",
+         size=18, height=0.7, fill=INK, bold=True)
     return s
 
 
-# ── 讲稿备注（每题时长按 20 页 / 11 分钟配）──────────────────────
+# ── 讲稿备注（每题时长按 21 页 / 11 分钟配）──────────────────────
 NOTES = [
     # 封面
-    "开场（约 10 秒）：各位评委老师好，我们是【团队名称】。参赛作品 PolicyLoop，"
-    "解决的是 OpenHarmony SELinux 拒绝日志的诊断与最小权限修复问题。",
+    "开场（约 10 秒）：各位评委老师好，我们是 PolicyLoop 门禁团队。参赛作品 PolicyLoop，"
+    "解决 OpenHarmony SELinux 拒绝日志的诊断与最小权限修复问题。",
     # 目录
-    "约 10 秒：汇报分三部分 —— 为什么要做、怎么做的、实测到了什么程度，以及我们主动划出的边界。",
+    "约 10 秒：三部分 —— 为什么要做、怎么做、实测到什么程度；以及我们主动划出的边界。",
     # 问题
-    "约 50 秒：SELinux 是强制门禁，但 denial 对开发者有三个卡点：读不懂、不知道在哪补、补不对。"
-    "上游策略仓库自己的注释里就埋着 5,230 条历史 denial，全靠人力诊断。现实中的应对往往是把门禁关成 permissive —— "
-    "系统看起来正常了，门实际上没有了。",
+    "约 45 秒：一条 denial 卡住三件事：读不懂、找不准、补不对。现场常见的应对是把门禁关成 permissive —— "
+    "功能恢复了，强制访问控制却没有了。上游自己的注释里就埋着 5,230 条历史 denial，全靠人力诊断。",
+    # 三件事
+    "约 30 秒：如果只让评委记住一页，就是这一页。零误报、两端逐字节相同、真正要补权限 0 条 —— "
+    "这三个数别的方案给不出来。",
     # 目标
-    "约 30 秒：我们不回答「这条访问要放行吗」，而是「该不该放行」。撞系统红线的一律拒绝自动放权；"
-    "补丁要求精确最小；补完还要验证真的消除且没有回归。验收指标是可量化的四组。",
+    "约 30 秒：我们不回答「这条访问能不能放行」，回答「该不该放行」：先问红线，再问最小，最后验证真消除且无回归。",
     # 架构
-    "约 35 秒：系统按「能独立验证」分四层，主机端重、设备端轻，中间只有一条窄接口：构建期导出的 PLI 只读索引，"
-    "以及 JSON/TSV 判定结果。同一份判定逻辑三次落地：Python 做对语义、评测证明它收敛、设备端做原生组件并差分证明等价。",
+    "约 30 秒：按「能独立验证」分四层，主机端重、设备端轻，中间只有 PLI 只读索引和判定结果这条窄接口。",
     # 四原则
-    "约 30 秒：四条原则。最关键的是第一条：所有安全决策都是确定性规则，LLM 不参与判定，只在配置了 key 时写人话解释。"
-    "第二条：工具永不自动写盘。",
+    "约 25 秒：四原则的核心是第一条：安全决策全部由确定性规则做，LLM 只写解释；第二条，工具永不自动写盘。",
     # neverallow
-    "约 50 秒：这是最常被问的问题——为什么不把整个 PolicyLoop 搬到设备上？两个事实：设备上没有 .te 源码；"
-    "neverallow 是编译期断言，原理上不写进二进制策略。拿不到红线，工具就退化成「看到 denial 就建议放权」。"
-    "所以索引必须构建期导出、设备端只负责用语义。",
+    "约 40 秒：为什么不把整个系统搬到设备上？设备上没有 .te 源码，neverallow 又是编译期断言、不进二进制。"
+    "拿不到红线，工具就退化成「见 denial 就放行」。所以索引必须构建期导出。",
     # 流水线
-    "约 50 秒：一条 denial 走七个 Agent 的单向链。两个刻意设计：CrossLayerAgent 只读，加不加它结论不变；"
-    "流水线不含回路，Verify 失败直接归「需人工」——允许重试等于让它迭代出一个更宽的补丁。",
+    "约 35 秒：七个 Agent 单向执行。两个刻意设计：CrossLayer 只读，加不加结论不变；流水线没有回路，"
+    "Verify 失败直接转人工 —— 允许重试等于迭代出更宽的补丁。",
     # 守门
-    "约 35 秒：五道拒绝点 + 六道 apply_guards。右边这个真实例子最能说明问题：策略已经允许了 ioctl 大类，"
-    "缺的只是一个命令号；「看到 denial 就加 allow」会写一条已经存在的规则。我们给的是 allowxperm。",
+    "约 30 秒：五道拒绝点，加上六道 apply_guards。右边这个真实例子最能说明问题：只差一个命令号，"
+    "「见 denial 就加 allow」会写一条已经存在的规则，我们给的是 allowxperm。",
     # 收敛
-    "约 35 秒：整份 5,161 条日志，去重后 4,911 个唯一案例，4.16 秒出清单：70 类可自动出最小补丁，1,580 类需人工。"
-    "这个 1,580 是工具主动拒绝越权的结果，不是它做不到。",
+    "约 30 秒：5,161 条日志去重成 4,911 个案例，4.16 秒出清单：70 类可自动补丁，1,580 类转人工。"
+    "转人工是主动拒绝越权，不是做不到。",
     # 最小化
-    "约 35 秒：补丁 69 行归并成 54 条根因规则。闭环反验多证了一件事：套回之前这些案例确实没被解决，"
-    "否则本来就允许的案例会被算成补丁的功劳。",
+    "约 25 秒：补丁从 69 行归并到 54 条根因规则，再套回索引反验前后都关上。最窄规则按影响面判，不按 token 数。",
     # 归因
-    "约 30 秒：1,580 条逐条归因「该谁修」，真正需要给设备补权限的是 0 条：大部分是语料的历史噪声，"
-    "小部分是工具侧对齐和日志质量问题，38 条是撞红线的架构决策。",
+    "约 30 秒：1,580 条逐条回答「该谁修」，真正需要给设备补权限的是 0 条。"
+    "大部分是语料历史噪声，38 条是撞红线的架构决策。",
     # 两端一致
-    "约 40 秒：设备端是独立的 C++ 实现，五项门禁证明两端同源。最有说服力的是第五项：27,912 条查询、"
-    "2.98 MB 输出逐字节相同。空 perms、xperm 大小写、permissive 三态、未知 perm 名，错一个哈希就炸。",
+    "约 30 秒：设备端是独立的 C++ 实现。五项门禁全绿，最有说服力的是 27,912 条查询、2.98 MB 输出逐字节相同。"
+    "四个语义陷阱，错一个哈希就炸。",
     # 性能
-    "约 30 秒：原来的线性扫描换成类型对倒排索引，设备侧 34 倍、宿主侧 238 倍。请注意口径："
-    "板端的「约 2 秒」是按倍数外推，不是测量，上板后还要复测。",
+    "约 25 秒：线性扫描换成类型对倒排索引，设备 34 倍、宿主 238 倍。板端约 2 秒是外推，上板后要复测。",
     # LLM
-    "约 30 秒：这是我们的对照实验。未受约束的 AI 直接放权，过宽率 100%；同批样本经过确定性护栏，0%。"
-    "越权倾向是 LLM 的默认行为，提示词消除不掉，只能靠规则兜住。",
+    "约 25 秒：未受约束的 AI 直接放权，过宽率 100%；同批样本经确定性护栏，0%。越权倾向消不掉，只能靠规则兜住。",
     # 界面
-    "约 25 秒：两处界面。原则是如实区分数据来源：工具造成的 denial 必须标注「工具造成」，"
-    "「累计案例」和「本次窗口行数」分开计数。",
+    "约 20 秒：界面原则是如实区分数据来源：工具造成的 denial 必须标注，不冒充分析结果。",
     # 真机
-    "约 40 秒：采集器是正规 init service，开机自启、自有 enforcing 域。拨一次开关，1~2 秒出结论。"
-    "结论一句话：部署依赖 PC，运行不依赖 PC。",
+    "约 30 秒：采集器是正规 init service，开机自启、自有 enforcing 域，拨一次开关 1~2 秒出结论。"
+    "部署依赖 PC，运行不依赖 PC。",
     # 关键数字
-    "约 20 秒：一页回顾六个关键数字，每一个都能用报告附录 A 的命令复现。",
+    "约 20 秒：六个最强的数字，每一个都能用附录 A 复现。",
     # 坑
-    "约 40 秒：四个坑都改变过设计。共同点是「看起来正常」的假象：服务活着、日志干净、策略也对，缺陷在看不见的地方。",
+    "约 30 秒：四个坑都改过设计，共同点是「看起来正常」的假象：服务活着、日志干净、策略也对，缺陷在看不见的地方。",
     # 边界
-    "约 30 秒：安全工具的可信度来自说清边界。语料来自上游注释而不是设备采集；构造内自洽不等于独立金标准；"
-    "外推值一律标注；未做但已证伪的写证伪。",
+    "约 25 秒：安全工具的可信度来自说清边界：语料来自上游、自洽不等于金标准、外推值必须标注、证伪也要写。",
     # 下一步
-    "约 25 秒：交付前必补的三项和下一步方向。谢谢各位老师。",
+    "约 20 秒：交付前必补的和下一步方向。谢谢各位老师。",
 ]
 
 
@@ -874,9 +844,10 @@ def build(out: Path) -> Path:
     thanks_rid = list(prs.slides._sldIdLst)[3].rId   # 模板的「谢谢」页
 
     builders = [
-        s_problem, s_goal, s_arch, s_principles, s_neverallow, s_pipeline,
-        s_guards, s_converge, s_minimize, s_attribution, s_parity, s_perf,
-        s_llm, s_ui, s_board, s_numbers, s_pitfalls, s_limits, s_next,
+        s_problem, s_differentiators, s_goal, s_arch, s_principles,
+        s_neverallow, s_pipeline, s_guards, s_converge, s_minimize,
+        s_attribution, s_parity, s_perf, s_llm, s_ui, s_board,
+        s_numbers, s_pitfalls, s_limits, s_next,
     ]
     for i, fn in enumerate(builders):
         s = fn(prs, layout)
