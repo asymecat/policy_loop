@@ -473,8 +473,12 @@ def check_placeholders(ctx: Ctx) -> list[Finding]:
 # --------------------------------------------------------------------------- #
 
 def _v3(s: str | None) -> str:
-    """版本号归一到前三位 —— `pandoc --version` 打的是 3.1.11.1，
-    而 CI 能钉住的是 3.1.11；第四位是打包修订号，不是行为差异。
+    """版本号归一到前三位。
+
+    ⚠️ 2026-10-23 更正：第四位**会**改变行为 —— 3.1.11 与 3.1.11.1 产出的
+    docx `word/document.xml` 不同（实测 --check 直接判不一致）。这里仍只比前三位，
+    所以 toolchain-drift 只能挡住大版本；**生成 docx 的本机版本与 CI 钉的版本
+    必须逐位相同**（见 .github/workflows/ci.yml 的 docx job 与 facts.json 的 note）。
     """
     if not s:
         return ""

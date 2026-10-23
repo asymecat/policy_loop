@@ -129,8 +129,8 @@
     "md": "docs/report.md",
     "builder": "tools/build_report_docx.py",
     "artifact": "docs/report.docx",
-    "provenance_env": {"pandoc": "3.1.11", "python_docx": "1.2.0"},
-    "note": "工具链版本与 provenance_env 不符时记 SKIP(env) 并打印两个版本，**不判红** —— pandoc/python-docx 的版本会改变正文 XML 的细节，那是环境差异不是文档缺陷。"
+    "provenance_env": {"pandoc": "3.1.11.1", "python_docx": "1.2.0"},
+    "note": "工具链版本与 provenance_env 不符时记 SKIP(env) 并打印两个版本，**不判红** —— pandoc/python-docx 的版本会改变正文 XML 的细节，那是环境差异不是文档缺陷。⚠️ 2026-10-23 实测：3.1.11 与 3.1.11.1 产出的 document.xml 不同，而这个门禁比的正是它的 sha256 ⇒ **CI 必须钉到与本地生成时逐位相同的版本**，否则会以“docx 落后于 md”的假红形式出现。"
   },
 
   "figures": {
