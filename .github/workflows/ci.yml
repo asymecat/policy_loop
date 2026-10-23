@@ -56,10 +56,13 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - uses: pandoc/setup-pandoc@v2
+      # 原来的 pandoc/setup-pandoc 仓库已不存在（Set up job 直接报
+      # "Unable to resolve action ... repository not found"），动作已迁到
+      # pandoc/actions/setup，输入名从 pandoc-version 改成 version。
+      - uses: pandoc/actions/setup@v1
         with:
           # 与 docs/facts.json 的 provenance_env 对齐（比对只看前三位）。
-          pandoc-version: "3.1.11"
+          version: "3.1.11"
       - run: python -m pip install --upgrade pip "python-docx==1.2.0"
       - name: report.docx 必须与 report.md 一致
         run: python tools/docgate.py --only docx --strict-env
