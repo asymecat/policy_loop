@@ -9,7 +9,7 @@
      两份并存会变成两个目录）；
   2. 交给 pandoc 转 docx（--toc 生成的是真正的 TOC 域，Word 里可更新出页码）；
   3. 用 python-docx 后处理：把目录挪到封面页之后并另起一页、目录标题改中文、
-     正文章节另起一页、设定中西文字体。
+     正文章节另起一页、设定中西文字体、表头跨页重复且单行不跨页拆分。
 
 用法：
     python3 tools/build_report_docx.py                # 生成 docs/report.docx
@@ -236,6 +236,25 @@ def fill_toc(doc, headings: list[tuple[int, str]]) -> None:
     prev.addnext(tail)
 
 
+def harden_tables(doc) -> None:
+    """表头跨页重复、单行不跨页拆分。
+
+    Word 默认允许一行被分页切开，长枚举名（如 DOMAIN_OR_LABEL_MISMATCH）
+    会被劈成两半压在下一行。这里给每张表的表头行加 tblHeader、给每一行
+    加 cantSplit：跨页时表头跟着走，行整体挪到下一页。
+    """
+    from docx.oxml import OxmlElement
+    from docx.oxml.ns import qn
+
+    for table in doc.tables:
+        for i, row in enumerate(table.rows):
+            tr_pr = row._tr.get_or_add_trPr()
+            if tr_pr.find(qn("w:cantSplit")) is None:
+                tr_pr.append(OxmlElement("w:cantSplit"))
+            if i == 0 and tr_pr.find(qn("w:tblHeader")) is None:
+                tr_pr.append(OxmlElement("w:tblHeader"))
+
+
 def postprocess(path: Path, headings: list[tuple[int, str]]) -> None:
     try:
         import docx
@@ -247,6 +266,7 @@ def postprocess(path: Path, headings: list[tuple[int, str]]) -> None:
     set_page_a4(doc)
     move_toc_and_paginate(doc)
     fill_toc(doc, headings)
+    harden_tables(doc)
     doc.save(str(path))
 
 
