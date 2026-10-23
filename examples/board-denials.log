@@ -1,0 +1,6 @@
+#avc:  denied  { ioctl } for  pid=468 comm="sensor_host" path="/dev/hdf_sensor_manager_ap" dev="tmpfs" ino=195 ioctlcmd=0x6206 scontext=u:r:sensor_host:s0 tcontext=u:object_r:dev_hdf_sensor_mgr:s0 tclass=chr_file permissive=0
+#avc:  denied  { ioctl } for  pid=312 comm="hdf_devmgr" path="/dev/hdf_dev_mgr" ioctlcmd=0x6201 scontext=u:r:hdf_devmgr:s0 tcontext=u:object_r:dev_file:s0 tclass=chr_file permissive=0
+#avc:  denied  { ioctl } for  pid=312 comm="hdf_devmgr" path="/dev/hdf_dev_mgr" ioctlcmd=0x6202 scontext=u:r:hdf_devmgr:s0 tcontext=u:object_r:dev_file:s0 tclass=chr_file permissive=0
+#avc:  denied  { write } for  pid=12844 comm="recorder_unit_t" path="/data/test/recorder_video_yuv_mpeg4.mp4" dev="mmcblk0p11" ino=391698 scontext=u:r:media_service:s0 tcontext=u:object_r:data_file:s0 tclass=file permissive=0
+#avc:  denied  { getattr } for  pid=475 comm="media_service" path="/data/test/H264_AAC.mp4" dev="mmcblk0p11" ino=1044486 scontext=u:r:media_service:s0 tcontext=u:object_r:data_file:s0 tclass=file permissive=1
+# avc:  denied  { relabelfrom } for  pid=1 comm="init" path="/dev/__paramerters__/u:object_r:hilog_private_param:s0" dev="" ino=218 scontext=u:r:init:s0 tcontext=u:object_r:hilog_private_param:s0 tclass=file permissive=0
