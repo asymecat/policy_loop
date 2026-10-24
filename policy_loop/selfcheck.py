@@ -40,9 +40,13 @@ def run() -> list:
     """Run all checks; returns a list of (ok: bool, message: str)."""
     results: list = []
 
-    # 1. python version
-    ok = sys.version_info >= (3, 10)
-    results.append((ok, f"Python >= 3.10 ({sys.version.split()[0]})"))
+    # 1. python version -- the upper bound is not cosmetic: on 3.13 the
+    # core path segfaults at random (docs/known-limitations.md §7), so a
+    # green light here would be the one place that lets a demo walk into it.
+    v = sys.version_info[:2]
+    ok = (3, 10) <= v <= (3, 12)
+    why = "" if ok else "；3.13 有已知随机段错误，请换 3.12 或跑 tools/demo.sh"
+    results.append((ok, f"Python 3.10–3.12 ({sys.version.split()[0]}){why}"))
 
     # 2. imports
     try:
