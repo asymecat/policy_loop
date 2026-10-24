@@ -594,7 +594,7 @@ real 0m4.161s
 
 ### 2.8.7 工程自证：372 通过 / 0 失败 / 第三方依赖 0
 
-- **372 项测试通过、5 跳过、0 失败**（`pytest -q` 收 377 项；`unittest discover` 在 3.12 环境运行 341 项，差异来自环境依赖，结论相同）。
+- **372 项测试通过、5 跳过、0 失败**（`pytest -q` 收 377 项；`unittest discover` 在 3.12 环境同样收 377 项、371 通过 / 6 跳过 / 0 失败 —— 多出的一次 skip 是 3.12 环境没装 `python-docx`，不是测试失效）。
 - **第三方运行时依赖 0**：主机端纯标准库；设备端仅 libc/libc++/libm。
 - **稳定性门**：同一负载 60 轮，CPython 3.12 **0 崩溃**，3.13 **6 次（10%）** ⇒ 钉 3.12。
 - **文档门禁**：6 项检查、35 项反控测试，首跑抓出 3 处陈旧数字。
@@ -793,7 +793,7 @@ real 0m4.161s
 ```bash
 # ── 自检与单测 ────────────────────────────────────────────────
 python3.12 -m policy_loop.selfcheck      # 环境 + 模块 + 冒烟
-python3.12 -m unittest discover -s tests # 341 项，0 失败
+python3.12 -m unittest discover -s tests # 377 项，0 失败
 python3 -m pytest -q                     # 372 通过 / 5 跳过（pytest 只装在 3.13 上；3.12 请用上面那行 unittest）
 python3.12 tools/stability_gate.py --runs 60   # 稳定性门：零崩溃 = 通过
 python3.12 tools/docgate.py --live            # 文档生产门禁：文稿 ↔ 清单 ↔ 真实产物

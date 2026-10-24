@@ -39,6 +39,11 @@
 
 ## 快速开始
 
+> **解释器口径：用 Python 3.10–3.12（推荐 3.12）。** 3.13 上核心路径有已知的
+> 随机 SIGSEGV（0.7%–10%，崩在解释器内部而非本项目，见
+> [`docs/known-limitations.md` §7](docs/known-limitations.md)）。
+> 一条命令自检这套环境：`tools/demo.sh`（自动优先挑 3.12）。
+
 ```bash
 # 自检（环境/模块/冒烟样例，全绿才算就绪）
 python -m policy_loop.selfcheck
@@ -98,7 +103,7 @@ data/
   reports/            # corpus/replay/trust/agent-eval/converge 评测报告（已入库）
   raw/                # 上游语料（稀疏克隆，不入库，需自行拉取）
 docs/                 # 方案与路线文档
-tests/                # 单测（341 个，`python -m unittest discover -s tests`，0 失败）
+tests/                # 单测（377 项，`python -m unittest discover -s tests`，0 失败）
 ```
 
 ## L2/L3 评测命令
