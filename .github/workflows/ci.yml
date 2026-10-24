@@ -23,10 +23,10 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      # tests/test_attribution.py 是 pytest 风格（模块级函数，没有 TestCase 子类），
-      # unittest discover 收不到它。少了 pytest，它会以 ImportError 记账成一个
-      # "失败的测试"，于是同一棵树在两种环境下报出 306 与 307 两个数。
-      # 两个口径都跑，才谈得上"报告里那个数是可复现的"。
+      # 两个口径都跑：unittest 是本仓承诺的"零第三方依赖"口径，pytest 是报告里
+      # 那个「372 通过 / 5 跳过」的来源。2026-10-24 起两者收的是同一批 377 项
+      # （此前 test_attribution.py 是 pytest 风格，unittest 根本收不到它，
+      # 所以在 3.12 上既少 36 项又多一条 ImportError）。
       - run: python -m pip install --upgrade pip pytest
       - name: selfcheck
         run: python -m policy_loop.selfcheck
