@@ -6,7 +6,7 @@
 队长：苏子峰　队员：王子优、曹灿
 提交截止：2026-10-31
 源码仓库：https://github.com/asymecat/policy_loop
-提交仓库：https://atomgit.com/asymecat/policy_loop
+提交仓库：https://atomgit.com/szf-Spencer/policy_loop
 
 整理日期：2026-10-31
 
@@ -36,7 +36,7 @@
   提交要求：https://atomgit.com/TSC2026Comp
   实际提交：把本目录的四类材料放进个人 AtomGit 仓库，按参赛群公告/问卷填写仓库地址；
   平台页面不再单独上传材料。
-  仓库地址：https://atomgit.com/asymecat/policy_loop
+  仓库地址：https://atomgit.com/szf-Spencer/policy_loop
 
 五、材料自检状态（2026-10-31）
   - docx / pptx 已用 LibreOffice 实际打开并转 PDF 验证：开发设计文档 40 页、答辩 PPT 25 页，无损坏。
