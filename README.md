@@ -5,6 +5,7 @@
 > 完整方案与设计见 [`docs/design.md`](docs/design.md)（含"先仿真、后真机"执行策略）。
 > 三件突破的验收文档：批量收敛 [`docs/eval-converge.md`](docs/eval-converge.md)、评测可信度质检 [`docs/eval-trust.md`](docs/eval-trust.md)。
 > 已知边界与未建模路径（含逐条 file:line 出处与量化）：[`docs/known-limitations.md`](docs/known-limitations.md)。
+> 参赛提交材料（简介 / 开发设计文档 / 答辩 PPT / 作品视频 / 辅助材料）：[`submission/`](submission/)。
 
 ## 现状（2026-10-09）
 
@@ -94,7 +95,7 @@ tools/
   docgate.py            # 文档生产门禁：文稿 ↔ docs/facts.json ↔ 真实产物（配图/数字/占位符/docx）
   docfacts.py           # 上面那道门的探针：AST 派生真值，不 import 被检查的脚本
   stability_gate.py     # 稳定性门：逐轮全新子进程，把解释器级间歇崩溃变成可重复的数字
-  build_report_docx.py  # docs/report.md → docs/report.docx（pandoc + python-docx，支持 --check）
+  build_report_docx.py  # docs/report.md → docs/report.docx（按需生成、不入库；支持 --check）
 webui/                # Web UI：stdlib HTTP server + /api/analyze + Agent Trace 前端
 data/
   fixtures/           # 测试/演示样例（含上游真实格式 denial）
@@ -102,7 +103,8 @@ data/
   eval/golden.trusted.jsonl  # 质检后干净子集（2,154 对，含 pair_kind 标注）
   reports/            # corpus/replay/trust/agent-eval/converge 评测报告（已入库）
   raw/                # 上游语料（稀疏克隆，不入库，需自行拉取）
-docs/                 # 方案与路线文档
+docs/                 # 方案与路线文档（report.md 是文稿源；docx/pptx 按需生成）
+submission/           # 参赛定稿：简介、开发设计文档、答辩 PPT、作品视频、辅助材料
 tests/                # 单测（377 项，`python -m unittest discover -s tests`，0 失败）
 ```
 

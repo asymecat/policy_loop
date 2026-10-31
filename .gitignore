@@ -27,6 +27,10 @@ data/raw/
 docs/optimized-proposal.md
 docs/reproduce-l1.md
 
+# 文稿/答辩的派生物：按需生成，不入库（比赛定稿在 submission/）
+docs/report.docx
+docs/policy_loop-答辩.pptx
+
 # 误拉整个 OHOS 源码树的保险（项目里绝不跟踪它）
 ohos_src/
 

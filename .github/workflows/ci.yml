@@ -1,9 +1,11 @@
 name: CI
 
-# 三道作业各自回答一个不同的问题：
+# 两道作业各自回答一个不同的问题：
 #   unit     —— 代码还对吗（unittest 与 pytest 两个口径都要跑，见下）
 #   docgate  —— 文稿说的还是真的吗（配图/数字/占位符/一致性）
-#   docx     —— report.docx 与 report.md 还对得上吗（要固定 pandoc 版本才判得准）
+#
+# report.docx 是 docs/report.md 的派生物，按需生成、不入库（定稿在 submission/），
+# 所以不再设 docx 门禁作业；docgate 的 docx 一项此时如实记 SKIP。
 #
 # 语料（data/raw）不入库，所以这里不跑 --live；那一条由 docgate-live.yml 每周兜。
 
@@ -48,24 +50,3 @@ jobs:
         run: python tools/docgate.py
       - name: 门禁本身的反控测试
         run: python -m unittest tests.test_docgate -v
-
-  docx:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-      # 原来的 pandoc/setup-pandoc 仓库已不存在（Set up job 直接报
-      # "Unable to resolve action ... repository not found"），动作已迁到
-      # pandoc/actions/setup，输入名从 pandoc-version 改成 version。
-      - uses: pandoc/actions/setup@v1
-        with:
-          # 必须与生成 report.docx 的版本**逐位**相同：docx 门禁比的是
-          # word/document.xml 的 sha256，而 3.1.11 与 3.1.11.1 产出的
-          # XML 不同（实测：用 3.1.11 跑 --check 直接判“不一致”）。
-          # 登记值见 docs/facts.json 的 provenance_env。
-          version: "3.1.11.1"
-      - run: python -m pip install --upgrade pip "python-docx==1.2.0" "lxml==6.1.1"
-      - name: report.docx 必须与 report.md 一致
-        run: python tools/docgate.py --only docx --strict-env
