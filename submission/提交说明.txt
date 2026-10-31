@@ -6,6 +6,7 @@
 队长：苏子峰　队员：王子优、曹灿
 提交截止：2026-10-31
 源码仓库：https://github.com/asymecat/policy_loop
+提交仓库：https://atomgit.com/asymecat/policy_loop
 
 整理日期：2026-10-31
 
@@ -30,11 +31,12 @@
     「视频：产品片（1 分 49 秒，无音乐版）」。
   - 开发设计文档（40 页）、答辩 PPT（25 页）、可选辅助材料：沿用 2026-10-30 定稿，未改动。
 
-四、提交入口
+四、提交方式
   赛事平台：https://competitions.atomgit.com/competition/2074791206352715777/intro
   提交要求：https://atomgit.com/TSC2026Comp
-  登录后进入「赛道一：系统与技术创新」→ 作品提交，按四类材料分别上传。
-  本压缩包仅用于打包传输；若平台不接受压缩包，解压后按上表逐项上传。
+  实际提交：把本目录的四类材料放进个人 AtomGit 仓库，按参赛群公告/问卷填写仓库地址；
+  平台页面不再单独上传材料。
+  仓库地址：https://atomgit.com/asymecat/policy_loop
 
 五、材料自检状态（2026-10-31）
   - docx / pptx 已用 LibreOffice 实际打开并转 PDF 验证：开发设计文档 40 页、答辩 PPT 25 页，无损坏。
