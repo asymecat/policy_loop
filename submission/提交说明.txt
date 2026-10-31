@@ -5,8 +5,8 @@
 学校：华中科技大学
 队长：苏子峰　队员：王子优、曹灿
 提交截止：2026-10-31
-源码仓库：https://github.com/asymecat/policy_loop
-提交仓库：https://atomgit.com/szf-Spencer/policy_loop
+提交仓库（源码 + 四类材料）：https://atomgit.com/szf-Spencer/policy_loop
+GitHub 镜像：https://github.com/asymecat/policy_loop
 
 整理日期：2026-10-31
 
